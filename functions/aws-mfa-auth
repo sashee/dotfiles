@@ -1,3 +1,1 @@
-function aws-mfa-auth () {
-	eval `aws sts get-session-token --serial-number $(aws iam list-mfa-devices --user-name $(aws sts get-caller-identity | jq -r '.Arn | split("/")[1]')| jq -r '.MFADevices[0].SerialNumber') --token-code $1 | jq -r '"export AWS_ACCESS_KEY_ID=" + .Credentials.AccessKeyId, "export AWS_SECRET_ACCESS_KEY="+.Credentials.SecretAccessKey, "export AWS_SESSION_TOKEN="+.Credentials.SessionToken'`
-}
+eval `aws sts get-session-token --serial-number $(aws iam list-mfa-devices --user-name $(aws sts get-caller-identity | jq -r '.Arn | split("/")[1]')| jq -r '.MFADevices[0].SerialNumber') --token-code $1 | jq -r '"export AWS_ACCESS_KEY_ID=" + .Credentials.AccessKeyId, "export AWS_SECRET_ACCESS_KEY="+.Credentials.SecretAccessKey, "export AWS_SESSION_TOKEN="+.Credentials.SessionToken'`
