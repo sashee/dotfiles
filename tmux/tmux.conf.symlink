@@ -16,3 +16,5 @@ bind-key -T copy-mode-vi 'y' send -X copy-selection-and-cancel
 
 set -sg escape-time 10
 
+set-option -g default-shell /bin/zsh
+
