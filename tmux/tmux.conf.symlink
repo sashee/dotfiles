@@ -18,3 +18,4 @@ set -sg escape-time 10
 
 set-option -g default-shell /bin/zsh
 
+set-option -g mouse off
