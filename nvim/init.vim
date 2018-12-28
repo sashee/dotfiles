@@ -22,7 +22,11 @@ Plug 'carlitux/deoplete-ternjs'
 
 Plug 'neomake/neomake'
 
+Plug 'elzr/vim-json'
+
 call plug#end()
+
+let g:vim_json_syntax_conceal = 0
 
 let g:neomake_javascript_enabled_makers = ['eslint']
 
@@ -50,6 +54,8 @@ set autoindent
 colorscheme solarized8
 set background=dark
 set termguicolors
+
+autocmd BufNewFile,BufRead *.json.symlink set syntax=json
 
 " NERDTress File highlighting
 function! NERDTreeHighlightFile(extension, fg, bg, guifg, guibg)
