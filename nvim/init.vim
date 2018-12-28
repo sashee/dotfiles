@@ -31,8 +31,12 @@ set hidden
 
 set splitbelow
 
-set tabstop=4
-set shiftwidth=4
+set tabstop=2
+set shiftwidth=2
+set smartindent
+set ignorecase
+set smartcase
+set autoindent
 
 colorscheme solarized8
 set background=dark
