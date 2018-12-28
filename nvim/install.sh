@@ -5,6 +5,8 @@ pip3 install --user neovim
 curl -sL https://deb.nodesource.com/setup_11.x | sudo bash -
 sudo apt-get install -y nodejs
 
+npm config set prefix ~/npm
+
 wget https://github.com/neovim/neovim/releases/download/stable/nvim.appimage -O /tmp/nvim.appimage
 
 chmod u+x /tmp/nvim.appimage

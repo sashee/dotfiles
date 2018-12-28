@@ -17,7 +17,14 @@ Plug 'neomake/neomake'
 Plug 'tpope/vim-fugitive'
 Plug 'easymotion/vim-easymotion'
 
+Plug 'ternjs/tern_for_vim', { 'do': 'npm install && npm install -g tern' }
+Plug 'carlitux/deoplete-ternjs'
+
+Plug 'neomake/neomake', { 'on': 'Neomake' }
+
 call plug#end()
+
+let g:neomake_javascript_enabled_makers = ['eslint']
 
 let g:deoplete#enable_at_startup = 1
 

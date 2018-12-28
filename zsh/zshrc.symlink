@@ -9,7 +9,7 @@ git
 fzf
 )
 
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:$HOME/.local/bin:$HOME/squashfs-root/usr/bin"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:$HOME/.local/bin:$HOME/squashfs-root/usr/bin:$HOME/npm/bin"
 
 source $ZSH/oh-my-zsh.sh
 
@@ -70,3 +70,5 @@ bindkey '^P' fzf-history-widget
 
 alias nvim='nocorrect nvim '
 
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
