@@ -38,8 +38,8 @@ set ignorecase
 set smartcase
 set autoindent
 
-colorscheme solarized8
 set background=dark
+colorscheme solarized8
 " set termguicolors
 
 " autocmd BufNewFile,BufRead *.json.symlink set syntax=json
@@ -186,3 +186,10 @@ function! s:check_back_space() abort
   let col = col('.') - 1
   return !col || getline('.')[col - 1]  =~# '\s'
 endfunction
+
+autocmd User fugitive 
+  \ if fugitive#buffer().type() =~# '^\%(tree\|blob\)$' |
+  \   nnoremap <buffer> .. :edit %:h<CR> |
+  \ endif
+autocmd BufReadPost fugitive://* set bufhidden=delete
+
