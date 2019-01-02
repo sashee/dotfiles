@@ -14,6 +14,8 @@ Plug 'tpope/vim-fugitive'
 Plug 'easymotion/vim-easymotion'
 Plug 'jiangmiao/auto-pairs'
 Plug 'luochen1990/rainbow'
+Plug 'tpope/vim-unimpaired'
+Plug 'tpope/vim-repeat'
 
 Plug 'neoclide/coc.nvim', {'tag': '*', 'do': { -> coc#util#install()}}
 
