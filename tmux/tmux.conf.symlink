@@ -21,3 +21,5 @@ set-option -g default-shell /bin/zsh
 set-option -g mouse off
 
 set-option -g default-terminal "screen-256color"
+set -ga terminal-overrides ",*256col*:Tc"
+
