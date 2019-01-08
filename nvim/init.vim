@@ -23,6 +23,8 @@ call plug#end()
 
 let g:rainbow_active = 1
 
+:set backupcopy=yes
+
 :set number
 :set relativenumber
 :set signcolumn=yes
