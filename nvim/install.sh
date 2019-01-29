@@ -9,7 +9,9 @@ npm config set prefix ~/npm
 
 npm install -g eslint
 
-wget https://github.com/neovim/neovim/releases/download/stable/nvim.appimage -O /tmp/nvim.appimage
+sudo apt install -y ack-grep
+
+wget $(curl -s https://api.github.com/repos/neovim/neovim/releases/latest | jq -r '.assets[] | select(.name == "nvim.appimage") | .browser_download_url') -O /tmp/nvim.appimage
 
 chmod u+x /tmp/nvim.appimage
 
@@ -20,6 +22,6 @@ ln -s $(pwd -P)/nvim/init.vim ~/.config/nvim/init.vim
 curl -fLo ~/.local/share/nvim/site/autoload/plug.vim --create-dirs \
     https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 
-~/squashfs-root/usr/bin/nvim +PlugInstall +UpdateRemotePlugins +qall
+~/squashfs-root/usr/bin/nvim +'PlugInstall --sync' +UpdateRemotePlugins +'qall!'
 
 ~/squashfs-root/usr/bin/nvim -c ":CocInstall coc-html coc-css coc-json coc-tsserver coc-yaml coc-eslint coc-tslint"
