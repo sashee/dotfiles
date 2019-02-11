@@ -23,6 +23,7 @@ Plug 'neoclide/coc.nvim', {'tag': '*', 'do': { -> coc#util#install()}}
 call plug#end()
 
 let g:rainbow_active = 1
+let g:AutoPairsMultilineClose = 0
 
 :set backupcopy=yes
 
