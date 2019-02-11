@@ -24,6 +24,7 @@ call plug#end()
 
 let g:rainbow_active = 1
 let g:AutoPairsMultilineClose = 0
+autocmd FileType markdown let b:AutoPairs = AutoPairsDefine({'```' : '```'})
 
 :set backupcopy=yes
 
