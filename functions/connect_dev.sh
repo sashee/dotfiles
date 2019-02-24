@@ -1,6 +1,7 @@
 while true ; do
 	dir=$(dirname "$BASH_SOURCE[0]");
-	"$dir/watch_dir.sh" $1 $2 > /dev/null &2> /dev/null &
+	mkdir -p $2
+	watch "find $2 -maxdepth 1 -mindepth 1 -exec "$dir/transfer_files.sh" $1 {} \; -exec rm -r {} \;" > /dev/null &
 	pid=$!
         XPORT=$((netstat -nutlp 2> /dev/null | grep :600 | awk '{print $4}' | awk -F: '{print $2}' ; echo 6000) | sort | tail -1)
         ssh -R 6000:localhost:"$XPORT" -CtA $1 AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN tmux new-session -A -s main
