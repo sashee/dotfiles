@@ -17,6 +17,7 @@ Plug 'luochen1990/rainbow'
 Plug 'tpope/vim-unimpaired'
 Plug 'tpope/vim-repeat'
 Plug 'mileszs/ack.vim'
+Plug 'terryma/vim-expand-region'
 
 Plug 'neoclide/coc.nvim', {'tag': '*', 'do': { -> coc#util#install()}}
 
