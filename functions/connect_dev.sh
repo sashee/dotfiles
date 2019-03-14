@@ -1,5 +1,15 @@
 dir=$(dirname "$BASH_SOURCE[0]");
 
+SG=$(aws --region eu-central-1 ec2 describe-instances --filter "Name=tag:Name,Values=$2" --query "Reservations[].Instances[].SecurityGroups[].GroupId" --no-paginate | jq -r '.[0]')
+
+for ip in $(aws --region eu-central-1 ec2 describe-security-groups --group-ids $SG | jq -r '.SecurityGroups[].IpPermissions[].IpRanges[].CidrIp'); do
+	aws --region eu-central-1 ec2 revoke-security-group-ingress --group-id $SG --protocol tcp --port 22 --cidr $ip
+done
+
+MYIP=$(curl -s ifconfig.me)
+
+aws --region eu-central-1 ec2 authorize-security-group-ingress --group-id $SG --protocol tcp --port 22 --cidr $MYIP/32
+
 STATE=$(aws --region eu-central-1 ec2 describe-instances --filter "Name=tag:Name,Values=$2" --query "Reservations[].Instances[].State.Name" --no-paginate | jq -r '.[0]')
 if [ "$STATE" != "running" ]
 then
