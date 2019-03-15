@@ -1,22 +1,29 @@
 dir=$(dirname "$BASH_SOURCE[0]");
 
-SG=$(aws --region eu-central-1 ec2 describe-instances --filter "Name=tag:Name,Values=$2" --query "Reservations[].Instances[].SecurityGroups[].GroupId" --no-paginate | jq -r '.[0]')
+function setup_sg () {
+	SG=$(aws --region eu-central-1 ec2 describe-instances --filter "Name=tag:Name,Values=$1" --query "Reservations[].Instances[].SecurityGroups[].GroupId" --no-paginate | jq -r '.[0]')
 
-for ip in $(aws --region eu-central-1 ec2 describe-security-groups --group-ids $SG | jq -r '.SecurityGroups[].IpPermissions[].IpRanges[].CidrIp'); do
-	aws --region eu-central-1 ec2 revoke-security-group-ingress --group-id $SG --protocol tcp --port 22 --cidr $ip
-done
+	CIDRS=$(aws --region eu-central-1 ec2 describe-security-groups --group-ids $SG | jq -r '.SecurityGroups[].IpPermissions[].IpRanges[].CidrIp')
 
-MYIP=$(curl -s ifconfig.me)
+	MYIP=$(curl -s ifconfig.me)
 
-aws --region eu-central-1 ec2 authorize-security-group-ingress --group-id $SG --protocol tcp --port 22 --cidr $MYIP/32
+	for ip in $CIDRS; do
+		[ "$MYIP/32" != $ip ] && aws --region eu-central-1 ec2 revoke-security-group-ingress --group-id $SG --protocol tcp --port 22 --cidr $ip
+	done
+
+	[ -z $(echo "$CIDRS" | grep "$MYIP/32") ] && aws --region eu-central-1 ec2 authorize-security-group-ingress --group-id $SG --protocol tcp --port 22 --cidr $MYIP/32
+}
 
 STATE=$(aws --region eu-central-1 ec2 describe-instances --filter "Name=tag:Name,Values=$2" --query "Reservations[].Instances[].State.Name" --no-paginate | jq -r '.[0]')
 if [ "$STATE" != "running" ]
 then
+	setup_sg $2
 	$dir/start_instance.sh $2 || exit
 fi
 
 while true ; do
+	setup_sg $2
+
 	IP=$(aws --region eu-central-1 ec2 describe-instances --filter "Name=tag:Name,Values=$2" --query "Reservations[].Instances[].NetworkInterfaces[].PrivateIpAddresses[].Association.PublicIp" --no-paginate | jq -r '.[0]')
 
 	mkdir -p $3
@@ -27,5 +34,4 @@ while true ; do
 	kill $pid > /dev/null
         sleep 1;
 done
-# No true-color support in 1.3.2. Need to try again when a new version is released
-# mosh --ssh="ssh -tA" ubuntu@test.myawsexperiments.com -- env AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN tmux new-session -A -s main
+
