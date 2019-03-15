@@ -6,6 +6,6 @@ eval `ssh-agent`
 
 ssh-add <(aws --region eu-central-1 ssm get-parameter --name $1 --with-decryption | jq -r '.Parameter.Value' | sed 's/\\n/\n/g')
 
-RC=$(([ -r ~/.bashrc ] && cat ~/.bashrc); echo 'PS1="\e[0;32m$ \e[m"')
+RC=$(([ -r ~/.bashrc ] && cat ~/.bashrc); echo 'PS1="\[\e[0;32m\]$ \[\e[m\]"')
 
 bash --rcfile <(echo $RC)
