@@ -1,3 +1,5 @@
+sudo apt install -y curl jq wget
+
 sudo apt install -y python3-pip
 
 pip3 install --user neovim
@@ -17,7 +19,7 @@ chmod u+x /tmp/nvim.appimage
 
 (cd ~ && /tmp/nvim.appimage --appimage-extract)
 
-ln -s $(pwd -P)/nvim/init.vim ~/.config/nvim/init.vim
+mkdir -p ~/.config/nvim && ln -s $(pwd -P)/nvim/init.vim ~/.config/nvim/init.vim
 
 curl -fLo ~/.local/share/nvim/site/autoload/plug.vim --create-dirs \
     https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
