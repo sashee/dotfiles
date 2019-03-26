@@ -31,6 +31,7 @@ while true ; do
 	while : ; do
 		CURRENTMYIP=$(curl -s ifconfig.me)
 		[ -z "$CURRENTMYIP" ] || break
+		sleep 1
 	done
 
 	[ "$CURRENTMYIP" != "$MYIP" ] && setup_sg $SG $CURRENTMYIP
