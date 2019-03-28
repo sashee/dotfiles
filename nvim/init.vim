@@ -19,6 +19,7 @@ Plug 'tpope/vim-repeat'
 Plug 'mileszs/ack.vim'
 Plug 'terryma/vim-expand-region'
 Plug 'mattn/emmet-vim'
+Plug 'editorconfig/editorconfig-vim'
 
 Plug 'neoclide/coc.nvim', {'tag': '*', 'do': { -> coc#util#install()}}
 
