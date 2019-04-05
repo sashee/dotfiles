@@ -24,3 +24,6 @@ set-option -g default-terminal "screen-256color"
 set -ga terminal-overrides ",*256col*:Tc"
 
 set-option -ga update-environment ' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN DISPLAY'
+
+set -g status-right '#[fg=colour5]#[bg=colour7]Mem:#(dotfiles/functions/get_mem.sh) #[fg=colour1]CPU: #(dotfiles/functions/get_cpu_credits.sh) #[bg=colour3]#[fg=colour1]#[bg=colour1]#[fg=colour0] %b %d %H:%M '
+
