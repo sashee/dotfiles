@@ -36,6 +36,7 @@ autocmd FileType markdown let b:AutoPairs = AutoPairsDefine({'```' : '```'})
 :set signcolumn=yes
 
 nnoremap <C-p> :FZF<CR>
+let $FZF_DEFAULT_COMMAND = 'ack -g ""'
 
 set hidden
 
