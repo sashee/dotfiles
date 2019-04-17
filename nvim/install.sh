@@ -26,4 +26,6 @@ curl -fLo ~/.local/share/nvim/site/autoload/plug.vim --create-dirs \
 
 ~/squashfs-root/usr/bin/nvim +'PlugInstall --sync' +UpdateRemotePlugins +'qall!'
 
+~/squashfs-root/usr/bin/nvim +'PlugInstall --sync' +UpdateRemotePlugins +'qall!'
+
 ~/squashfs-root/usr/bin/nvim -c ":CocInstall coc-html coc-css coc-json coc-tsserver coc-yaml coc-eslint coc-tslint"
