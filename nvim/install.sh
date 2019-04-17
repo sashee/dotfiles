@@ -4,8 +4,8 @@ sudo apt install -y python3-pip
 
 pip3 install --user neovim
 
-curl -sL https://deb.nodesource.com/setup_11.x | sudo bash -
-sudo apt-get install -y nodejs
+# curl -sL https://deb.nodesource.com/setup_11.x | sudo bash -
+sudo apt-get install -y nodejs npm
 
 npm config set prefix ~/npm
 
