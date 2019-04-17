@@ -22,6 +22,8 @@ set-option -g mouse off
 
 set-option -g default-terminal "screen-256color"
 set -ga terminal-overrides ",*256col*:Tc"
+set-option -ga terminal-overrides ",xterm*:Tc:smcup@:rmcup@"
+set-option -ga terminal-overrides ",screen*:Tc:smcup@:rmcup@"
 
 set-option -ga update-environment ' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN DISPLAY TZ'
 
