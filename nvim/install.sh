@@ -4,8 +4,15 @@ sudo apt install -y python3-pip
 
 pip3 install --user neovim
 
+curl -sSL https://deb.nodesource.com/gpgkey/nodesource.gpg.key | sudo apt-key add -
+VERSION=node_11.x
+DISTRO="$(lsb_release -s -c)"
+echo "deb https://deb.nodesource.com/$VERSION $DISTRO main" | sudo tee /etc/apt/sources.list.d/nodesource.list
+echo "deb-src https://deb.nodesource.com/$VERSION $DISTRO main" | sudo tee -a /etc/apt/sources.list.d/nodesource.list
+sudo apt-get update
+
 # curl -sL https://deb.nodesource.com/setup_11.x | sudo bash -
-sudo apt-get install -y nodejs npm
+sudo apt-get install -y nodejs
 
 npm config set prefix ~/npm
 
