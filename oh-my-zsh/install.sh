@@ -5,3 +5,6 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/mas
 if [ -e ~/.zshrc.pre-oh-my-zsh ]; then
 	mv ~/.zshrc.pre-oh-my-zsh ~/.zshrc
 fi
+
+sudo apt install -y locales
+sudo locale-gen en_US.UTF-8
