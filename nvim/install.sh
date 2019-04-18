@@ -11,7 +11,7 @@ if [ -e "/etc/apt/sources.list.d/nodesource.list" ]; then
 	sudo rm /etc/apt/sources.list.d/nodesource.list
 fi
 
-VERSION=node_11.x
+VERSION=node_10.x
 DISTRO="$(lsb_release -s -c)"
 echo "deb https://deb.nodesource.com/$VERSION $DISTRO main" | sudo tee /etc/apt/sources.list.d/nodesource.list
 echo "deb-src https://deb.nodesource.com/$VERSION $DISTRO main" | sudo tee -a /etc/apt/sources.list.d/nodesource.list
