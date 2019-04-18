@@ -1,1 +1,1 @@
-sudo apt install -y vncserver
+sudo apt install -y tigervnc-standalone-server xorg openbox
