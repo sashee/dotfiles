@@ -48,9 +48,6 @@ mkdir -p ~/.config/nvim && ln -s $(pwd -P)/nvim/init.vim ~/.config/nvim/init.vim
 curl -fLo ~/.local/share/nvim/site/autoload/plug.vim --create-dirs \
     https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 
-echo "BEFORE INSTALL"
 ~/squashfs-root/usr/bin/nvim +'PlugInstall --sync' +UpdateRemotePlugins +'qall!'
-echo "AFTER INSTALL"
 
 ~/squashfs-root/usr/bin/nvim -c ":CocInstall coc-html coc-css coc-json coc-tsserver coc-yaml coc-eslint coc-tslint"
-echo "AFTER PLUGINSTALL"
