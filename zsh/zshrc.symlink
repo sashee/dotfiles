@@ -13,6 +13,9 @@ ZSH_THEME="sunrise"
 
 export FZF_BASE=~/.fzf/
 
+# Ignore duplicate entries
+setopt HIST_IGNORE_ALL_DUPS
+
 plugins=(
 git
 fzf
