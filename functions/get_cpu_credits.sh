@@ -1,9 +1,8 @@
-unset AWS_ACCESS_KEY_ID
-unset AWS_SECRET_ACCESS_KEY
-unset AWS_SESSION_TOKEN
-
 INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-CPU_BALANCE=$(aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUCreditBalance --start-time $(date --iso-8601=seconds -d "10 mins ago") --end-time $(date --iso-8601=seconds) --period 1 --statistics Maximum --dimensions Name=InstanceId,Value=$INSTANCE_ID | jq '.Datapoints[-1].Maximum')
+CPU_POSITIVE_BALANCE=$(aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUCreditBalance --start-time $(date --iso-8601=seconds -d "10 mins ago") --end-time $(date --iso-8601=seconds) --period 300 --statistics Maximum --dimensions Name=InstanceId,Value=$INSTANCE_ID | jq '.Datapoints | sort_by(.Timestamp | fromdateiso8601) | .[-1].Maximum')
+CPU_SURPLUS_BALANCE=$(aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUSurplusCreditBalance --start-time $(date --iso-8601=seconds -d "10 mins ago") --end-time $(date --iso-8601=seconds) --period 300 --statistics Maximum --dimensions Name=InstanceId,Value=$INSTANCE_ID | jq '.Datapoints | sort_by(.Timestamp | fromdateiso8601) | .[-1].Maximum')
+
+CPU_BALANCE=$(echo "$CPU_POSITIVE_BALANCE - $CPU_SURPLUS_BALANCE" | bc)
 
 INSTANCE_TYPE=$(curl -s http://169.254.169.254/latest/meta-data/instance-type)
 

@@ -86,3 +86,9 @@ weight of my changes and tweaks inspired me to finally roll my own. But Ryan's
 dotfiles were an easy way to get into bash customization, and then to jump ship
 to zsh a bit later. A decent amount of the code in these dotfiles stem or are
 inspired from Ryan's original project.
+
+## run in docker
+
+```
+docker run -i -p 5901:5901 -t ubuntu:19.04 /bin/bash -c "apt update && apt upgrade -y && apt install -y sudo git cron lsb-release && adduser --disabled-password --gecos '' ubuntu && adduser ubuntu sudo && echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && su ubuntu -c \"/bin/bash -c 'cd ~ && git clone -b master --single-branch https://github.com/sashee/dotfiles.git && cd dotfiles && script/bootstrap && script/install'\" && su ubuntu -c \"tmux\""
+```

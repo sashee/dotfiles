@@ -36,6 +36,7 @@ autocmd FileType markdown let b:AutoPairs = AutoPairsDefine({'```' : '```'})
 :set signcolumn=yes
 
 nnoremap <C-p> :FZF<CR>
+let $FZF_DEFAULT_COMMAND = 'ack -g ""'
 
 set hidden
 
@@ -49,7 +50,7 @@ set smartcase
 set autoindent
 
 set background=dark
-colorscheme solarized8
+silent! colorscheme solarized8
 
 " Enable true color 启用终端24位色
 if exists('+termguicolors')
