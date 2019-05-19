@@ -21,7 +21,7 @@ git
 fzf
 )
 
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:$HOME/.local/bin:$HOME/squashfs-root/usr/bin:$HOME/npm/bin"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:$HOME/.local/bin:$HOME/squashfs-root/usr/bin:$HOME/npm/bin:$HOME/.terraform"
 
 source $ZSH/oh-my-zsh.sh
 
