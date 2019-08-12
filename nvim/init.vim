@@ -50,6 +50,8 @@ set smartcase
 set autoindent
 
 set background=dark
+set termguicolors
+
 silent! colorscheme solarized8
 
 " Enable true color 启用终端24位色
