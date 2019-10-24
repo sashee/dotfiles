@@ -20,6 +20,7 @@ Plug 'mileszs/ack.vim'
 Plug 'terryma/vim-expand-region'
 Plug 'mattn/emmet-vim'
 Plug 'editorconfig/editorconfig-vim'
+Plug 'vim-scripts/vim-auto-save'
 
 Plug 'neoclide/coc.nvim', {'tag': '*', 'do': { -> coc#util#install()}}
 
@@ -50,6 +51,8 @@ set smartcase
 set autoindent
 
 set background=dark
+set termguicolors
+
 silent! colorscheme solarized8
 
 " Enable true color 启用终端24位色

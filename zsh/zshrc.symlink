@@ -19,7 +19,16 @@ setopt HIST_IGNORE_ALL_DUPS
 plugins=(
 git
 fzf
+vi-mode
 )
+
+# Make Vi mode transitions faster (KEYTIMEOUT is in hundredths of a second)
+export KEYTIMEOUT=1
+
+# `v` is already mapped to visual mode, so we need to use a different key to
+# open Vim
+bindkey -M vicmd "^V" edit-command-line
+export EDITOR='nvim'
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:$HOME/.local/bin:$HOME/squashfs-root/usr/bin:$HOME/npm/bin:$HOME/.terraform"
 
@@ -85,3 +94,8 @@ alias nvim='nocorrect nvim '
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
+
+autoload -U +X bashcompinit && bashcompinit
+complete -o nospace -C ~/.terraform/terraform terraform
+
+export PROMPT="$PROMPT_PREF$PROMPT"
