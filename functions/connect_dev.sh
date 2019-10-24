@@ -2,6 +2,8 @@ set -x
 
 dir=$(dirname "$BASH_SOURCE[0]");
 
+PASSPHRASE="$4"
+
 SG=$(aws --region eu-central-1 ec2 describe-instances --filter "Name=tag:Name,Values=$2" --query "Reservations[].Instances[].SecurityGroups[].GroupId" --no-paginate | jq -r '.[0]')
 
 while : ; do
@@ -42,9 +44,10 @@ while true ; do
 	mkdir -p $3
 	trap 'kill $(jobs -p) 2> /dev/null' EXIT
 	watch "find $3 -maxdepth 1 -mindepth 1 -exec "$dir/transfer_files.sh" $1@$IP {} \; -exec rm -r {} \;" > /dev/null &
+	AWSKEYS=$(echo "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN" | gzip | gpg --cipher-algo AES256 --symmetric --passphrase $PASSPHRASE --batch | base64 | tr -d '\n')
 
 	echo "Connecting" 
-	ssh -q -o ConnectTimeout=10 -o "StrictHostKeyChecking no" -L 0.0.0.0:8080:localhost:8080 -L 0.0.0.0:3000:localhost:3000 -L 0.0.0.0:3001:localhost:3001 -L 0.0.0.0:8443:localhost:443 -L 0.0.0.0:35729:localhost:35729 -L 0.0.0.0:9229:localhost:9229 -L 0.0.0.0:5901:localhost:5901 -L 0.0.0.0:4200:localhost:4200 -CtA $1@$IP AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN TZ=$(getprop persist.sys.timezone) tmux new-session -A -s main
+	ssh -q -o ConnectTimeout=10 -o "StrictHostKeyChecking no" -L 0.0.0.0:8080:localhost:8080 -L 0.0.0.0:3000:localhost:3000 -L 0.0.0.0:3001:localhost:3001 -L 0.0.0.0:8443:localhost:443 -L 0.0.0.0:35729:localhost:35729 -L 0.0.0.0:9229:localhost:9229 -L 0.0.0.0:5901:localhost:5901 -L 0.0.0.0:4200:localhost:4200 -L 0.0.0.0:4001:localhost:4001 -CtA $1@$IP AWSKEYS="$AWSKEYS" TZ=$(getprop persist.sys.timezone) tmux new-session -A -s main
 	clear;
 	echo "Connection closed"
 	kill $(jobs -p) 2> /dev/null
