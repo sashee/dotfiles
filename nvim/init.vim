@@ -53,7 +53,7 @@ set autoindent
 set background=dark
 set termguicolors
 
-silent! colorscheme solarized8
+silent! colorscheme solarized8_high
 
 " Enable true color 启用终端24位色
 if exists('+termguicolors')
