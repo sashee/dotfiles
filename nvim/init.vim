@@ -23,7 +23,7 @@ Plug 'editorconfig/editorconfig-vim'
 Plug 'vim-scripts/vim-auto-save'
 Plug 'rhysd/vim-grammarous'
 
-Plug 'neoclide/coc.nvim', {'tag': '*', 'do': { -> coc#util#install()}}
+Plug 'neoclide/coc.nvim', {'branch': 'release'}
 
 call plug#end()
 
