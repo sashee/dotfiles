@@ -1,5 +1,3 @@
-set -x
-
 dir=$(dirname "$BASH_SOURCE[0]");
 
 PASSPHRASE="$4"
