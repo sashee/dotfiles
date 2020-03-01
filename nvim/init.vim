@@ -21,6 +21,7 @@ Plug 'terryma/vim-expand-region'
 Plug 'mattn/emmet-vim'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'vim-scripts/vim-auto-save'
+Plug 'rhysd/vim-grammarous'
 
 Plug 'neoclide/coc.nvim', {'tag': '*', 'do': { -> coc#util#install()}}
 
