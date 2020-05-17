@@ -63,6 +63,8 @@ if exists('+termguicolors')
   set termguicolors
 endif
 
+let mapleader=","
+
 " autocmd BufNewFile,BufRead *.json.symlink set syntax=json
 
 " NERDTress File highlighting
@@ -101,53 +103,7 @@ let g:EasyMotion_do_mapping = 0 " Disable default mappings
 let g:EasyMotion_smartcase = 1
 
 nmap s <Plug>(easymotion-overwin-f2)
-" JK motions: Line motions
-map <Leader>j <Plug>(easymotion-j)
-map <Leader>k <Plug>(easymotion-k)
-
-" Changes to allow blank lines in blocks, and
-" Top level blocks (zero indent) separated by two or more blank lines.
-" Usage: source <thisfile> in pythonmode and
-" Press: vai, vii to select outer/inner python blocks by indetation.
-" Press: vii, yii, dii, cii to select/yank/delete/change an indented block.
-onoremap <silent>ai :<C-u>call IndTxtObj(0)<CR>
-onoremap <silent>ii :<C-u>call IndTxtObj(1)<CR>
-vnoremap <silent>ai <Esc>:call IndTxtObj(0)<CR><Esc>gv
-vnoremap <silent>ii <Esc>:call IndTxtObj(1)<CR><Esc>gv
-
-function! IndTxtObj(inner)
-  let curcol = col(".")
-  let curline = line(".")
-  let lastline = line("$")
-  let i = indent(line("."))
-  if getline(".") !~ "^\\s*$"
-    let p = line(".") - 1
-    let pp = line(".") - 2
-    let nextblank = getline(p) =~ "^\\s*$"
-    let nextnextblank = getline(pp) =~ "^\\s*$"
-    while p > 0 && ((i == 0 && (!nextblank || (pp > 0 && !nextnextblank))) || (i > 0 && ((indent(p) >= i && !(nextblank && a:inner)) || (nextblank && !a:inner))))
-      -
-      let p = line(".") - 1
-      let pp = line(".") - 2
-      let nextblank = getline(p) =~ "^\\s*$"
-      let nextnextblank = getline(pp) =~ "^\\s*$"
-    endwhile
-    normal! 0V
-    call cursor(curline, curcol)
-    let p = line(".") + 1
-    let pp = line(".") + 2
-    let nextblank = getline(p) =~ "^\\s*$"
-    let nextnextblank = getline(pp) =~ "^\\s*$"
-    while p <= lastline && ((i == 0 && (!nextblank || pp < lastline && !nextnextblank)) || (i > 0 && ((indent(p) >= i && !(nextblank && a:inner)) || (nextblank && !a:inner))))
-      +
-      let p = line(".") + 1
-      let pp = line(".") + 2
-      let nextblank = getline(p) =~ "^\\s*$"
-      let nextnextblank = getline(pp) =~ "^\\s*$"
-    endwhile
-    normal! $
-  endif
-endfunction
+nmap <Leader>w <Plug>(easymotion-bd-W)
 
 " Coc
 
