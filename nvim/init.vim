@@ -54,6 +54,10 @@ set autoindent
 set background=dark
 set termguicolors
 
+if $RECORDING_MODE == "true"
+	set laststatus=0 cmdheight=1 background=light signcolumn=no nonumber norelativenumber shell=bash\ --norc
+endif
+
 silent! colorscheme solarized8_high
 
 " Enable true color 启用终端24位色
@@ -73,21 +77,23 @@ function! NERDTreeHighlightFile(extension, fg, bg, guifg, guibg)
  exec 'autocmd filetype nerdtree syn match ' . a:extension .' #^\s\+.*'. a:extension .'$#'
 endfunction
 
-call NERDTreeHighlightFile('jade', 'green', 'none', 'green', '#151515')
-call NERDTreeHighlightFile('ini', 'yellow', 'none', 'yellow', '#151515')
-call NERDTreeHighlightFile('md', 'blue', 'none', '#3366FF', '#151515')
-call NERDTreeHighlightFile('yml', 'yellow', 'none', 'yellow', '#151515')
-call NERDTreeHighlightFile('config', 'yellow', 'none', 'yellow', '#151515')
-call NERDTreeHighlightFile('conf', 'yellow', 'none', 'yellow', '#151515')
-call NERDTreeHighlightFile('json', 'yellow', 'none', 'yellow', '#151515')
-call NERDTreeHighlightFile('html', 'yellow', 'none', 'yellow', '#151515')
-call NERDTreeHighlightFile('styl', 'cyan', 'none', 'cyan', '#151515')
-call NERDTreeHighlightFile('css', 'cyan', 'none', 'cyan', '#151515')
-call NERDTreeHighlightFile('coffee', 'Red', 'none', 'red', '#151515')
-call NERDTreeHighlightFile('js', 'Red', 'none', '#ffa500', '#151515')
-call NERDTreeHighlightFile('jsx', 'Red', 'none', '#ffa500', '#151515')
-call NERDTreeHighlightFile('ts', 'Magenta', 'none', '#ff00ff', '#151515')
-call NERDTreeHighlightFile('tsx', 'Magenta', 'none', '#ff00ff', '#151515')
+if &background == "dark"
+	call NERDTreeHighlightFile('jade', 'green', 'none', 'green', '#151515')
+	call NERDTreeHighlightFile('ini', 'yellow', 'none', 'yellow', '#151515')
+	call NERDTreeHighlightFile('md', 'blue', 'none', '#3366FF', '#151515')
+	call NERDTreeHighlightFile('yml', 'yellow', 'none', 'yellow', '#151515')
+	call NERDTreeHighlightFile('config', 'yellow', 'none', 'yellow', '#151515')
+	call NERDTreeHighlightFile('conf', 'yellow', 'none', 'yellow', '#151515')
+	call NERDTreeHighlightFile('json', 'yellow', 'none', 'yellow', '#151515')
+	call NERDTreeHighlightFile('html', 'yellow', 'none', 'yellow', '#151515')
+	call NERDTreeHighlightFile('styl', 'cyan', 'none', 'cyan', '#151515')
+	call NERDTreeHighlightFile('css', 'cyan', 'none', 'cyan', '#151515')
+	call NERDTreeHighlightFile('coffee', 'Red', 'none', 'red', '#151515')
+	call NERDTreeHighlightFile('js', 'Red', 'none', '#ffa500', '#151515')
+	call NERDTreeHighlightFile('jsx', 'Red', 'none', '#ffa500', '#151515')
+	call NERDTreeHighlightFile('ts', 'Magenta', 'none', '#ff00ff', '#151515')
+	call NERDTreeHighlightFile('tsx', 'Magenta', 'none', '#ff00ff', '#151515')
+endif
 nmap <silent> <F2> :NERDTreeToggle<CR>
 nmap <silent> <F3> :NERDTreeFind<CR>
 
@@ -175,6 +181,3 @@ augroup TerminalStuff
   autocmd TermOpen * setlocal nonumber norelativenumber
 augroup END
 
-if $RECORDING_MODE == "true"
-	set laststatus=0 cmdheight=1 background=light signcolumn=no nonumber norelativenumber shell=bash\ --norc
-endif
