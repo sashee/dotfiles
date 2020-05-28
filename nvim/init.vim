@@ -174,3 +174,7 @@ autocmd BufReadPost fugitive://* set bufhidden=delete
 augroup TerminalStuff
   autocmd TermOpen * setlocal nonumber norelativenumber
 augroup END
+
+if $RECORDING_MODE == "true"
+	set laststatus=0 cmdheight=1 background=light signcolumn=no nonumber norelativenumber shell=bash\ --norc
+endif
