@@ -22,10 +22,19 @@ Plug 'mattn/emmet-vim'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'vim-scripts/vim-auto-save'
 Plug 'rhysd/vim-grammarous'
+Plug 'zhou13/vim-easyescape'
 
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 
 call plug#end()
+
+let g:easyescape_chars = { "n": 1, "t": 1 }
+let g:easyescape_timeout = 100
+cnoremap nt <ESC>
+cnoremap tn <ESC>
+
+nnoremap <silent> <C-s> :w <cr>
+nnoremap <silent> <C-q> :q <cr>
 
 let g:rainbow_active = 1
 let g:AutoPairsMultilineClose = 0
@@ -51,7 +60,7 @@ set ignorecase
 set smartcase
 set autoindent
 
-set background=dark
+set background=light
 set termguicolors
 
 if $RECORDING_MODE == "true"
