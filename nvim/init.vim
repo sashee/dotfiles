@@ -22,19 +22,19 @@ Plug 'mattn/emmet-vim'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'vim-scripts/vim-auto-save'
 Plug 'rhysd/vim-grammarous'
-Plug 'zhou13/vim-easyescape'
+Plug 'hyhugh/vim-easyescape-plus'
 
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 
 call plug#end()
 
-let g:easyescape_chars = { "n": 1, "t": 1 }
+let g:easyescape_string = "tn"
 let g:easyescape_timeout = 100
-cnoremap nt <ESC>
-cnoremap tn <ESC>
 
-nnoremap <silent> <C-s> :w <cr>
-nnoremap <silent> <C-q> :q <cr>
+map <Space> <Leader>
+
+nnoremap <silent> <Leader>t :w <cr>
+nnoremap <silent> <Leader>s :q <cr>
 
 let g:rainbow_active = 1
 let g:AutoPairsMultilineClose = 0
@@ -75,8 +75,6 @@ if exists('+termguicolors')
   let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
   set termguicolors
 endif
-
-let mapleader=","
 
 " autocmd BufNewFile,BufRead *.json.symlink set syntax=json
 
