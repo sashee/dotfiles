@@ -59,6 +59,7 @@ set smartindent
 set ignorecase
 set smartcase
 set autoindent
+set tw=160
 
 set background=light
 set termguicolors
