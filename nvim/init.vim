@@ -28,6 +28,8 @@ Plug 'neoclide/coc.nvim', {'branch': 'release'}
 
 call plug#end()
 
+let g:gitgutter_map_keys = 0
+
 let g:easyescape_string = "tn"
 let g:easyescape_timeout = 100
 
@@ -118,6 +120,10 @@ let g:EasyMotion_smartcase = 1
 
 nmap s <Plug>(easymotion-overwin-f2)
 nmap <Leader>w <Plug>(easymotion-bd-W)
+map <Leader>l <Plug>(easymotion-lineforward)
+map <Leader>j <Plug>(easymotion-j)
+map <Leader>k <Plug>(easymotion-k)
+map <Leader>h <Plug>(easymotion-linebackward)
 
 " Coc
 
