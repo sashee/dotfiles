@@ -6,6 +6,7 @@ SG=$(aws --region eu-central-1 ec2 describe-instances --filter "Name=tag:Name,Va
 
 while : ; do
 	MYIP=$(curl -s ifconfig.me)
+	[ -z "$MYIP" ] && MYIP=$(curl -s ifconfig.co)
 	[ -z "$MYIP" ] || break
 done
 
@@ -30,6 +31,7 @@ fi
 while true ; do
 	while : ; do
 		CURRENTMYIP=$(curl -s ifconfig.me)
+		[ -z "$CURRENTMYIP" ] && CURRENTMYIP=$(curl -s ifconfig.co)
 		[ -z "$CURRENTMYIP" ] || break
 		sleep 1
 	done
