@@ -47,7 +47,7 @@ while true ; do
 	AWSKEYS=$(echo "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN" | gzip | gpg --cipher-algo AES256 --symmetric --batch --passphrase $PASSPHRASE --batch | base64 | tr -d '\n')
 
 	echo "Connecting" 
-	ssh -q -o ConnectTimeout=10 -o "StrictHostKeyChecking no" -L 127.0.0.2:8080:localhost:8080 -L 127.0.0.2:8081:localhost:8081 -L 127.0.0.2:3000:localhost:3000 -L 127.0.0.2:3001:localhost:3001 -L 127.0.0.2:8443:localhost:443 -L 127.0.0.2:35729:localhost:35729 -L 127.0.0.2:9229:localhost:9229 -L 127.0.0.2:5901:localhost:5901 -L 127.0.0.2:4200:localhost:4200 -L 127.0.0.2:4001:localhost:4001 -L 127.0.0.2:8384:localhost:8384 -L 127.0.0.2:22000:localhost:22000 -CtA $1@$IP AWSKEYS="$AWSKEYS" TZ=$(cat /etc/timezone) tmux new-session -A -s main
+	ssh -q -o ConnectTimeout=10 -o "StrictHostKeyChecking no" -L 127.0.0.2:1234:localhost:1234 -L 127.0.0.2:8080:localhost:8080 -L 127.0.0.2:8081:localhost:8081 -L 127.0.0.2:3000:localhost:3000 -L 127.0.0.2:3001:localhost:3001 -L 127.0.0.2:8443:localhost:443 -L 127.0.0.2:35729:localhost:35729 -L 127.0.0.2:9229:localhost:9229 -L 127.0.0.2:5901:localhost:5901 -L 127.0.0.2:4200:localhost:4200 -L 127.0.0.2:4001:localhost:4001 -L 127.0.0.2:8384:localhost:8384 -L 127.0.0.2:22000:localhost:22000 -CtA $1@$IP AWSKEYS="$AWSKEYS" TZ=$(cat /etc/timezone) tmux new-session -A -s main
 	clear;
 	echo "Connection closed"
 	# kill $(jobs -p) 2> /dev/null
