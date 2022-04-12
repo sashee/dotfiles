@@ -1,0 +1,8 @@
+[Unit]
+Description=Shutdown if there are no tmux sessions
+
+[Timer]
+OnCalendar=*-*-* *:00:00
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Checks tmux session, shuts down if none is active
+
+[Service]
+User=${USERNAME}
+Group=${GROUPNAME}
+Type=oneshot
+ExecStart=${PWD}/auto_shutdown/shutdown_if_no_sessions.sh
+
+[Install]
+WantedBy=multi-user.target

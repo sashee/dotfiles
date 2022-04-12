@@ -1,5 +1,9 @@
 if $(curl -s -m 5 http://169.254.169.254/latest/dynamic/instance-identity/document | grep -q availabilityZone) ; then
-	sudo cp auto_shutdown/shutdown_if_no_sessions /etc/cron.hourly/
+	cat auto_shutdown/shutdown_if_no_sessions.timer | envsubst | sudo tee /etc/systemd/system/shutdown_if_no_sessions.timer > /dev/null
 
-	sudo chown root:root /etc/cron.hourly/shutdown_if_no_sessions
+	cat auto_shutdown/shutdown_if_no_sessions.service | USERNAME="$(id -u -n)" GROUPNAME="$(id -g -n)" envsubst | \
+		sudo tee /etc/systemd/system/shutdown_if_no_sessions.service > /dev/null
+
+	sudo systemctl enable shutdown_if_no_sessions.timer
+	sudo systemctl start shutdown_if_no_sessions.timer
 fi
