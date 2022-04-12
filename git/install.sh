@@ -17,8 +17,4 @@ fi
 
 declare -p GIT_NAME GIT_EMAIL > git/.saved_variables
 
-cat << EOF > $HOME/.gitconfig
-[user]
-	name = ${GIT_NAME}
-	email = ${GIT_EMAIL}
-EOF
+cat git/gitconfig | GIT_NAME="$GIT_NAME" GIT_EMAIL="$GIT_EMAIL" envsubst > $HOME/.gitconfig
