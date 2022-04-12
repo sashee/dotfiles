@@ -1,0 +1,9 @@
+[Unit]
+Description=Syncthing monitoring
+
+[Timer]
+OnBootSec=5m
+
+[Install]
+WantedBy=timers.target
+
