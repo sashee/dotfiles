@@ -52,6 +52,11 @@ const sendTelegramCommand = async (url, params) => {
 	return res.result;
 };
 
+// set commands
+await sendTelegramCommand("setMyCommands", {commands: [
+	{command: "status", description: "Get folder + device stats"},
+]});
+
 const folderStats = await sendSyncthingRequest("http://localhost:8384/rest/stats/folder");
 const deviceStats = await sendSyncthingRequest("http://localhost:8384/rest/stats/device");
 const systemErrors = (await sendSyncthingRequest("http://localhost:8384/rest/system/error")).errors;
@@ -119,7 +124,14 @@ const deviceWithErrors = devices.map((device) => ({
 
 const inError = folderWithErrors.some(({folderErrors}) => folderErrors.length > 0) || deviceWithErrors.some(({deviceErrors}) => deviceErrors.length > 0) || global.globalErrors.length > 0;
 
-const text = `
+const updates = await sendTelegramCommand("getUpdates", {timeout: 0});
+
+const statusMessage = updates.find(({message}) => message.text === "/status");
+
+if (statusMessage) {
+	// needs detailed status
+
+	const text = `
 ${inError ? "<b>=======ERROR=======</b>\n" : ""}Folders:
 
 ${folderWithErrors.map(({path, globalBytes, lastFileAt, folderErrors}) => `
@@ -137,10 +149,13 @@ System:
 
 ${(global.sumGlobalBytes / 10 ** 9).toFixed(2)} GB
 ${global.globalErrors.length > 0 ? "ERRORS!" : ""}
-`.trim();
-console.log(text);
+	`.trim();
 
-await sendTelegramCommand("sendMessage", {text, disable_notification: !inError, parse_mode: "HTML"})
+	await sendTelegramCommand("sendMessage", {text, parse_mode: "HTML"})
+
+	// clear messages
+	await sendTelegramCommand("getUpdates", {timeout: 0, offset: statusMessage.update_id + 1});
+}
 if (inError) {
 	const folderErrors = folderWithErrors.filter(({folderErrors}) => folderErrors.length > 0).map(({path, folderErrors}) => `
 		${path}: ${folderErrors.join("\n")};
@@ -163,5 +178,6 @@ GLOBAL
 ${globalErrors}
 	`.trim();
 	console.log(errorText)
-	await sendTelegramCommand("sendMessage", {text: errorText, disable_notification: !inError, parse_mode: "HTML"})
+	await sendTelegramCommand("sendMessage", {text: "ERRORS", parse_mode: "HTML"})
+	await sendTelegramCommand("sendMessage", {text: errorText, parse_mode: "HTML"})
 }

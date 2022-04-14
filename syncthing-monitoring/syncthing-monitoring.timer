@@ -3,6 +3,7 @@ Description=Syncthing monitoring
 
 [Timer]
 OnBootSec=5m
+OnUnitActiveSec=1h
 
 [Install]
 WantedBy=timers.target
