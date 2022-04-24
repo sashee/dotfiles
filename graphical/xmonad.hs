@@ -28,6 +28,7 @@ myConfig = def
     , ("M1-<Tab>", windows W.focusDown)
     , ("M4-S-o", spawn "chromium")
     , ("M4-S-i", spawn "chromium --incognito")
+    , ("M4-S-;", spawn "flameshot gui")
   ]
 
 myTerminal = "alacritty"
