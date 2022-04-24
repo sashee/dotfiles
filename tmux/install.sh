@@ -1,1 +1,1 @@
-sudo apt install -y tmux bc
+sudo pacman -S --needed --noconfirm tmux

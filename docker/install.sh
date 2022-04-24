@@ -1,7 +1,6 @@
 #!/bin/bash
 
-sudo apt update
-sudo apt install -y docker.io
+sudo pacman -S --noconfirm --needed docker
 
 sudo systemctl enable --now docker
 
