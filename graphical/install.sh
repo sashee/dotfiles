@@ -18,7 +18,7 @@ then
 	sudo pacman -S --needed --noconfirm pulseaudio pavucontrol
 	sudo pacman -S --needed --noconfirm redshift
 	sudo pacman -S --needed --noconfirm xorg alacritty xmonad xmobar xmonad-contrib dmenu xscreensaver dunst numlockx
-	sudo pacman -S --needed --noconfirm vlc ffmpeg chromium leafpad flameshot
+	sudo pacman -S --needed --noconfirm vlc ffmpeg chromium leafpad flameshot noto-fonts-emoji
 
 	mkdir -p ~/.xmonad
 	rm -f ~/.xmonad/xmonad.hs
