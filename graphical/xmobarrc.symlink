@@ -30,9 +30,9 @@ Config { overrideRedirect = False
 		     ] 50
 			, Run Brightness [ "-t", "Br: <percent>%", "--", "-D", "intel_backlight" ] 2
 
-                    , Run XMonadLog
+                    , Run StdinReader
                     ]
        , sepChar  = "%"
        , alignSep = "}{"
-       , template = "%XMonadLog% }{ Vol: %volume% | %bright% | %battery% | %cpu% | %memory% * %swap% | %date% "
+       , template = "%StdinReader% }{ Vol: %volume% | %bright% | %battery% | %cpu% | %memory% * %swap% | %date% "
        }

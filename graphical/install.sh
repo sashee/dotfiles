@@ -17,7 +17,7 @@ then
 	sudo pacman -S --needed --noconfirm xf86-video-intel acpid intel-media-driver
 	sudo pacman -S --needed --noconfirm pulseaudio pavucontrol
 	sudo pacman -S --needed --noconfirm redshift
-	sudo pacman -S --needed --noconfirm xorg alacritty xmonad xmobar xmonad-contrib dmenu xscreensaver dunst
+	sudo pacman -S --needed --noconfirm xorg alacritty xmonad xmobar xmonad-contrib dmenu xscreensaver dunst numlockx
 	sudo pacman -S --needed --noconfirm vlc ffmpeg chromium leafpad flameshot
 
 	mkdir -p ~/.xmonad
