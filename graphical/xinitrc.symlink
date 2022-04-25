@@ -1,10 +1,10 @@
-setxkbmap us -variant colemak
+# setxkbmap us -variant colemak
 xrdb -merge ~/.Xresources
 killall redshift || true
 redshift -l $(curl -s "https://location.services.mozilla.com/v1/geolocate?key=geoclue" | awk 'OFS=":" {print $3,$5}' | tr -d ',}') &
 killall xscreensaver || true
 xscreensaver -no-splash &
-setxkbmap -option caps:super
+# setxkbmap -option caps:super
 
 systemctl --user import-environment DISPLAY
 systemctl --user start dunst

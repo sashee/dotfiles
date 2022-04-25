@@ -30,6 +30,9 @@ then
 	rm -f ~/.bash_profile
 	ln -s $PWD/graphical/bash_profile ~/.bash_profile
 
+	sudo rm -f /etc/X11/xorg.conf.d/00-keyboard.conf
+	sudo ln -s $PWD/graphical/xorg_00-keyboard.conf /etc/X11/xorg.conf.d/00-keyboard.conf
+
 	sudo rm -f /etc/X11/xorg.conf.d/20-intel.conf
 	sudo ln -s $PWD/graphical/xorg_20-intel.conf /etc/X11/xorg.conf.d/20-intel.conf
 
