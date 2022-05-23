@@ -39,9 +39,9 @@ then
 	sudo rm -f /etc/X11/xorg.conf.d/30-touchpad.conf
 	sudo ln -s $PWD/graphical/xorg_30-touchpad.conf /etc/X11/xorg.conf.d/30-touchpad.conf
 
-	#sudo mkdir -p /etc/systemd/logind.conf.d
-	#sudo rm -f /etc/systemd/logind.conf.d/10-desktop.conf
-	sudo rm -f /etc/systemd/logind.conf
-	sudo cp $PWD/graphical/logind_10-desktop.conf /etc/systemd/logind.conf
+	sudo mkdir -p /etc/systemd/logind.conf.d
+	sudo rm -f /etc/systemd/logind.conf.d/10-desktop.conf
+	#sudo rm -f /etc/systemd/logind.conf
+	sudo cp $PWD/graphical/logind_10-desktop.conf /etc/systemd/logind.conf.d/10-desktop.conf
 fi
 
