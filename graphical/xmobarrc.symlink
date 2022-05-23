@@ -2,31 +2,31 @@ Config { overrideRedirect = False
        , font     = "xft:iosevka-9"
        , bgColor  = "#5f5f5f"
        , fgColor  = "#f8f8f2"
-       , position = TopW L 90
+       , position = TopW L 100
        , commands = [ Run Cpu
-                        [ "-L", "3"
-                        , "-H", "50"
-                        , "--high"  , "red"
-                        , "--normal", "green"
+                        [ "-L", "25"
+                        , "-H", "90"
+                        , "--high"  , "orange"
+                        , "--normal", "white"
                         ] 10
                     , Run Memory ["--template", "Mem: <usedratio>%"] 10
                     , Run Swap [] 10
                     , Run Date "%a %Y-%m-%d <fc=#8be9fd>%H:%M</fc>" "date" 10
 		    , Run Com "/home/sashee/dotfiles/functions/get-volume.sh" [] "volume" 2
 		    , Run Battery        [ "--template" , "Batt: <acstatus>"
-		     , "--Low"      , "10"        -- units: %
-		     , "--High"     , "80"        -- units: %
-		     , "--low"      , "darkred"
-		     , "--normal"   , "darkorange"
-		     , "--high"     , "lightgreen"
+		     , "--Low"      , "30"        -- units: %
+		     , "--High"     , "50"        -- units: %
+		     , "--low"      , "orange"
+		     , "--normal"   , "lightgreen"
+		     , "--high"     , "white"
 
 		     , "--" -- battery specific options
 			       -- discharging status
 			       , "-o"	, "<left>% (<timeleft>)"
 			       -- AC "on" status
-			       , "-O"	, "<fc=#dAA520>Charging</fc>"
+			       , "-O"	, "<fc=#AAFFAA>C <left>% (<timeleft>)</fc>"
 			       -- charged status
-			       , "-i"	, "<fc=#006000>Charged</fc>"
+			       , "-i"	, "<fc=#006000>Charged</fc> <left>"
 		     ] 50
 			, Run Brightness [ "-t", "Br: <percent>%", "--", "-D", "intel_backlight" ] 2
 
