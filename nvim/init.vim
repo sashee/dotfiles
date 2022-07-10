@@ -195,3 +195,8 @@ augroup TerminalStuff
   autocmd TermOpen * setlocal nonumber norelativenumber
 augroup END
 
+" source vimrc
+nnoremap <leader>sv <cmd>source $MYVIMRC<CR>
+
+autocmd FileType * setlocal foldmethod=expr foldlevel=0 foldcolumn=2
+autocmd FileType * setlocal foldexpr=getline(v:lnum)=~'^{%\\s*plantuml\\s*%}$'?'>1':getline(v:lnum)=~'^{%\\s*endplantuml\\s*%}$'?'<1':'='
