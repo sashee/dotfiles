@@ -7,13 +7,12 @@ import XMonad.Hooks.EwmhDesktops
 import Graphics.X11.ExtraTypes.XF86
 import qualified XMonad.StackSet as W
 
-main = xmonad . ewmh =<< xmobar myConfig
+main = xmonad . ewmhFullscreen . ewmh =<< xmobar myConfig
 
 myConfig = def
   { terminal = myTerminal
   , borderWidth = myBorderWidth
-  , handleEventHook = fullscreenEventHook
-	, modMask = mod4Mask
+  , modMask = mod4Mask
   }
   `additionalKeysP`
   [ ("M4-<F9>", spawn "pactl set-sink-volume @DEFAULT_SINK@ -5% && notify-send 'Audio' $(~/dotfiles/functions/get-volume.sh)")
