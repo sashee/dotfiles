@@ -5,3 +5,6 @@
 [[ -f ~/.bashrc ]] && . ~/.bashrc
 [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]] && exec startx -- -dpi 120
 [[ -z $DISPLAY && $XDG_VTNR -eq 2 ]] && exec startx ./.xinitrc-highres -- -dpi 288
+
+# abevjava
+. /home/sashee/.profabevjava

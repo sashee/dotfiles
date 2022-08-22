@@ -6,6 +6,7 @@ import XMonad.Util.EZConfig
 import XMonad.Hooks.EwmhDesktops
 import Graphics.X11.ExtraTypes.XF86
 import qualified XMonad.StackSet as W
+import XMonad.Hooks.SetWMName
 
 main = xmonad . ewmhFullscreen . ewmh =<< xmobar myConfig
 
@@ -13,6 +14,7 @@ myConfig = def
   { terminal = myTerminal
   , borderWidth = myBorderWidth
   , modMask = mod4Mask
+  , startupHook = setWMName "LG3D" -- Abevjava only (gray windows)
   }
   `additionalKeysP`
   [ ("M4-<F9>", spawn "pactl set-sink-volume @DEFAULT_SINK@ -5% && notify-send 'Audio' $(~/dotfiles/functions/get-volume.sh)")
