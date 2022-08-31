@@ -9,6 +9,3 @@ Environment="CHAT_ID=${CHAT_ID}"
 Type=oneshot
 ExecStart=/usr/bin/node ${PWD}/syncthing-monitoring/monitoring.mjs
 
-[Install]
-WantedBy=multi-user.target
-
