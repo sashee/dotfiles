@@ -1,14 +1,20 @@
 # setxkbmap us -variant colemak
 xrdb -merge <(echo "Xft.dpi: 288")
-killall xscreensaver || true
-xscreensaver -no-splash &
-# setxkbmap -option caps:super
 
 systemctl --user import-environment DISPLAY
-systemctl --user start dunst
 
-killall xmobar || true
 xrandr --output eDP1 --rate 40.01 --fb 4608x2592 --scale 2.4
 
 numlockx
+
+watch_clip() {
+	while true; do
+		xclip -selection clip -o -display :0 | xclip -selection clip -i -display :1
+
+		sleep 2
+	done
+}
+
+watch_clip &
+
 exec xmonad
