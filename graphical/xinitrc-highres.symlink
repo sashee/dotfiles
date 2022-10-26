@@ -8,8 +8,23 @@ xrandr --output eDP1 --rate 40.01 --fb 4608x2592 --scale 2.4
 numlockx
 
 watch_clip() {
+	local curr="" prev=""
 	while true; do
-		xclip -selection clip -o -display :0 | xclip -selection clip -i -display :1
+		# 0 -> 1
+		curr=$(xclip -o -selection clipboard -d :0 2> /dev/null)
+
+		if [[ "$curr" != "$prev" ]]; then
+			xclip -selection clip -o -display :0 | xclip -selection clip -i -display :1
+			prev="$curr"
+		else
+			# 1 -> 0
+			curr=$(xclip -o -selection clipboard -d :1 2> /dev/null)
+
+			if [[ "$curr" != "$prev" ]]; then
+				xclip -selection clip -o -display :1 | xclip -selection clip -i -display :0
+				prev="$curr"
+			fi
+		fi
 
 		sleep 2
 	done
