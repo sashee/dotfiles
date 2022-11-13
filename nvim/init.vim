@@ -21,16 +21,12 @@ Plug 'mattn/emmet-vim'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'vim-scripts/vim-auto-save'
 Plug 'rhysd/vim-grammarous'
-Plug 'hyhugh/vim-easyescape-plus'
 
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 
 call plug#end()
 
 let g:gitgutter_map_keys = 0
-
-let g:easyescape_string = "tn"
-let g:easyescape_timeout = 100
 
 map <Space> <Leader>
 
