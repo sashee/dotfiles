@@ -180,4 +180,4 @@ nnoremap <leader>sv <cmd>source $MYVIMRC<CR>
 
 autocmd FileType * setlocal foldmethod=expr foldlevel=0 foldcolumn=2
 autocmd BufNewFile,BufRead */awm/blog/**/*.md setlocal foldexpr=getline(v:lnum)=~'^{%\\s*plantuml\\s*%}$'?'>1':getline(v:lnum)=~'^{%\\s*endplantuml\\s*%}$'?'<1':'='
-autocmd BufNewFile,BufRead */fiverr-ebooks/**/*.md setlocal foldexpr=getline(v:lnum)=~'^```plantuml'?'>1':getline(v:lnum)=~'^```$'?'<1':'='
+autocmd BufNewFile,BufRead */workspace/**/*.md setlocal foldexpr=getline(v:lnum)=~'^```plantuml'?'>1':getline(v:lnum)=~'^```$'?'<1':'='
