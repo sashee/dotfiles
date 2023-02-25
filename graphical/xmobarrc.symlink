@@ -1,8 +1,9 @@
 Config { overrideRedirect = False
+       , dpi = 120
        , font     = "xft:iosevka-9"
        , bgColor  = "#5f5f5f"
        , fgColor  = "#f8f8f2"
-       , position = TopW L 100
+       , position = TopH 25
        , commands = [ Run Cpu
                         [ "-L", "25"
                         , "-H", "90"
