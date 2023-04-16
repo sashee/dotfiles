@@ -30,6 +30,7 @@ myConfig = def
     , ("M4-S-o", spawn "chromium")
     , ("M4-S-i", spawn "chromium --incognito")
     , ("M4-S-;", spawn "flameshot gui")
+    , ("M4-S-l", spawn "killall ssh")
   ]
 
 myTerminal = "alacritty"
