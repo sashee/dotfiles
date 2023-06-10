@@ -29,7 +29,7 @@ Config { overrideRedirect = False
 			       -- charged status
 			       , "-i"	, "<fc=#006000>Charged</fc> <left>"
 		     ] 50
-			, Run Brightness [ "-t", "Br: <percent>%", "--", "-D", "intel_backlight" ] 2
+			, Run Brightness [ "-t", "Br: <percent>%", "--", "-D", "(xbacklight -getf)" ] 2
 
                     , Run StdinReader
                     ]

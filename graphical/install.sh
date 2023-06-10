@@ -14,7 +14,6 @@ declare -p ENABLED > graphical/.saved_variables
 
 if [[ "$ENABLED" == "y" ]];
 then
-	sudo pacman -S --needed --noconfirm xf86-video-intel acpid intel-media-driver
 	sudo pacman -S --needed --noconfirm pulseaudio pavucontrol
 	sudo pacman -S --needed --noconfirm redshift
 	sudo pacman -S --needed --noconfirm xorg alacritty xmonad xmobar xmonad-contrib dmenu xscreensaver dunst numlockx
@@ -32,9 +31,6 @@ then
 
 	sudo rm -f /etc/X11/xorg.conf.d/00-keyboard.conf
 	sudo ln -s $PWD/graphical/xorg_00-keyboard.conf /etc/X11/xorg.conf.d/00-keyboard.conf
-
-	sudo rm -f /etc/X11/xorg.conf.d/20-intel.conf
-	sudo ln -s $PWD/graphical/xorg_20-intel.conf /etc/X11/xorg.conf.d/20-intel.conf
 
 	sudo rm -f /etc/X11/xorg.conf.d/30-touchpad.conf
 	sudo ln -s $PWD/graphical/xorg_30-touchpad.conf /etc/X11/xorg.conf.d/30-touchpad.conf
