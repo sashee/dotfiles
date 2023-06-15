@@ -29,11 +29,12 @@ Config { overrideRedirect = False
 			       -- charged status
 			       , "-i"	, "<fc=#006000>Charged</fc> <left>"
 		     ] 50
-			, Run Brightness [ "-t", "Br: <percent>%", "--", "-D", "(xbacklight -getf)" ] 2
+			, Run Com "/home/sashee/dotfiles/functions/manage-brightness.sh" [] "brightness" 2
+			, Run Com "cat" ["/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"] "governor" 2
 
                     , Run StdinReader
                     ]
        , sepChar  = "%"
        , alignSep = "}{"
-       , template = "%StdinReader% }{ Vol: %volume% | %bright% | %battery% | %cpu% | %memory% * %swap% | %date% "
+       , template = "%StdinReader% }{ Vol: %volume% | Bright: %brightness% | %battery% | %cpu% | %governor% | %memory% * %swap% | %date% "
        }
