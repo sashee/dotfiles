@@ -3,7 +3,7 @@ xrdb -merge <(echo "Xft.dpi: 288")
 
 systemctl --user import-environment DISPLAY
 
-xrandr --output eDP1 --rate 40.01 --fb 4608x2592 --scale 2.4
+xrandr --output eDP --rate 40.01 --fb 4608x2592 --scale 2.4
 
 numlockx
 
