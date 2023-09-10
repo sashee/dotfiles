@@ -15,7 +15,7 @@ declare -p ENABLED > graphical/.saved_variables
 if [[ "$ENABLED" == "y" ]];
 then
 	sudo pacman -S --needed --noconfirm pulseaudio pavucontrol
-	sudo pacman -S --needed --noconfirm xorg alacritty xmonad xmobar xmonad-contrib dmenu xscreensaver dunst numlockx
+	sudo pacman -S --needed --noconfirm xorg alacritty xmonad xmobar xmonad-contrib dmenu xscreensaver dunst numlockx x11-ssh-askpass
 	sudo pacman -S --needed --noconfirm vlc ffmpeg chromium leafpad flameshot noto-fonts-emoji
 
 	mkdir -p ~/.xmonad

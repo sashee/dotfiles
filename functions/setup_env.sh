@@ -9,7 +9,7 @@ AWSKEYS=$(echo $AWSRESULTS | jq -r '"AWS_ACCESS_KEY_ID=" + .Credentials.AccessKe
 
 eval `ssh-agent`
 
-ssh-add <( \
+ssh-add -c <( \
 	AWS_ACCESS_KEY_ID=$(echo $AWSRESULTS | jq -r '.Credentials.AccessKeyId') \
 	AWS_SECRET_ACCESS_KEY=$(echo $AWSRESULTS | jq -r '.Credentials.SecretAccessKey') \
 	AWS_SESSION_TOKEN=$(echo $AWSRESULTS | jq -r '.Credentials.SessionToken') \
