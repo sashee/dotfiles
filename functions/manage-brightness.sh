@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SYS_BRIGHTNESS=$(cat /sys/class/backlight/amdgpu_bl0/actual_brightness)
+SYS_BRIGHTNESS=$(cat /sys/class/backlight/amdgpu_bl*/actual_brightness)
 XRANDR_BRIGHTNESS=$(xrandr --verbose | awk '/Brightness/ { print $2; exit }')
 XRANDR_GAMMA=$(xrandr --verbose | awk '/Gamma/ { print $2; exit }')
 
