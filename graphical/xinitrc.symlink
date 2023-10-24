@@ -10,6 +10,7 @@ systemctl --user start dunst
 killall xmobar || true
 
 sudo -n cpupower frequency-set -g powersave
+sudo -n cpupower frequency-set -d 2100MHz
 
 numlockx
 exec xmonad
