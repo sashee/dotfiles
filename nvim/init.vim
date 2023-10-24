@@ -173,16 +173,50 @@ autocmd User fugitive
 autocmd BufReadPost fugitive://* set bufhidden=delete
 
 " No line numbers in terminal
-augroup TerminalStuff
-  autocmd TermOpen * setlocal nonumber norelativenumber
-augroup END
+lua << EOF
+	local mygroup = vim.api.nvim_create_augroup('TerminalStuff', { clear = true })
+	vim.api.nvim_create_autocmd({ 'TermOpen' }, {
+		pattern = '*',
+		group = mygroup,
+		callback = function()
+			vim.opt_local.number = false
+			vim.opt_local.relativenumber = false
+		end,
+	})
+EOF
 
 " source vimrc
 nnoremap <leader>sv <cmd>source $MYVIMRC<CR>
 
-autocmd FileType * setlocal foldmethod=expr foldlevel=0 foldcolumn=2
-autocmd BufNewFile,BufRead */awm/blog/**/*.md setlocal foldexpr=getline(v:lnum)=~'^{%\\s*plantuml\\s*%}$'?'>1':getline(v:lnum)=~'^{%\\s*endplantuml\\s*%}$'?'<1':'='
-autocmd BufNewFile,BufRead */workspace/**/*.md setlocal foldexpr=getline(v:lnum)=~'^```plantuml'?'>1':getline(v:lnum)=~'^```$'?'<1':'='
+lua << EOF
+	vim.api.nvim_create_autocmd({ 'FileType' }, {
+		pattern = '*',
+		callback = function()
+			vim.opt_local.foldmethod = "expr"
+			vim.opt_local.foldlevel = 0
+			vim.opt_local.foldcolumn = "2"
+		end,
+	})
+	vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
+		pattern = '*',
+		callback = function()
+			vim.opt_local.foldexpr = "nvim_treesitter#foldexpr()"
+			vim.opt_local.foldenable = false
+		end,
+	})
+	vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
+		pattern = '*/workspace/**/*.md',
+		callback = function()
+			vim.opt_local.foldexpr = "getline(v:lnum)=~'^```plantuml'?'>1':getline(v:lnum)=~'^```$'?'<1':'='"
+		end,
+	})
+	vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
+		pattern = '*/awm/blog/**/*.md',
+		callback = function()
+			vim.opt_local.foldexpr = "getline(v:lnum)=~'^{%\\s*plantuml\\s*%}$'?'>1':getline(v:lnum)=~'^{%\\s*endplantuml\\s*%}$'?'<1':'='"
+		end,
+	})
+EOF
 
 lua << EOF
 	require("jester").setup({
