@@ -22,4 +22,4 @@ curl -fLo ~/.local/share/nvim/site/autoload/plug.vim --create-dirs \
 
 nvim +'PlugInstall --sync' +UpdateRemotePlugins +'qall!'
 
-nvim -c ":CocInstall coc-html coc-css coc-json coc-tsserver coc-yaml coc-eslint"
+nvim -c ":LspInstall tsserver"
