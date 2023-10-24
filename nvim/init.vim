@@ -21,6 +21,8 @@ Plug 'mattn/emmet-vim'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'vim-scripts/vim-auto-save'
 Plug 'rhysd/vim-grammarous'
+Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
+Plug 'David-Kunz/jester'
 
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 
@@ -181,3 +183,11 @@ nnoremap <leader>sv <cmd>source $MYVIMRC<CR>
 autocmd FileType * setlocal foldmethod=expr foldlevel=0 foldcolumn=2
 autocmd BufNewFile,BufRead */awm/blog/**/*.md setlocal foldexpr=getline(v:lnum)=~'^{%\\s*plantuml\\s*%}$'?'>1':getline(v:lnum)=~'^{%\\s*endplantuml\\s*%}$'?'<1':'='
 autocmd BufNewFile,BufRead */workspace/**/*.md setlocal foldexpr=getline(v:lnum)=~'^```plantuml'?'>1':getline(v:lnum)=~'^```$'?'<1':'='
+
+lua << EOF
+	require("jester").setup({
+		path_to_jest_run = 'NODE_OPTIONS=--experimental-vm-modules ./node_modules/.bin/jest'
+	})
+	vim.keymap.set('n', '<Leader>rt', function() require"jester".run() end)
+EOF
+
