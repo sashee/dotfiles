@@ -154,8 +154,11 @@ lua << EOF
 require "lsp_signature".setup({})
 
 require("mason").setup()
-require("mason-lspconfig").setup()
+require("mason-lspconfig").setup({
+	ensure_installed = {'tsserver', 'eslint'}
+})
 require'lspconfig'.tsserver.setup{}
+require'lspconfig'.eslint.setup{}
 
 vim.keymap.set('n', '<space>e', vim.diagnostic.open_float)
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
