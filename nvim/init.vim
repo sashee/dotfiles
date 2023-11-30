@@ -198,6 +198,12 @@ vim.api.nvim_create_autocmd('LspAttach', {
 EOF
 
 lua << EOF
+require("nvim-treesitter.configs").setup({
+  ensure_installed = {"html", "markdown"},
+})
+EOF
+
+lua << EOF
 	vim.api.nvim_create_autocmd({ 'FileType' }, {
 		pattern = '*',
 		callback = function()
