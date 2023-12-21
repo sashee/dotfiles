@@ -4,13 +4,11 @@ Plug 'tpope/vim-surround'
 Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
 Plug 'junegunn/fzf.vim'
 Plug 'scrooloose/nerdtree', { 'on':  'NERDTreeToggle' }
-Plug 'HerringtonDarkholme/yats.vim'
 Plug 'roxma/nvim-yarp'
 Plug 'airblade/vim-gitgutter'
 Plug 'lifepillar/vim-solarized8'
 Plug 'scrooloose/nerdtree'
 Plug 'Xuyuanp/nerdtree-git-plugin'
-Plug 'tpope/vim-fugitive'
 Plug 'easymotion/vim-easymotion'
 Plug 'jiangmiao/auto-pairs'
 Plug 'luochen1990/rainbow'
@@ -128,12 +126,6 @@ map <Leader>j <Plug>(easymotion-j)
 map <Leader>k <Plug>(easymotion-k)
 map <Leader>h <Plug>(easymotion-linebackward)
 
-autocmd User fugitive 
-  \ if fugitive#buffer().type() =~# '^\%(tree\|blob\)$' |
-  \   nnoremap <buffer> .. :edit %:h<CR> |
-  \ endif
-autocmd BufReadPost fugitive://* set bufhidden=delete
-
 " No line numbers in terminal
 lua << EOF
 	local mygroup = vim.api.nvim_create_augroup('TerminalStuff', { clear = true })
@@ -204,40 +196,40 @@ require("nvim-treesitter.configs").setup({
 EOF
 
 lua << EOF
-	vim.api.nvim_create_autocmd({ 'FileType' }, {
-		pattern = '*',
-		callback = function()
-			vim.opt_local.foldmethod = "expr"
-			vim.opt_local.foldlevel = 0
-			vim.opt_local.foldcolumn = "2"
-		end,
-	})
-	vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
-		pattern = '*',
-		callback = function()
-			vim.opt_local.foldexpr = "nvim_treesitter#foldexpr()"
-			vim.opt_local.foldenable = false
-		end,
-	})
-	vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
-		pattern = '*/workspace/**/*.md',
-		callback = function()
-			vim.opt_local.foldexpr = "getline(v:lnum)=~'^```plantuml'?'>1':getline(v:lnum)=~'^```$'?'<1':'='"
-		end,
-	})
-	vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
-		pattern = '*/awm/blog/**/*.md',
-		callback = function()
-			vim.opt_local.foldexpr = "getline(v:lnum)=~'^{%\\s*plantuml\\s*%}$'?'>1':getline(v:lnum)=~'^{%\\s*endplantuml\\s*%}$'?'<1':'='"
-		end,
-	})
+vim.api.nvim_create_autocmd({ 'FileType' }, {
+	pattern = '*',
+	callback = function()
+		vim.opt_local.foldmethod = "expr"
+		vim.opt_local.foldlevel = 0
+		vim.opt_local.foldcolumn = "2"
+	end,
+})
+vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
+	pattern = '*',
+	callback = function()
+		vim.opt_local.foldexpr = "nvim_treesitter#foldexpr()"
+		vim.opt_local.foldenable = false
+	end,
+})
+vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
+	pattern = '*/workspace/**/*.md',
+	callback = function()
+		vim.opt_local.foldexpr = "getline(v:lnum)=~'^```plantuml'?'>1':getline(v:lnum)=~'^```$'?'<1':'='"
+	end,
+})
+vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
+	pattern = '*/awm/blog/**/*.md',
+	callback = function()
+		vim.opt_local.foldexpr = "getline(v:lnum)=~'^{%\\s*plantuml\\s*%}$'?'>1':getline(v:lnum)=~'^{%\\s*endplantuml\\s*%}$'?'<1':'='"
+	end,
+})
 EOF
 
 lua << EOF
-	require("jester").setup({
-		path_to_jest_run = 'NODE_OPTIONS=--experimental-vm-modules ./node_modules/.bin/jest'
-	})
-	vim.keymap.set('n', '<Leader>rt', function() require"jester".run() end)
+require("jester").setup({
+	path_to_jest_run = 'NODE_OPTIONS=--experimental-vm-modules ./node_modules/.bin/jest'
+})
+vim.keymap.set('n', '<Leader>rt', function() require"jester".run() end)
 EOF
 
 lua << EOF
