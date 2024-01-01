@@ -107,6 +107,8 @@ if &background == "dark"
 endif
 nmap <silent> <F2> :NERDTreeToggle<CR>
 nmap <silent> <F3> :NERDTreeFind<CR>
+" remove L mapping
+let g:NERDTreeMapToggleFileLines = 0
 
 let NERDTreeQuitOnOpen = 1
 
