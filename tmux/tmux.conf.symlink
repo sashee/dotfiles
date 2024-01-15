@@ -9,6 +9,8 @@ bind -n C-l next-window
 # reload config file (change file location to your the tmux.conf you want to use)
 bind r source-file ~/.tmux.conf
 
+set-option -g history-limit 50000
+
 # Enable mouse mode (tmux 2.1 and above)
 set -g mouse on
 
