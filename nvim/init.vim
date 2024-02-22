@@ -19,8 +19,13 @@ Plug 'mattn/emmet-vim'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'vim-scripts/vim-auto-save'
 Plug 'rhysd/vim-grammarous'
+
+Plug 'nvim-lua/plenary.nvim'
+Plug 'antoinemadec/FixCursorHold.nvim'
+Plug 'nvim-neotest/neotest'
+Plug 'nvim-neotest/neotest-jest'
+
 Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
-Plug 'David-Kunz/jester'
 Plug 'williamboman/mason.nvim'
 Plug 'williamboman/mason-lspconfig.nvim'
 Plug 'neovim/nvim-lspconfig'
@@ -141,6 +146,40 @@ lua << EOF
 	})
 EOF
 
+lua << EOF
+require("neotest").setup({
+	icons = {
+		child_indent = "│",
+		child_prefix = "├",
+		collapsed = "─",
+		expanded = "╮",
+		failed = "X",
+		final_child_indent = " ",
+		final_child_prefix = "╰",
+		non_collapsible = "─",
+		passed = "✓",
+		running = "𝦎",
+		running_animated = { "/", "|", "\\", "-", "/", "|", "\\", "-" },
+		skipped = "?",
+		unknown = "?",
+		watching = "👀"
+	},
+	status = {
+		enabled = false,
+	},
+  adapters = {
+		require('neotest-jest')({
+			jestCommand = "npm test --",
+			cwd = function(path)
+				return vim.fn.getcwd()
+			end,
+		}),
+  },
+})
+
+vim.keymap.set('n', '<Leader>rt', function() require("neotest").summary.toggle() end)
+EOF
+
 " source vimrc
 nnoremap <leader>sv <cmd>source $MYVIMRC<CR>
 
@@ -193,7 +232,7 @@ EOF
 
 lua << EOF
 require("nvim-treesitter.configs").setup({
-  ensure_installed = {"html", "markdown"},
+  ensure_installed = {"html", "markdown", "javascript", "typescript"},
 })
 EOF
 
@@ -225,13 +264,6 @@ vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
 		vim.opt_local.foldexpr = "getline(v:lnum)=~'^{%\\s*plantuml\\s*%}$'?'>1':getline(v:lnum)=~'^{%\\s*endplantuml\\s*%}$'?'<1':'='"
 	end,
 })
-EOF
-
-lua << EOF
-require("jester").setup({
-	path_to_jest_run = 'NODE_OPTIONS=--experimental-vm-modules ./node_modules/.bin/jest'
-})
-vim.keymap.set('n', '<Leader>rt', function() require"jester".run() end)
 EOF
 
 lua << EOF
