@@ -24,6 +24,7 @@ bind-key -T copy-mode-vi 'y' send -X copy-selection-and-cancel
 set -sg escape-time 10
 
 set-option -g default-shell /bin/zsh
+# set-option -g default-command "/usr/sbin/firejail --profile=/home/sashee/dotfiles/tmux/firejail.profile /bin/zsh"
 
 set-option -g mouse off
 
