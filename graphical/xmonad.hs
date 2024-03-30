@@ -31,6 +31,7 @@ myConfig = def
     , ("M1-<Tab>", windows W.focusDown)
     , ("M4-S-o", spawn "firejail chromium")
     , ("M4-S-i", spawn "firejail chromium --incognito")
+    , ("M4-S-k", spawn "firejail --ignore=\"private-dev\" --protocol=unix,netlink --ignore=\"net\" keepassxc")
     , ("M4-S-;", spawn "flameshot gui")
     , ("M4-S-l", spawn "killall ssh")
     , ("M4-S-u", spawn "xscreensaver-command -lock")
