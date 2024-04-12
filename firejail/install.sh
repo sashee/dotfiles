@@ -24,5 +24,7 @@ rm -f ~/.config/firejail/npx.profile
 ln -s $PWD/firejail/npx.profile ~/.config/firejail/npx.profile
 rm -f ~/.config/firejail/lazygit.profile
 ln -s $PWD/firejail/lazygit.profile ~/.config/firejail/lazygit.profile
+rm -f ~/.config/firejail/nvim.profile
+ln -s $PWD/firejail/nvim.profile ~/.config/firejail/nvim.profile
 
 sudo firecfg
