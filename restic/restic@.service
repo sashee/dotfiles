@@ -5,11 +5,29 @@ Description=Restic backup to %i
 EnvironmentFile=/etc/restic_configs/%i
 Type=oneshot
 
+SystemCallFilter=@system-service
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+MemoryDenyWriteExecute=true
+RestrictSUIDSGID=true
+KeyringMode=private
+ProtectClock=true
+RestrictRealtime=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectHostname=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+RestrictNamespaces=
+
 TemporaryFileSystem=/home
-BindPaths=/home/sashee/laptop-backup
-BindPaths=/home/sashee/Mobile-backup
-BindPaths=/home/sashee/safe
-BindPaths=/home/sashee/Notes
+BindReadOnlyPaths=/home/sashee/laptop-backup
+BindReadOnlyPaths=/home/sashee/Mobile-backup
+BindReadOnlyPaths=/home/sashee/safe
+BindReadOnlyPaths=/home/sashee/Notes
 
 ExecStartPre=/usr/sbin/curl -s --get --data-urlencode state=run --data-urlencode series=${INVOCATION_ID} --data-urlencode message=%i ${CRONITOR_MONITOR_URL}
 ExecStartPre=/usr/sbin/restic unlock
