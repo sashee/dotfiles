@@ -29,10 +29,10 @@ then
 	ln -s $PWD/graphical/bash_profile ~/.bash_profile
 
 	sudo rm -f /etc/X11/xorg.conf.d/00-keyboard.conf
-	sudo ln -s $PWD/graphical/xorg_00-keyboard.conf /etc/X11/xorg.conf.d/00-keyboard.conf
+	sudo cp $PWD/graphical/xorg_00-keyboard.conf /etc/X11/xorg.conf.d/00-keyboard.conf
 
 	sudo rm -f /etc/X11/xorg.conf.d/30-touchpad.conf
-	sudo ln -s $PWD/graphical/xorg_30-touchpad.conf /etc/X11/xorg.conf.d/30-touchpad.conf
+	sudo cp $PWD/graphical/xorg_30-touchpad.conf /etc/X11/xorg.conf.d/30-touchpad.conf
 
 	sudo mkdir -p /etc/systemd/logind.conf.d
 	sudo rm -f /etc/systemd/logind.conf.d/10-desktop.conf

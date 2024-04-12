@@ -1,0 +1,8 @@
+ignore private-dev
+protocol unix,netlink
+ignore net
+
+noblacklist ~/.config/keepassxc
+noblacklist ~/*.kdbx
+noblacklist ~/**/*.kdbx
+noblacklist ~/laptop-backup

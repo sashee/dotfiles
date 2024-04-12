@@ -1,0 +1,27 @@
+[Unit]
+Description=Restic backup to %i
+
+[Service]
+EnvironmentFile=/etc/restic_configs/%i
+Type=oneshot
+
+TemporaryFileSystem=/home
+BindPaths=/home/sashee/laptop-backup
+BindPaths=/home/sashee/Mobile-backup
+BindPaths=/home/sashee/safe
+BindPaths=/home/sashee/Notes
+
+ExecStartPre=/usr/sbin/curl -s --get --data-urlencode state=run --data-urlencode series=${INVOCATION_ID} --data-urlencode message=%i ${CRONITOR_MONITOR_URL}
+ExecStartPre=/usr/sbin/restic unlock
+ExecStart=/usr/sbin/date
+ExecStart=/usr/sbin/restic backup --group-by '' $BACKUP_DIRS $EXCLUDES
+ExecStart=echo "Backup complete"
+ExecStart=/bin/sh -c 'if [ -n "${PRUNE}" ]; then /usr/sbin/restic forget $PRUNE --group-by \'\' --prune --compact; else echo "Skipping prune"; fi'
+ExecStart=echo "Prune complete"
+ExecStart=/usr/sbin/restic check
+ExecStart=echo "Check complete"
+ExecStart=/usr/sbin/restic snapshots
+ExecStart=/usr/sbin/restic stats latest
+ExecStart=/usr/sbin/date
+ExecStopPost=/bin/sh -c '/usr/sbin/curl -s --get --data-urlencode series=${INVOCATION_ID} --data-urlencode state@<([ "${EXIT_STATUS}" == 0 ] && echo -n "complete" || echo -n "fail") --data-urlencode message@<(/usr/sbin/journalctl USER_INVOCATION_ID=${INVOCATION_ID} + _SYSTEMD_INVOCATION_ID=${INVOCATION_ID} + INVOCATION_ID=${INVOCATION_ID} -o cat | tail -c 2000) ${CRONITOR_MONITOR_URL}'
+

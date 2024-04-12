@@ -14,22 +14,4 @@ blacklist ~/safe
 read-only ~/dotfiles
 read-only ~/private_scripts
 
-caps.drop all
-seccomp
-
-dbus-system none
-dbus-user none
-disable-mnt
-
-nosound
-notv
-novideo
-no3d
-nodvd
-noinput
-noprinters
-nou2f
-private-dev
-private-tmp
-x11 none
-
+env AWSKEYS=""
