@@ -6,3 +6,4 @@ noblacklist ~/.config/keepassxc
 noblacklist ~/*.kdbx
 noblacklist ~/**/*.kdbx
 noblacklist ~/laptop-backup
+noblacklist ~/safe

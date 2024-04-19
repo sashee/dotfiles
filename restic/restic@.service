@@ -20,7 +20,7 @@ PrivateDevices=true
 PrivateTmp=true
 ProtectHostname=true
 SystemCallArchitectures=native
-CapabilityBoundingSet=
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
 RestrictNamespaces=
 
 TemporaryFileSystem=/home
