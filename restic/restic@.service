@@ -25,8 +25,11 @@ RestrictNamespaces=true
 LockPersonality=true
 RestrictAddressFamilies=AF_INET AF_INET6
 ProtectProc=noaccess
+PrivateUsers=true
 
-TemporaryFileSystem=/home
+ProtectSystem=strict
+
+ProtectHome=tmpfs
 BindReadOnlyPaths=/home/sashee/laptop-backup
 BindReadOnlyPaths=/home/sashee/Mobile-backup
 BindReadOnlyPaths=/home/sashee/safe
