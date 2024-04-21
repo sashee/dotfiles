@@ -20,12 +20,14 @@ PrivateDevices=true
 PrivateTmp=true
 ProtectHostname=true
 SystemCallArchitectures=native
-CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+CapabilityBoundingSet=
 RestrictNamespaces=true
 LockPersonality=true
 RestrictAddressFamilies=AF_INET AF_INET6
 ProtectProc=noaccess
+RemoveIPC=true
 PrivateUsers=true
+User=sashee
 
 ProtectSystem=strict
 
