@@ -3,8 +3,9 @@ Description=Restic backup to %i
 After=network-online.target
 
 [Timer]
-OnBootSec=30m
-RandomizedDelaySec=30m
+Persistent=true
+OnCalendar=daily
+RandomizedDelaySec=60m
 
 [Install]
 WantedBy=timers.target
