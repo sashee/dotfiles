@@ -3,3 +3,10 @@ TERM = "alacritty"
 
 [shell]
 program = "/bin/zsh"
+
+[font]
+normal.family = "JetBrainsMono Nerd Font"
+bold.family = "JetBrainsMono Nerd Font"
+italic.family = "JetBrainsMono Nerd Font"
+bold_italic.family = "JetBrainsMono Nerd Font"
+size = 12.0

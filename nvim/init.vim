@@ -1,30 +1,29 @@
 call plug#begin('~/.local/share/nvim/plugged')
 
-Plug 'tpope/vim-surround'
-Plug 'junegunn/fzf', { 'dir': '~/.fzf', 'do': './install --all' }
-Plug 'junegunn/fzf.vim'
-Plug 'scrooloose/nerdtree', { 'on':  'NERDTreeToggle' }
-Plug 'roxma/nvim-yarp'
-Plug 'airblade/vim-gitgutter'
-Plug 'lifepillar/vim-solarized8'
-Plug 'scrooloose/nerdtree'
-Plug 'Xuyuanp/nerdtree-git-plugin'
-Plug 'easymotion/vim-easymotion'
-Plug 'jiangmiao/auto-pairs'
-Plug 'luochen1990/rainbow'
-Plug 'tpope/vim-unimpaired'
-Plug 'tpope/vim-repeat'
-Plug 'terryma/vim-expand-region'
-Plug 'mattn/emmet-vim'
-Plug 'editorconfig/editorconfig-vim'
-Plug 'vim-scripts/vim-auto-save'
-Plug 'rhysd/vim-grammarous'
+Plug 'kylechui/nvim-surround'
 
+Plug 'lewis6991/gitsigns.nvim'
+
+Plug 'maxmx03/solarized.nvim'
+"
+" needed by: telescope, neotree
 Plug 'nvim-lua/plenary.nvim'
-Plug 'antoinemadec/FixCursorHold.nvim'
+
+Plug 'MunifTanjim/nui.nvim'
+Plug 'nvim-tree/nvim-web-devicons'
+Plug 'nvim-neo-tree/neo-tree.nvim'
+
+Plug 'smoka7/hop.nvim'
+
+Plug 'windwp/nvim-autopairs'
+
+Plug 'hiphish/rainbow-delimiters.nvim'
+
 Plug 'nvim-neotest/nvim-nio'
 Plug 'nvim-neotest/neotest'
 Plug 'nvim-neotest/neotest-jest'
+
+Plug 'nvim-telescope/telescope.nvim'
 
 Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
 Plug 'williamboman/mason.nvim'
@@ -39,24 +38,16 @@ Plug 'ray-x/lsp_signature.nvim'
 
 call plug#end()
 
-let g:gitgutter_map_keys = 0
-
 map <Space> <Leader>
 
 nnoremap <silent> <Leader>t :w <cr>
 nnoremap <silent> <Leader>s :q <cr>
-
-let g:rainbow_active = 1
-let g:AutoPairsMultilineClose = 0
-autocmd FileType markdown let b:AutoPairs = AutoPairsDefine({'```' : '```'})
 
 :set backupcopy=yes
 
 :set number
 :set relativenumber
 :set signcolumn=yes
-
-nnoremap <C-p> :FZF<CR>
 
 set hidden
 
@@ -70,72 +61,14 @@ set smartcase
 set autoindent
 set tw=160
 
-set background=light
-set termguicolors
-
-if $RECORDING_MODE == "true"
-	set laststatus=0 cmdheight=1 background=light signcolumn=no nonumber norelativenumber shell=bash\ --norc
-endif
-
-silent! colorscheme solarized8_high
-
-" Enable true color 启用终端24位色
-if exists('+termguicolors')
-  let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
-  let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
-  set termguicolors
-endif
-
-" autocmd BufNewFile,BufRead *.json.symlink set syntax=json
-
-" NERDTress File highlighting
-function! NERDTreeHighlightFile(extension, fg, bg, guifg, guibg)
- exec 'autocmd filetype nerdtree highlight ' . a:extension .' ctermbg='. a:bg .' ctermfg='. a:fg .' guibg='. a:guibg .' guifg='. a:guifg
- exec 'autocmd filetype nerdtree syn match ' . a:extension .' #^\s\+.*'. a:extension .'$#'
-endfunction
-
-if &background == "dark"
-	call NERDTreeHighlightFile('jade', 'green', 'none', 'green', '#151515')
-	call NERDTreeHighlightFile('ini', 'yellow', 'none', 'yellow', '#151515')
-	call NERDTreeHighlightFile('md', 'blue', 'none', '#3366FF', '#151515')
-	call NERDTreeHighlightFile('yml', 'yellow', 'none', 'yellow', '#151515')
-	call NERDTreeHighlightFile('config', 'yellow', 'none', 'yellow', '#151515')
-	call NERDTreeHighlightFile('conf', 'yellow', 'none', 'yellow', '#151515')
-	call NERDTreeHighlightFile('json', 'yellow', 'none', 'yellow', '#151515')
-	call NERDTreeHighlightFile('html', 'yellow', 'none', 'yellow', '#151515')
-	call NERDTreeHighlightFile('styl', 'cyan', 'none', 'cyan', '#151515')
-	call NERDTreeHighlightFile('css', 'cyan', 'none', 'cyan', '#151515')
-	call NERDTreeHighlightFile('coffee', 'Red', 'none', 'red', '#151515')
-	call NERDTreeHighlightFile('js', 'Red', 'none', '#ffa500', '#151515')
-	call NERDTreeHighlightFile('jsx', 'Red', 'none', '#ffa500', '#151515')
-	call NERDTreeHighlightFile('ts', 'Magenta', 'none', '#ff00ff', '#151515')
-	call NERDTreeHighlightFile('tsx', 'Magenta', 'none', '#ff00ff', '#151515')
-endif
-nmap <silent> <F2> :NERDTreeToggle<CR>
-nmap <silent> <F3> :NERDTreeFind<CR>
-" remove L mapping
-let g:NERDTreeMapToggleFileLines = 0
-
-let NERDTreeQuitOnOpen = 1
-
-" call neomake#configure#automake('wn', 2000)
+nmap <silent> <F2> :Neotree toggle<CR>
+nmap <silent> <F3> :Neotree reveal<CR>
 
 nnoremap H gT
 nnoremap L gt
 
-let g:EasyMotion_do_mapping = 0 " Disable default mappings
-" Turn on case insensitive feature
-let g:EasyMotion_smartcase = 1
-
-nmap s <Plug>(easymotion-overwin-f2)
-nmap <Leader>w <Plug>(easymotion-bd-W)
-map <Leader>l <Plug>(easymotion-lineforward)
-map <Leader>j <Plug>(easymotion-j)
-map <Leader>k <Plug>(easymotion-k)
-map <Leader>h <Plug>(easymotion-linebackward)
-
-" No line numbers in terminal
 lua << EOF
+	-- No line numbers in terminal
 	local mygroup = vim.api.nvim_create_augroup('TerminalStuff', { clear = true })
 	vim.api.nvim_create_autocmd({ 'TermOpen' }, {
 		pattern = '*',
@@ -145,9 +78,7 @@ lua << EOF
 			vim.opt_local.relativenumber = false
 		end,
 	})
-EOF
 
-lua << EOF
 require("neotest").setup({
 	icons = {
 		child_indent = "│",
@@ -179,12 +110,7 @@ require("neotest").setup({
 })
 
 vim.keymap.set('n', '<Leader>rt', function() require("neotest").summary.toggle() end)
-EOF
 
-" source vimrc
-nnoremap <leader>sv <cmd>source $MYVIMRC<CR>
-
-lua << EOF
 require "lsp_signature".setup({})
 
 require("mason").setup()
@@ -229,15 +155,11 @@ vim.api.nvim_create_autocmd('LspAttach', {
     end, opts)
   end,
 })
-EOF
 
-lua << EOF
 require("nvim-treesitter.configs").setup({
   ensure_installed = {"html", "markdown", "javascript", "typescript"},
 })
-EOF
 
-lua << EOF
 vim.api.nvim_create_autocmd({ 'FileType' }, {
 	pattern = '*',
 	callback = function()
@@ -265,9 +187,7 @@ vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
 		vim.opt_local.foldexpr = "getline(v:lnum)=~'^{%\\s*plantuml\\s*%}$'?'>1':getline(v:lnum)=~'^{%\\s*endplantuml\\s*%}$'?'<1':'='"
 	end,
 })
-EOF
 
-lua << EOF
 local cmp = require 'cmp'
 cmp.setup {
   mapping = cmp.mapping.preset.insert({
@@ -298,4 +218,42 @@ cmp.setup {
     { name = 'nvim_lsp' },
   },
 }
+
+require("nvim-surround").setup()
+
+require('gitsigns').setup()
+
+vim.o.background = 'light'
+vim.cmd.colorscheme 'solarized'
+
+require('solarized').setup()
+
+-- hop
+local hop = require('hop').setup({
+	--keys = "arsdheiqwfpgjluy;zxcvbkmtn"
+	keys = "arstneio"
+})
+local hop = require('hop')
+local directions = require('hop.hint').HintDirection
+
+vim.keymap.set('', 's', function()
+  hop.hint_char2({})
+end, {remap=true})
+
+--nmap s <Plug>(easymotion-overwin-f2)
+--nmap <Leader>w <Plug>(easymotion-bd-W)
+--map <Leader>l <Plug>(easymotion-lineforward)
+--map <Leader>j <Plug>(easymotion-j)
+--map <Leader>k <Plug>(easymotion-k)
+--map <Leader>h <Plug>(easymotion-linebackward)
+
+require("nvim-autopairs").setup({
+	break_undo = false
+})
+
+require('rainbow-delimiters.setup').setup()
+
+local builtin = require('telescope.builtin')
+vim.keymap.set('', '<C-f>', builtin.live_grep, {})
+vim.keymap.set('', '<C-p>', builtin.find_files, {})
 EOF

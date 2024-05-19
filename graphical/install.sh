@@ -16,7 +16,7 @@ if [[ "$ENABLED" == "y" ]];
 then
 	sudo pacman -S --needed --noconfirm pipewire wireplumber pipewire-audio pipewire-pulse pipewire-alsa sof-firmware pavucontrol
 	sudo pacman -S --needed --noconfirm xorg alacritty xmonad xmobar xmonad-contrib dmenu xscreensaver dunst numlockx x11-ssh-askpass
-	sudo pacman -S --needed --noconfirm vlc ffmpeg chromium leafpad flameshot noto-fonts-emoji
+	sudo pacman -S --needed --noconfirm vlc ffmpeg chromium leafpad flameshot noto-fonts-emoji ttf-jetbrains-mono-nerd ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono
 
 	mkdir -p ~/.xmonad
 	rm -f ~/.xmonad/xmonad.hs
