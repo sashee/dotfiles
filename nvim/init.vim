@@ -61,9 +61,6 @@ set smartcase
 set autoindent
 set tw=160
 
-nmap <silent> <F2> :Neotree toggle<CR>
-nmap <silent> <F3> :Neotree reveal<CR>
-
 nnoremap H gT
 nnoremap L gt
 
@@ -253,7 +250,33 @@ require("nvim-autopairs").setup({
 
 require('rainbow-delimiters.setup').setup()
 
+require('telescope').setup{
+  defaults = {
+    mappings = {
+      i = {
+        ["<C-k>"] = "move_selection_previous",
+        ["<C-j>"] = "move_selection_next",
+      }
+    }
+  }
+}
+
 local builtin = require('telescope.builtin')
 vim.keymap.set('', '<C-f>', builtin.live_grep, {})
 vim.keymap.set('', '<C-p>', builtin.find_files, {})
+
+require("neo-tree").setup({
+	event_handlers = {
+		{
+			event = "file_opened",
+			handler = function(file_path)
+				require("neo-tree.command").execute({ action = "close" })
+			end
+		}
+	}
+})
+
+vim.keymap.set('', '<F2>', ':Neotree toggle<CR>')
+vim.keymap.set('', '<F3>', ':Neotree reveal<CR>')
+
 EOF
