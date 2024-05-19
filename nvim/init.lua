@@ -219,7 +219,7 @@ require("nvim-surround").setup()
 
 require('gitsigns').setup()
 
-vim.o.background = 'light'
+vim.opt.background = 'light'
 vim.cmd.colorscheme 'solarized'
 
 require('solarized').setup()
@@ -264,6 +264,14 @@ vim.keymap.set('', '<C-f>', builtin.live_grep, {})
 vim.keymap.set('', '<C-p>', builtin.find_files, {})
 
 require("neo-tree").setup({
+	filesystem = {
+		window = {
+			fuzzy_finder_mappings = {
+				["<C-j>"] = "move_cursor_down",
+				["<C-k>"] = "move_cursor_up",
+			}
+		}
+	},
 	event_handlers = {
 		{
 			event = "file_opened",
