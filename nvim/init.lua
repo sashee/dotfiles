@@ -1,80 +1,78 @@
-call plug#begin('~/.local/share/nvim/plugged')
+local vim = vim
+local Plug = vim.fn['plug#']
 
-Plug 'kylechui/nvim-surround'
+vim.call('plug#begin')
 
-Plug 'lewis6991/gitsigns.nvim'
+Plug('kylechui/nvim-surround')
 
-Plug 'maxmx03/solarized.nvim'
-"
-" needed by: telescope, neotree
-Plug 'nvim-lua/plenary.nvim'
+Plug('lewis6991/gitsigns.nvim')
 
-Plug 'MunifTanjim/nui.nvim'
-Plug 'nvim-tree/nvim-web-devicons'
-Plug 'nvim-neo-tree/neo-tree.nvim'
+Plug('maxmx03/solarized.nvim')
 
-Plug 'smoka7/hop.nvim'
+-- needed by: telescope, neotree
+Plug('nvim-lua/plenary.nvim')
 
-Plug 'windwp/nvim-autopairs'
+Plug('MunifTanjim/nui.nvim')
+Plug('nvim-tree/nvim-web-devicons')
+Plug('nvim-neo-tree/neo-tree.nvim')
 
-Plug 'hiphish/rainbow-delimiters.nvim'
+Plug('smoka7/hop.nvim')
 
-Plug 'nvim-neotest/nvim-nio'
-Plug 'nvim-neotest/neotest'
-Plug 'nvim-neotest/neotest-jest'
+Plug('windwp/nvim-autopairs')
 
-Plug 'nvim-telescope/telescope.nvim'
+Plug('hiphish/rainbow-delimiters.nvim')
 
-Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
-Plug 'williamboman/mason.nvim'
-Plug 'williamboman/mason-lspconfig.nvim'
-Plug 'neovim/nvim-lspconfig'
-Plug 'hrsh7th/cmp-nvim-lsp'
-Plug 'hrsh7th/cmp-buffer'
-Plug 'hrsh7th/cmp-path'
-Plug 'hrsh7th/cmp-cmdline'
-Plug 'hrsh7th/nvim-cmp'
-Plug 'ray-x/lsp_signature.nvim'
+Plug('nvim-neotest/nvim-nio')
+Plug('nvim-neotest/neotest')
+Plug('nvim-neotest/neotest-jest')
 
-call plug#end()
+Plug('nvim-telescope/telescope.nvim')
 
-map <Space> <Leader>
+Plug('nvim-treesitter/nvim-treesitter', {['do'] = ':TSUpdate'})
+Plug('williamboman/mason.nvim')
+Plug('williamboman/mason-lspconfig.nvim')
+Plug('neovim/nvim-lspconfig')
+Plug('hrsh7th/cmp-nvim-lsp')
+Plug('hrsh7th/cmp-buffer')
+Plug('hrsh7th/cmp-path')
+Plug('hrsh7th/cmp-cmdline')
+Plug('hrsh7th/nvim-cmp')
+Plug('ray-x/lsp_signature.nvim')
 
-nnoremap <silent> <Leader>t :w <cr>
-nnoremap <silent> <Leader>s :q <cr>
+vim.call('plug#end')
 
-:set backupcopy=yes
+vim.g.mapleader = " "
+vim.api.nvim_set_keymap('n', '<Leader>t', ':w<cr>', { noremap = true, silent = true })
+vim.api.nvim_set_keymap('n', '<Leader>s', ':q<cr>', { noremap = true, silent = true })
 
-:set number
-:set relativenumber
-:set signcolumn=yes
+vim.opt.backupcopy = "yes"
+vim.opt.number = true
+vim.opt.relativenumber = true
+vim.opt.signcolumn = "yes"
+vim.opt.hidden = true
+vim.opt.splitbelow = true
 
-set hidden
+vim.opt.tabstop = 2
+vim.opt.shiftwidth = 2
+vim.opt.smartindent = true
+vim.opt.ignorecase = true
+vim.opt.smartcase = true
+vim.opt.autoindent = true
+vim.opt.tw = 160
 
-set splitbelow
+vim.api.nvim_set_keymap('n', 'H', 'gT', { noremap = true})
+vim.api.nvim_set_keymap('n', 'L', 'gt', { noremap = true})
 
-set tabstop=2
-set shiftwidth=2
-set smartindent
-set ignorecase
-set smartcase
-set autoindent
-set tw=160
-
-nnoremap H gT
-nnoremap L gt
-
-lua << EOF
-	-- No line numbers in terminal
-	local mygroup = vim.api.nvim_create_augroup('TerminalStuff', { clear = true })
-	vim.api.nvim_create_autocmd({ 'TermOpen' }, {
-		pattern = '*',
-		group = mygroup,
-		callback = function()
-			vim.opt_local.number = false
-			vim.opt_local.relativenumber = false
-		end,
-	})
+-- No line numbers in terminal
+local mygroup = vim.api.nvim_create_augroup('TerminalStuff', { clear = true })
+vim.api.nvim_create_autocmd({ 'TermOpen' }, {
+	pattern = '*',
+	group = mygroup,
+	callback = function()
+		vim.opt_local.number = false
+		vim.opt_local.relativenumber = false
+	end,
+})
 
 require("neotest").setup({
 	icons = {
@@ -112,10 +110,11 @@ require "lsp_signature".setup({})
 
 require("mason").setup()
 require("mason-lspconfig").setup({
-	ensure_installed = {'tsserver', 'eslint'}
+	ensure_installed = {'tsserver', 'eslint', 'lua_ls'}
 })
 require'lspconfig'.tsserver.setup{}
 require'lspconfig'.eslint.setup{}
+require'lspconfig'.lua_ls.setup{}
 
 vim.keymap.set('n', '<space>e', vim.diagnostic.open_float)
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
@@ -154,7 +153,7 @@ vim.api.nvim_create_autocmd('LspAttach', {
 })
 
 require("nvim-treesitter.configs").setup({
-  ensure_installed = {"html", "markdown", "javascript", "typescript"},
+  ensure_installed = {"html", "markdown", "javascript", "typescript", "lua"},
 })
 
 vim.api.nvim_create_autocmd({ 'FileType' }, {
@@ -226,12 +225,11 @@ vim.cmd.colorscheme 'solarized'
 require('solarized').setup()
 
 -- hop
-local hop = require('hop').setup({
+require('hop').setup({
 	--keys = "arsdheiqwfpgjluy;zxcvbkmtn"
 	keys = "arstneio"
 })
 local hop = require('hop')
-local directions = require('hop.hint').HintDirection
 
 vim.keymap.set('', 's', function()
   hop.hint_char2({})
@@ -278,5 +276,3 @@ require("neo-tree").setup({
 
 vim.keymap.set('', '<F2>', ':Neotree toggle<CR>')
 vim.keymap.set('', '<F3>', ':Neotree reveal<CR>')
-
-EOF
