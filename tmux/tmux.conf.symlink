@@ -28,9 +28,7 @@ set-option -g default-shell /bin/zsh
 
 set-option -g mouse off
 
-set-option -g default-terminal "screen-256color"
-#set-option -ga terminal-overrides ",xterm-256color:Tc"
-set-option -ga terminal-overrides ",alacritty:RGB,xterm-256color:RGB"
+set -as terminal-features ",$TERM:RGB"
 
 set-option -ga update-environment ' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN DISPLAY TZ'
 

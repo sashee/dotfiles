@@ -219,6 +219,7 @@ require("nvim-surround").setup()
 
 require('gitsigns').setup()
 
+vim.o.termguicolors = true
 vim.opt.background = 'light'
 vim.cmd.colorscheme 'solarized'
 
