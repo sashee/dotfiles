@@ -221,9 +221,19 @@ require('gitsigns').setup()
 
 vim.o.termguicolors = true
 vim.opt.background = 'light'
+require('solarized').setup({
+	colors = function(colors, colorhelper)
+		local darken = colorhelper.darken
+		--local lighten = colorhelper.lighten
+		--local blend = colorhelper.blend
+
+		return {
+			base0 = darken(colors.base0, 10)
+		}
+	end,
+})
 vim.cmd.colorscheme 'solarized'
 
-require('solarized').setup()
 
 -- hop
 require('hop').setup({
