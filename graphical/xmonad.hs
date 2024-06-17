@@ -32,6 +32,7 @@ myConfig = def
     , ("M4-S-o", spawn "chromium")
     , ("M4-S-i", spawn "chromium --incognito")
     , ("M4-S-k", spawn "keepassxc")
+    , ("M4-S-l", spawn "firejail --profile=electron --whitelist=/home/sashee/Notes/obsidian --blacklist=/home/sashee/Downloads --whitelist=/home/sashee/.config/obsidian obsidian")
     , ("M4-S-;", spawn "flameshot gui")
     , ("M4-S-u", spawn "xscreensaver-command -lock")
     , ("M4-S-m", spawn "if [[ \"$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)\" == \"powersave\" ]]; then sudo -n cpupower frequency-set -g schedutil; else sudo -n cpupower frequency-set -g powersave; fi")
