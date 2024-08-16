@@ -19,6 +19,7 @@ then
 	sudo pacman -S --needed --noconfirm vlc ffmpeg chromium leafpad flameshot noto-fonts-emoji ttf-jetbrains-mono-nerd ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono
 	sudo pacman -S --needed --noconfirm keyd
 	sudo systemctl enable keyd --now
+	ln -s /usr/share/keyd/keyd.compose ~/.XCompose
 
 	mkdir -p ~/.xmonad
 	rm -f ~/.xmonad/xmonad.hs
