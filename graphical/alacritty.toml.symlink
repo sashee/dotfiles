@@ -1,8 +1,8 @@
 [env]
 TERM = "alacritty"
 
-[shell]
-program = "/bin/zsh"
+[terminal]
+shell = "/bin/zsh"
 
 [font.bold]
 family = "JetBrainsMono Nerd Font"
