@@ -38,6 +38,7 @@ Plug('hrsh7th/cmp-path')
 Plug('hrsh7th/cmp-cmdline')
 Plug('hrsh7th/nvim-cmp')
 Plug('ray-x/lsp_signature.nvim')
+Plug('rachartier/tiny-inline-diagnostic.nvim')
 
 vim.call('plug#end')
 
@@ -297,3 +298,7 @@ vim.keymap.set('', '<F2>', ':Neotree toggle<CR>')
 vim.keymap.set('', '<F3>', ':Neotree reveal<CR>')
 
 vim.keymap.set('n', '<Leader>Te', ':Texplore<CR>')
+
+-- for https://github.com/rachartier/tiny-inline-diagnostic.nvim
+vim.diagnostic.config({ virtual_text = false })
+require('tiny-inline-diagnostic').setup()
