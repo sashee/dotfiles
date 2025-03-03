@@ -1,3 +1,6 @@
 noblacklist ~/.config/chromium
 noblacklist ~/.config/Google
 
+# keyd compose file (unicode characters)
+whitelist /usr/share/keyd
+noblacklist /usr/share/keyd/keyd.compose
