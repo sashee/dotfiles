@@ -6,6 +6,8 @@ ignore nogroups
 ignore private-etc
 
 noblacklist ${RUNUSER}
+noblacklist /home/sashee/.cargo
+noblacklist /home/sashee/.cargo/bin
 
 include nodejs-common.profile
 
