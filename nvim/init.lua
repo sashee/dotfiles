@@ -111,9 +111,9 @@ require "lsp_signature".setup({})
 
 require("mason").setup()
 require("mason-lspconfig").setup({
-	ensure_installed = {'tsserver', 'eslint', 'lua_ls'}
+	ensure_installed = {'ts_ls', 'eslint', 'lua_ls'}
 })
-require'lspconfig'.tsserver.setup{}
+require'lspconfig'.ts_ls.setup{}
 require'lspconfig'.eslint.setup{}
 require'lspconfig'.lua_ls.setup{}
 
