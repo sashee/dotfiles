@@ -111,11 +111,12 @@ require "lsp_signature".setup({})
 
 require("mason").setup()
 require("mason-lspconfig").setup({
-	ensure_installed = {'ts_ls', 'eslint', 'lua_ls'}
+	ensure_installed = {'ts_ls', 'eslint', 'lua_ls', 'rust_analyzer'}
 })
 require'lspconfig'.ts_ls.setup{}
 require'lspconfig'.eslint.setup{}
 require'lspconfig'.lua_ls.setup{}
+require'lspconfig'.rust_analyzer.setup{}
 
 vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float)
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev)
