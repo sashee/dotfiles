@@ -3,6 +3,7 @@
 #
 
 [[ -f ~/.bashrc ]] && . ~/.bashrc
+export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-agent.socket"
 [[ -z $DISPLAY && $XDG_VTNR -eq 1 ]] && exec startx -- -nolisten local -dpi 120
 [[ -z $DISPLAY && $XDG_VTNR -eq 2 ]] && exec startx ./.xinitrc-highres -- -nolisten local -dpi 288
 

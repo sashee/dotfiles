@@ -21,6 +21,8 @@ then
 	sudo systemctl enable keyd --now
 	ln -s /usr/share/keyd/keyd.compose ~/.XCompose
 
+	systemctl --user enable ssh-agent.service
+
 	mkdir -p ~/.xmonad
 	rm -f ~/.xmonad/xmonad.hs
 	ln -s $PWD/graphical/xmonad.hs ~/.xmonad/xmonad.hs
