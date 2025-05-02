@@ -21,6 +21,10 @@ then
 	sudo systemctl enable keyd --now
 	ln -s /usr/share/keyd/keyd.compose ~/.XCompose
 
+	sudo mkdir -p /usr/lib/systemd/user/ssh-agent.service.d
+	sudo rm -f /usr/lib/systemd/user/ssh-agent.service.d/1-firejail.conf
+	sudo cp $PWD/firejail/ssh-agent_1_display.conf /usr/lib/systemd/user/ssh-agent.service.d/1-display.conf
+
 	systemctl --user enable ssh-agent.service
 
 	mkdir -p ~/.xmonad

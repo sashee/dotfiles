@@ -14,4 +14,7 @@ blacklist ~/safe
 read-only ~/dotfiles
 read-only ~/private_scripts
 
+noblacklist ${RUNUSER}/ssh-agent.socket
+whitelist ${RUNUSER}/ssh-agent.socket
+
 env AWSKEYS=""

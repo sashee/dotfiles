@@ -2,9 +2,6 @@ ignore private-dev
 protocol unix,netlink
 ignore net
 
-noblacklist ${RUNUSER}/ssh-agent.socket
-whitelist ${RUNUSER}/ssh-agent.socket
-
 noblacklist ~/.config/keepassxc
 noblacklist ~/*.kdbx
 noblacklist ~/**/*.kdbx
