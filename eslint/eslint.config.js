@@ -1,6 +1,6 @@
 export default [
 	{
-	    "rules": {
+		"rules": {
 		"indent": [
 		    "error",
 		    "tab"
