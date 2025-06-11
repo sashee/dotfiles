@@ -81,8 +81,6 @@ vim.lsp.enable('terraformls')
 vim.lsp.enable('nixd')
 
 vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float)
-vim.keymap.set('n', '[d', vim.diagnostic.get_prev)
-vim.keymap.set('n', ']d', vim.diagnostic.get_next)
 vim.keymap.set('n', '<Leader>q', vim.diagnostic.setloclist)
 
 -- Use LspAttach autocommand to only map the following keys
