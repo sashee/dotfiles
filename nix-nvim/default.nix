@@ -58,7 +58,7 @@ let
 
 		${pkgs.landrun}/bin/landrun \
 			--rox /usr,/dev,/nix \
-			--rwx ''$(${pkgs.nodejs_24}/bin/node -e 'console.log([path.relative(path.join(process.env.HOME, "workspace"), process.cwd()).split(path.sep)].map((rel) => rel[0].startsWith(".") ? process.cwd() : path.join(process.env.HOME, "workspace", rel[0]))[0])') \
+			--rwx ''$(${pkgs.nodePackages.nodejs}/bin/node -e 'console.log([path.relative(path.join(process.env.HOME, "workspace"), process.cwd()).split(path.sep)].map((rel) => rel[0].startsWith(".") ? process.cwd() : path.join(process.env.HOME, "workspace", rel[0]))[0])') \
 			--rwx /dev/ptmx \
 			--rwx /dev/pts \
 			--rwx /dev/null \
@@ -90,7 +90,7 @@ export PATH="${
 		pkgs.lua-language-server
 			pkgs.typescript-language-server
 			pkgs.bash
-			pkgs.nodejs_24
+			pkgs.nodePackages.nodejs
 			pkgs.git
 			pkgs.ripgrep
 			pkgs.tmux
