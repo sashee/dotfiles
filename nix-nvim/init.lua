@@ -69,17 +69,16 @@ vim.keymap.set('n', '<Leader>rt', function() require("neotest").summary.toggle()
 
 require "lsp_signature".setup({})
 
-require'lspconfig'.ts_ls.setup{}
-require'lspconfig'.eslint.setup{
-}
-require'lspconfig'.lua_ls.setup{}
-require'lspconfig'.rust_analyzer.setup{}
-require'lspconfig'.yamlls.setup{}
-require'lspconfig'.bashls.setup{}
-require'lspconfig'.dockerls.setup{}
-require'lspconfig'.marksman.setup{}
-require'lspconfig'.terraformls.setup{}
-require'lspconfig'.nixd.setup{}
+vim.lsp.enable('ts_ls')
+vim.lsp.enable('eslint')
+vim.lsp.enable('lua_ls')
+vim.lsp.enable('rust_analyzer')
+vim.lsp.enable('yamlls')
+vim.lsp.enable('bashls')
+vim.lsp.enable('dockerls')
+vim.lsp.enable('marksman')
+vim.lsp.enable('terraformls')
+vim.lsp.enable('nixd')
 
 --[[
 vim.lsp.config['luals'] = {
