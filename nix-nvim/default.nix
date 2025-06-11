@@ -66,6 +66,7 @@ let
 			--rwx ~/.local/state/nvim \
 			--rwx ~/.cache \
 			--ro ~/eslint.config.js \
+			--ro ~/.gitconfig \
 			--env HOME \
 			--env PATH \
 			--env NVIM_RPLUGIN_MANIFEST \
