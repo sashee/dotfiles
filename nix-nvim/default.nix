@@ -53,6 +53,9 @@ let
   '';
 
 	runInLandRun =''
+		mkdir -p ~/.local/state/nvim
+		mkdir -p ~/.cache
+
 		${pkgs.landrun}/bin/landrun \
 			--rox /usr,/dev,/nix \
 			--rwx . \
@@ -83,30 +86,32 @@ let
 
 	makeWrapper = {landRun}: ''
 export PATH="${
-	pkgs.lib.makeBinPath ([
+	pkgs.lib.makeBinPath [
 		pkgs.lua-language-server
-		pkgs.typescript-language-server
-		pkgs.bash
-		pkgs.nodejs_24
-		pkgs.git
-		pkgs.ripgrep
-		pkgs.tmux
-		pkgs.man
-		pkgs.eslint
-		pkgs.vscode-langservers-extracted
-		pkgs.rust-analyzer
-		pkgs.yaml-language-server
-		pkgs.bash-language-server
-		pkgs.dockerfile-language-server-nodejs
-		pkgs.marksman
-		pkgs.terraform-ls
-		pkgs.nixd
-	])
+			pkgs.typescript-language-server
+			pkgs.bash
+			pkgs.nodejs_24
+			pkgs.git
+			pkgs.ripgrep
+			pkgs.tmux
+			pkgs.man
+			pkgs.eslint
+			pkgs.vscode-langservers-extracted
+			pkgs.rust-analyzer
+			pkgs.yaml-language-server
+			pkgs.bash-language-server
+			pkgs.dockerfile-language-server-nodejs
+			pkgs.marksman
+			pkgs.terraform-ls
+			pkgs.nixd
+	]
 }"
 
 export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 
-NVIM_RPLUGIN_MANIFEST=${./rplugin.vim} ${landRun} \
+export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
+
+${landRun} \
 ${pkgs.neovim-unwrapped}/bin/nvim \
 -u ${./init.lua} \
 --cmd 'set packpath^=${packpath} | set runtimepath^=${packpath}' "$@"
