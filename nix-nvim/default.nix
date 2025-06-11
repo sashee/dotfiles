@@ -42,7 +42,7 @@ let
   startPluginsWithDeps = pkgs.lib.unique (foldPlugins startPlugins);
 
   packpath = pkgs.runCommandLocal "packpath" {} ''
-    mkdir -p $out/pack/${packageName}/{start,opt}
+    ${pkgs.coreutils}/bin/mkdir -p $out/pack/${packageName}/{start,opt}
 
     ${
       pkgs.lib.concatMapStringsSep
@@ -53,12 +53,12 @@ let
   '';
 
 	runInLandRun =''
-		mkdir -p ~/.local/state/nvim
-		mkdir -p ~/.cache
+		${pkgs.coreutils}/bin/mkdir -p ~/.local/state/nvim
+		${pkgs.coreutils}/bin/mkdir -p ~/.cache
 
 		${pkgs.landrun}/bin/landrun \
 			--rox /usr,/dev,/nix \
-			--rwx . \
+			--rwx ''$(${pkgs.nodejs_24}/bin/node -e 'console.log([path.relative(path.join(process.env.HOME, "workspace"), process.cwd()).split(path.sep)].map((rel) => rel[0].startsWith(".") ? process.cwd() : path.join(process.env.HOME, "workspace", rel[0]))[0])') \
 			--rwx /dev/ptmx \
 			--rwx /dev/pts \
 			--rwx /dev/null \
@@ -95,6 +95,7 @@ export PATH="${
 			pkgs.ripgrep
 			pkgs.tmux
 			pkgs.man
+			pkgs.coreutils
 			pkgs.eslint
 			pkgs.vscode-langservers-extracted
 			pkgs.rust-analyzer
