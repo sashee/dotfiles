@@ -96,6 +96,7 @@ export PATH="${
 			pkgs.tmux
 			pkgs.man
 			pkgs.coreutils
+			pkgs.gzip
 			pkgs.eslint
 			pkgs.vscode-langservers-extracted
 			pkgs.rust-analyzer
