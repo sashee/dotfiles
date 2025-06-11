@@ -80,22 +80,6 @@ vim.lsp.enable('marksman')
 vim.lsp.enable('terraformls')
 vim.lsp.enable('nixd')
 
---[[
-vim.lsp.config['luals'] = {
-  cmd = { 'lua-language-server' },
-  filetypes = { 'lua' },
-  root_markers = { { '.luarc.json', '.luarc.jsonc' }, '.git' },
-}
-vim.lsp.enable('luals')
-
-vim.lsp.config['tsls'] = {
-  cmd = { 'typescript-language-server', '--stdio' },
-  filetypes = { 'javascript', 'javascriptreact', 'javascript.jsx', 'typescript', 'typescriptreact', 'typescript.tsx' },
-  root_markers = { {'tsconfig.json', 'package.json'}, '.git' },
-}
-vim.lsp.enable('tsls')
---]]
-
 vim.keymap.set('n', '<Leader>e', vim.diagnostic.open_float)
 vim.keymap.set('n', '[d', vim.diagnostic.get_prev)
 vim.keymap.set('n', ']d', vim.diagnostic.get_next)
