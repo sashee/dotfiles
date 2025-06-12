@@ -98,6 +98,9 @@ export PATH="${
 			pkgs.man
 			pkgs.coreutils
 			pkgs.gzip
+			pkgs.unixtools.ping
+			pkgs.curl
+			pkgs.netcat
 			pkgs.eslint
 			pkgs.vscode-langservers-extracted
 			pkgs.rust-analyzer
