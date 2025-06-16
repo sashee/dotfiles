@@ -1,3 +1,6 @@
+{
+
+}:
 let
   nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.05";
   pkgs = import nixpkgs { config = {}; overlays = []; };
@@ -132,5 +135,8 @@ ${pkgs.neovim-unwrapped}/bin/nvim \
 		paths = [nvim nvim_net];
 	};
 in
-	res
+	[
+		nvim
+		nvim_net
+	]
 

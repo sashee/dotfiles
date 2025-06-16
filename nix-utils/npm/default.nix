@@ -1,3 +1,6 @@
+{
+
+}:
 let
   nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.05";
   pkgs = import nixpkgs { config = {}; overlays = []; };
@@ -15,10 +18,13 @@ let
 			--env TMPDIR \
 			--env SSL_CERT_FILE \
 			--env LANG \
+			--env NPM_TOKEN_WEARIN \
 			--connect-tcp 443 \
 	'';
 
 	makeWrapper = {landRun}: ''
+export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+
 ${landRun} \
 ${pkgs.nodePackages_latest.nodejs}/bin/npm "$@"
 	'';
@@ -31,5 +37,8 @@ ${pkgs.nodePackages_latest.nodejs}/bin/npm "$@"
 		paths = [npm npm_default];
 	};
 in
-	res
+	[
+		npm
+		npm_default
+	]
 
