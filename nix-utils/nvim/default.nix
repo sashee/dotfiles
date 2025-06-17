@@ -129,11 +129,6 @@ ${pkgs.neovim-unwrapped}/bin/nvim \
 
 	nvim = pkgs.writeShellScriptBin "nvim" (makeWrapper {landRun = runInLandRun;});
 	nvim_net = pkgs.writeShellScriptBin "nvim-net" (makeWrapper {landRun = runInLandRunWithNet;});
-
-	res = pkgs.symlinkJoin {
-		name = "nvim-custom";
-		paths = [nvim nvim_net];
-	};
 in
 	[
 		nvim

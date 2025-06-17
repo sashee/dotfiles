@@ -8,7 +8,7 @@ let
 	runInLandRun =''
 		${pkgs.landrun}/bin/landrun \
 			--rox /usr,/dev,/nix \
-			--rwx ~/.npm \
+			--rwx ~/.aws \
 			--rwx ''$(${pkgs.nodePackages_latest.nodejs}/bin/node -e 'console.log([path.relative(path.join(process.env.HOME, "workspace"), process.cwd()).split(path.sep)].map((rel) => rel[0].startsWith(".") ? process.cwd() : path.join(process.env.HOME, "workspace", rel[0]))[0])') \
 			--rwx /dev/null \
 			--rwx "''${TMPDIR:-/tmp}" \
@@ -17,8 +17,12 @@ let
 			--env PATH \
 			--env TMPDIR \
 			--env SSL_CERT_FILE \
+			--env AWS_ACCESS_KEY_ID \
+			--env AWS_SECRET_ACCESS_KEY \
+			--env AWS_SESSION_TOKEN \
+			--env AWS_REGION \
 			--env LANG \
-			--env NPM_TOKEN_WEARIN \
+			--env TERM \
 			--connect-tcp 443 \
 	'';
 
@@ -26,14 +30,14 @@ let
 export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 
 ${landRun} \
-${pkgs.nodePackages_latest.nodejs}/bin/npm "$@"
+${pkgs.awscli2}/bin/aws "$@"
 	'';
 
-	npm = pkgs.writeShellScriptBin "npm" (makeWrapper {landRun = runInLandRun;});
-	npm_default = pkgs.writeShellScriptBin "npm-default" (makeWrapper {landRun = "";});
+	aws = pkgs.writeShellScriptBin "aws" (makeWrapper {landRun = runInLandRun;});
+	aws_default = pkgs.writeShellScriptBin "aws-default" (makeWrapper {landRun = "";});
 in
 	[
-		npm
-		npm_default
+		aws
+		aws_default
 	]
 
