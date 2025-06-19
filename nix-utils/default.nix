@@ -5,8 +5,9 @@ let
 	nvim = (import ./nvim {inherit pkgs;});
 	npm = (import ./npm {inherit pkgs;});
 	aws = (import ./aws {inherit pkgs;});
+	lazygit = (import ./lazygit {inherit pkgs;});
 in
 	pkgs.symlinkJoin {
 		name = "nix-utils-custom";
-		paths = [nvim npm aws];
+		paths = [nvim npm aws lazygit];
 	}

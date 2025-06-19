@@ -4,6 +4,8 @@
 let
 	packageName = "nvim-custom";
 
+	utils = import ../utils.nix {inherit pkgs;};
+
 	startPlugins = [
     pkgs.vimPlugins.nvim-surround
     pkgs.vimPlugins.gitsigns-nvim
@@ -56,9 +58,11 @@ let
 		${pkgs.coreutils}/bin/mkdir -p ~/.local/state/nvim
 		${pkgs.coreutils}/bin/mkdir -p ~/.cache
 
+		echo "Restricting to folder: $(${utils.findWorkspaceDirAndDefaultsToCurrent}/bin/findWorkspaceDirAndDefaultsToCurrent)"
+
 		${pkgs.landrun}/bin/landrun \
 			--rox /usr,/dev,/nix \
-			--rwx ''$(${pkgs.nodePackages.nodejs}/bin/node -e 'console.log([path.relative(path.join(process.env.HOME, "workspace"), process.cwd()).split(path.sep)].map((rel) => rel[0].startsWith(".") ? process.cwd() : path.join(process.env.HOME, "workspace", rel[0]))[0])') \
+			--rwx ''$(${utils.findWorkspaceDirAndDefaultsToCurrent}/bin/findWorkspaceDirAndDefaultsToCurrent) \
 			--rwx /dev/ptmx \
 			--rwx /dev/pts \
 			--rwx /dev/null \
@@ -89,27 +93,27 @@ let
 export PATH="${
 	pkgs.lib.makeBinPath [
 		pkgs.lua-language-server
-			pkgs.typescript-language-server
-			pkgs.bash
-			pkgs.nodePackages.nodejs
-			pkgs.git
-			pkgs.ripgrep
-			pkgs.tmux
-			pkgs.man
-			pkgs.coreutils
-			pkgs.gzip
-			pkgs.unixtools.ping
-			pkgs.curl
-			pkgs.netcat
-			pkgs.eslint
-			pkgs.vscode-langservers-extracted
-			pkgs.rust-analyzer
-			pkgs.yaml-language-server
-			pkgs.bash-language-server
-			pkgs.dockerfile-language-server-nodejs
-			pkgs.marksman
-			pkgs.terraform-ls
-			pkgs.nixd
+		pkgs.typescript-language-server
+		pkgs.bash
+		pkgs.nodePackages.nodejs
+		pkgs.git
+		pkgs.ripgrep
+		pkgs.tmux
+		pkgs.man
+		pkgs.coreutils
+		pkgs.gzip
+		pkgs.unixtools.ping
+		pkgs.curl
+		pkgs.netcat
+		pkgs.eslint
+		pkgs.vscode-langservers-extracted
+		pkgs.rust-analyzer
+		pkgs.yaml-language-server
+		pkgs.bash-language-server
+		pkgs.dockerfile-language-server-nodejs
+		pkgs.marksman
+		pkgs.terraform-ls
+		pkgs.nixd
 	]
 }"
 
