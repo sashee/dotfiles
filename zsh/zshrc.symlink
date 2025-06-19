@@ -30,7 +30,7 @@ export KEYTIMEOUT=1
 bindkey -M vicmd "^V" edit-command-line
 export EDITOR='nvim'
 
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:$HOME/.local/bin:$HOME/squashfs-root/usr/bin:$HOME/npm/bin:$HOME/.terraform"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:$HOME/.local/bin:$HOME/squashfs-root/usr/bin:$HOME/npm/bin"
 
 source $ZSH/oh-my-zsh.sh
 
@@ -90,8 +90,6 @@ export DISABLE_FZF_KEY_BINDINGS="true"
 bindkey '^P' fzf-history-widget
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-
-export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 
 autoload -U +X bashcompinit && bashcompinit
 complete -o nospace -C ~/.terraform/terraform terraform
