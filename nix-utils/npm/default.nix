@@ -1,10 +1,7 @@
 {
-
+	pkgs
 }:
 let
-  nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.05";
-  pkgs = import nixpkgs { config = {}; overlays = []; };
-
 	runInLandRun =''
 		${pkgs.landrun}/bin/landrun \
 			--rox /usr,/dev,/nix \
