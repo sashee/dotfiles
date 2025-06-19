@@ -58,11 +58,13 @@ let
 		${pkgs.coreutils}/bin/mkdir -p ~/.local/state/nvim
 		${pkgs.coreutils}/bin/mkdir -p ~/.cache
 
-		echo "Restricting to folder: $(${utils.findWorkspaceDirAndDefaultsToCurrent}/bin/findWorkspaceDirAndDefaultsToCurrent)"
+		RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
+
+		echo "Restricting to folder: $RESTRICT_TO"
 
 		${pkgs.landrun}/bin/landrun \
 			--rox /usr,/dev,/nix \
-			--rwx ''$(${utils.findWorkspaceDirAndDefaultsToCurrent}/bin/findWorkspaceDirAndDefaultsToCurrent) \
+			--rwx ''$RESTRICT_TO \
 			--rwx /dev/ptmx \
 			--rwx /dev/pts \
 			--rwx /dev/null \

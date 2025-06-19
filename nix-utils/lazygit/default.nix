@@ -7,11 +7,13 @@ let
 	runInLandRun =''
 		${pkgs.coreutils}/bin/mkdir -p ~/.config/lazygit
 
-		echo "Restricting to folder: $(${utils.findGitRoot}/bin/findGitRoot)"
+		RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
+
+		echo "Restricting to folder: $RESTRICT_TO"
 
 		${pkgs.landrun}/bin/landrun \
 			--rox /usr,/dev,/nix \
-			--rwx ''$(${utils.findGitRoot}/bin/findGitRoot) \
+			--rwx ''$RESTRICT_TO \
 			--rwx /dev/null \
 			--rwx /dev/ptmx \
 			--rwx /dev/pts \
