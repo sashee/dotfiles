@@ -10,5 +10,5 @@ let
 in
 	pkgs.symlinkJoin {
 		name = "nix-utils-custom";
-		paths = [nvim npm aws lazygit fish];
+		paths = [nvim.scripts npm.scripts aws.scripts lazygit.scripts fish];
 	}

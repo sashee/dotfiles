@@ -4,16 +4,8 @@
 let
 	utils = import ../utils.nix {inherit pkgs;};
 
-	runInLandRun =''
-		${pkgs.coreutils}/bin/mkdir -p ~/.config/lazygit
-
-		RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
-
-		echo "Restricting to folder: $RESTRICT_TO"
-
-		${pkgs.landrun}/bin/landrun \
+	landrun_requirements = ''
 			--rox /usr,/dev,/nix \
-			--rwx ''$RESTRICT_TO \
 			--rwx /dev/null \
 			--rwx /dev/ptmx \
 			--rwx /dev/pts \
@@ -33,6 +25,22 @@ let
 			--connect-tcp 22 \
 	'';
 
+	landrun_setup = ''
+		${pkgs.coreutils}/bin/mkdir -p ~/.config/lazygit
+	'';
+
+	runInLandRun =''
+	${landrun_setup}
+
+		RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
+
+		echo "Restricting to folder: $RESTRICT_TO"
+
+		${pkgs.landrun}/bin/landrun \
+			--rwx ''$RESTRICT_TO \
+		${landrun_requirements} \
+	'';
+
 	makeWrapper = {landRun}: ''
 
 export PATH="${
@@ -48,9 +56,11 @@ ${pkgs.lazygit}/bin/lazygit "$@"
 	lazygit = pkgs.writeShellScriptBin "lazygit" (makeWrapper {landRun = runInLandRun;});
 	lazygit_default = pkgs.writeShellScriptBin "lazygit-default" (makeWrapper {landRun = "";});
 in
-	[
-		lazygit
-		lazygit_default
-	]
-
+	{
+		scripts = [
+			lazygit
+			lazygit_default
+		];
+		inherit landrun_requirements landrun_setup;
+	}
 

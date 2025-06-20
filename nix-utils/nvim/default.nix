@@ -54,17 +54,8 @@ let
     }
   '';
 
-	runInLandRun =''
-		${pkgs.coreutils}/bin/mkdir -p ~/.local/state/nvim
-		${pkgs.coreutils}/bin/mkdir -p ~/.cache
-
-		RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
-
-		echo "Restricting to folder: $RESTRICT_TO"
-
-		${pkgs.landrun}/bin/landrun \
+	landrun_requirements = ''
 			--rox /usr,/dev,/nix \
-			--rwx ''$RESTRICT_TO \
 			--rwx /dev/ptmx \
 			--rwx /dev/pts \
 			--rwx /dev/null \
@@ -80,6 +71,23 @@ let
 			--env SSL_CERT_FILE \
 			--env TERM \
 			--env LANG \
+	'';
+
+	landrun_setup = ''
+		${pkgs.coreutils}/bin/mkdir -p ~/.local/state/nvim
+		${pkgs.coreutils}/bin/mkdir -p ~/.cache
+	'';
+
+	runInLandRun =''
+	${landrun_setup}
+
+		RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
+
+		echo "Restricting to folder: $RESTRICT_TO"
+
+		${pkgs.landrun}/bin/landrun \
+			--rwx ''$RESTRICT_TO \
+		${landrun_requirements} \
 	'';
 
 	runInLandRunWithNet =''
@@ -133,8 +141,11 @@ ${pkgs.neovim-unwrapped}/bin/nvim \
 	nvim = pkgs.writeShellScriptBin "nvim" (makeWrapper {landRun = runInLandRun;});
 	nvim_net = pkgs.writeShellScriptBin "nvim-net" (makeWrapper {landRun = runInLandRunWithNet;});
 in
-	[
-		nvim
-		nvim_net
-	]
+	{
+		scripts = [
+			nvim
+			nvim_net
+		];
+		inherit landrun_requirements landrun_setup;
+	}
 

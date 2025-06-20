@@ -2,11 +2,11 @@
 	pkgs
 }:
 let
-	runInLandRun =''
-		${pkgs.landrun}/bin/landrun \
+	utils = import ../utils.nix {inherit pkgs;};
+
+	landrun_requirements = ''
 			--rox /usr,/dev,/nix \
 			--rwx ~/.aws \
-			--rwx ''$(${pkgs.nodePackages_latest.nodejs}/bin/node -e 'console.log([path.relative(path.join(process.env.HOME, "workspace"), process.cwd()).split(path.sep)].map((rel) => rel[0].startsWith(".") ? process.cwd() : path.join(process.env.HOME, "workspace", rel[0]))[0])') \
 			--rwx /dev/null \
 			--rwx "''${TMPDIR:-/tmp}" \
 			--ro /etc/ssl \
@@ -23,6 +23,21 @@ let
 			--connect-tcp 443 \
 	'';
 
+	landrun_setup = ''
+	'';
+
+	runInLandRun =''
+	${landrun_setup}
+
+		RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
+
+		echo "Restricting to folder: $RESTRICT_TO"
+
+		${pkgs.landrun}/bin/landrun \
+			--rwx ''$RESTRICT_TO \
+			${landrun_requirements} \
+	'';
+
 	makeWrapper = {landRun}: ''
 export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 
@@ -33,8 +48,11 @@ ${pkgs.awscli2}/bin/aws "$@"
 	aws = pkgs.writeShellScriptBin "aws" (makeWrapper {landRun = runInLandRun;});
 	aws_default = pkgs.writeShellScriptBin "aws-default" (makeWrapper {landRun = "";});
 in
-	[
-		aws
-		aws_default
-	]
+	{
+		scripts = [
+			aws
+			aws_default
+		];
+		inherit landrun_requirements landrun_setup;
+	}
 
