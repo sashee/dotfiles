@@ -1,19 +1,12 @@
 {
-	pkgs
+	pkgs,
+	prgs
 }:
 let
 	utils = import ../utils.nix {inherit pkgs;};
 
-	lazygit = (import ../lazygit {inherit pkgs;});
-	nvim = (import ../nvim {inherit pkgs;});
-	aws = (import ../aws {inherit pkgs;});
-	npm = (import ../npm {inherit pkgs;});
-
 	runInLandRun =''
-		${lazygit.landrun_setup}
-		${nvim.landrun_setup}
-		${aws.landrun_setup}
-		${npm.landrun_setup}
+		${pkgs.lib.strings.concatMapStringsSep "\n" (prg: prg.landrun_setup) prgs}
 
 		RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
 
@@ -33,12 +26,10 @@ let
 			--env XDG_DATA_DIRS \
 			--env XDG_RUNTIME_DIR \
 			--rwx ~/.local/share/fish \
+			--unrestricted-network \
 			--bind-tcp 8000 \
 \
-			${lazygit.landrun_requirements} \
-			${nvim.landrun_requirements} \
-			${aws.landrun_requirements} \
-			${npm.landrun_requirements} \
+			${pkgs.lib.strings.concatMapStringsSep "\\\n" (prg: prg.landrun_requirements) prgs} \
 			--rwx ~/.cache \
 	'';
 
@@ -55,11 +46,12 @@ ${pkgs.fish}/bin/fish "$@"
 	'';
 
 	fish = pkgs.writeShellScriptBin "fish" (makeWrapper {landRun = runInLandRun;});
-	#fish = pkgs.writeShellScriptBin "fish" (makeWrapper {landRun = '''';});
 	fish_strace = pkgs.writeShellScriptBin "fish-strace" (makeWrapper {landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -o /tmp/strace.log '';});
 in
-	[
-		fish
-		fish_strace
-	]
+	{
+		scripts = [
+			fish
+			fish_strace
+		];
+	}
 
