@@ -6,6 +6,7 @@ let
 		(import ./nvim {inherit pkgs;})
 		(import ./npm {inherit pkgs;})
 		(import ./npm/node.nix {inherit pkgs;})
+		(import ./npm/npx.nix {inherit pkgs;})
 		(import ./aws {inherit pkgs;})
 		(import ./lazygit {inherit pkgs;})
 	];

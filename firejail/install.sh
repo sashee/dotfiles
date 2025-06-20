@@ -12,19 +12,5 @@ rm -f ~/.config/firejail/globals.local
 ln -s $PWD/firejail/globals.local ~/.config/firejail/globals.local
 rm -f ~/.config/firejail/keepassxc.local
 ln -s $PWD/firejail/keepassxc.local ~/.config/firejail/keepassxc.local
-rm -f ~/.config/firejail/nix-shell.profile
-ln -s $PWD/firejail/nix-shell.profile ~/.config/firejail/nix-shell.profile
-rm -f ~/.config/firejail/npm.local
-ln -s $PWD/firejail/npm.local ~/.config/firejail/npm.local
-rm -f ~/.config/firejail/nvim.local
-ln -s $PWD/firejail/nvim.local ~/.config/firejail/nvim.local
-rm -f ~/.config/firejail/npm.profile
-ln -s $PWD/firejail/npm.profile ~/.config/firejail/npm.profile
-rm -f ~/.config/firejail/npx.profile
-ln -s $PWD/firejail/npx.profile ~/.config/firejail/npx.profile
-rm -f ~/.config/firejail/lazygit.profile
-ln -s $PWD/firejail/lazygit.profile ~/.config/firejail/lazygit.profile
-rm -f ~/.config/firejail/nvim.profile
-ln -s $PWD/firejail/nvim.profile ~/.config/firejail/nvim.profile
 
 sudo firecfg
