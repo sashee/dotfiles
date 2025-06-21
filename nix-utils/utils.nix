@@ -45,8 +45,46 @@ if (mostSpecificRepo) {
 	console.log(process.cwd());
 }
 	'';
+
+	makeWrappedProgram = {name, landrun_requirements, landrun_setup, before, bin}:
+{
+	pkgs
+}:
+let
+
+	runInLandRun =''
+	${landrun_setup}
+
+		RESTRICT_TO=$(${findGitRoot}/bin/findGitRoot)
+
+		echo "Restricting to folder: $RESTRICT_TO"
+
+		${pkgs.landrun}/bin/landrun \
+			--rwx ''$RESTRICT_TO \
+		${landrun_requirements} \
+	'';
+
+	makeWrapper = {landRun}: ''
+
+${before}
+${landRun} \
+${bin} "$@"
+	'';
+
+	prg = pkgs.writeShellScriptBin name (makeWrapper {landRun = runInLandRun;});
+	prg_default = pkgs.writeShellScriptBin "${name}-default" (makeWrapper {landRun = "";});
 in
 	{
-		inherit findWorkspaceDirAndDefaultsToCurrent findGitRoot;
+		scripts = [
+			prg
+			prg_default
+		];
+		inherit landrun_requirements landrun_setup;
+	}
+
+;
+in
+	{
+		inherit findWorkspaceDirAndDefaultsToCurrent findGitRoot makeWrappedProgram;
 	}
 

@@ -1,10 +1,6 @@
-{
-	pkgs
-}:
+{}:
 let
-	utils = import ../utils.nix {inherit pkgs;};
-
-	landrun_requirements = ''
+	get_landrun_requirements = {pkgs}: ''
 			--rox /usr,/dev,/nix \
 			--rwx ~/.npm \
 			--rwx /dev/null \
@@ -19,36 +15,30 @@ let
 			--connect-tcp 443 \
 	'';
 
-	landrun_setup = ''
-	'';
-
-	runInLandRun =''
-	${landrun_setup}
-
-		RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
-
-		echo "Restricting to folder: $RESTRICT_TO"
-
-		${pkgs.landrun}/bin/landrun \
-			--rwx ''$RESTRICT_TO \
-			${landrun_requirements} \
-	'';
-
-	makeWrapper = {landRun}: ''
+	get_landrun_setup = {pkgs}: ''
 export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
-
-${landRun} \
-${pkgs.nodePackages_latest.nodejs}/bin/npm "$@"
 	'';
 
-	npm = pkgs.writeShellScriptBin "npm" (makeWrapper {landRun = runInLandRun;});
-	npm_default = pkgs.writeShellScriptBin "npm-default" (makeWrapper {landRun = "";});
-in
-	{
-		scripts = [
-			npm
-			npm_default
-		];
-		inherit landrun_requirements landrun_setup;
-	}
+	get_before = {pkgs}: ''
+export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+	'';
 
+	wrapper = import ../wrapper.nix;
+in
+[
+	(wrapper {
+	 name = "npm";
+	 inherit get_landrun_requirements get_landrun_setup get_before;
+	 get_bin = {pkgs}: "${pkgs.nodePackages_latest.nodejs}/bin/npm";
+	})
+	(wrapper {
+		name = "node";
+		inherit get_landrun_requirements get_landrun_setup get_before;
+		get_bin = {pkgs}: "${pkgs.nodePackages_latest.nodejs}/bin/node";
+	})
+	(wrapper {
+		name = "npx";
+		inherit get_landrun_requirements get_landrun_setup get_before;
+		get_bin = {pkgs}: "${pkgs.nodePackages_latest.nodejs}/bin/npx";
+	})
+]

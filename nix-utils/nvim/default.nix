@@ -1,10 +1,63 @@
-{
-	pkgs
-}:
+{}:
 let
-	packageName = "nvim-custom";
+	get_landrun_requirements = {pkgs}: ''
+			--rox /usr,/dev,/nix \
+			--rwx /dev/ptmx \
+			--rwx /dev/pts \
+			--rwx /dev/null \
+			--rwx "''${TMPDIR:-/tmp}" \
+			--rwx ~/.local/state/nvim \
+			--rwx ~/.cache \
+			--ro ~/eslint.config.js \
+			--ro ~/.gitconfig \
+			--env HOME \
+			--env PATH \
+			--env NVIM_RPLUGIN_MANIFEST \
+			--env TMPDIR \
+			--env SSL_CERT_FILE \
+			--env TERM \
+			--env LANG \
+	'';
 
-	utils = import ../utils.nix {inherit pkgs;};
+	get_landrun_setup = {pkgs}: ''
+		${pkgs.coreutils}/bin/mkdir -p ~/.local/state/nvim
+		${pkgs.coreutils}/bin/mkdir -p ~/.cache
+	'';
+
+	get_before = {pkgs}: ''
+export PATH="${
+	pkgs.lib.makeBinPath [
+		pkgs.lua-language-server
+		pkgs.typescript-language-server
+		pkgs.bash
+		pkgs.nodePackages.nodejs
+		pkgs.git
+		pkgs.ripgrep
+		pkgs.tmux
+		pkgs.man
+		pkgs.coreutils
+		pkgs.gzip
+		pkgs.unixtools.ping
+		pkgs.curl
+		pkgs.netcat
+		pkgs.eslint
+		pkgs.vscode-langservers-extracted
+		pkgs.rust-analyzer
+		pkgs.yaml-language-server
+		pkgs.bash-language-server
+		pkgs.dockerfile-language-server-nodejs
+		pkgs.marksman
+		pkgs.terraform-ls
+		pkgs.nixd
+	]
+}"
+export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+
+export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
+	'';
+
+	get_bin = {pkgs}: let
+	packageName = "nvim-custom";
 
 	startPlugins = [
     pkgs.vimPlugins.nvim-surround
@@ -53,99 +106,29 @@ let
       startPluginsWithDeps
     }
   '';
+	in ''
+${pkgs.neovim-unwrapped}/bin/nvim \
+-u ${./init.lua} \
+--cmd 'set packpath^=${packpath} | set runtimepath^=${packpath}' \
+'';
 
-	landrun_requirements = ''
-			--rox /usr,/dev,/nix \
-			--rwx /dev/ptmx \
-			--rwx /dev/pts \
-			--rwx /dev/null \
-			--rwx "''${TMPDIR:-/tmp}" \
-			--rwx ~/.local/state/nvim \
-			--rwx ~/.cache \
-			--ro ~/eslint.config.js \
-			--ro ~/.gitconfig \
-			--env HOME \
-			--env PATH \
-			--env NVIM_RPLUGIN_MANIFEST \
-			--env TMPDIR \
-			--env SSL_CERT_FILE \
-			--env TERM \
-			--env LANG \
-	'';
-
-	landrun_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p ~/.local/state/nvim
-		${pkgs.coreutils}/bin/mkdir -p ~/.cache
-	'';
-
-	runInLandRun =''
-	${landrun_setup}
-
-		RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
-
-		echo "Restricting to folder: $RESTRICT_TO"
-
-		${pkgs.landrun}/bin/landrun \
-			--rwx ''$RESTRICT_TO \
-		${landrun_requirements} \
-	'';
-
-	runInLandRunWithNet =''
-		${runInLandRun} \
+	wrapper = import ../wrapper.nix;
+in
+[
+	(wrapper {
+	 name = "nvim";
+	 inherit get_landrun_requirements get_landrun_setup get_before get_bin;
+	})
+	(wrapper {
+	 name = "nvim-net";
+	 inherit get_landrun_setup get_before get_bin;
+	 get_landrun_requirements = {pkgs}: (get_landrun_requirements {inherit pkgs;} + ''
 			--connect-tcp 443 \
 			--env AWS_REGION \
 			--env AWS_ACCESS_KEY_ID \
 			--env AWS_SECRET_ACCESS_KEY \
 			--env AWS_SESSION_TOKEN \
-	'';
-
-	makeWrapper = {landRun}: ''
-export PATH="${
-	pkgs.lib.makeBinPath [
-		pkgs.lua-language-server
-		pkgs.typescript-language-server
-		pkgs.bash
-		pkgs.nodePackages.nodejs
-		pkgs.git
-		pkgs.ripgrep
-		pkgs.tmux
-		pkgs.man
-		pkgs.coreutils
-		pkgs.gzip
-		pkgs.unixtools.ping
-		pkgs.curl
-		pkgs.netcat
-		pkgs.eslint
-		pkgs.vscode-langservers-extracted
-		pkgs.rust-analyzer
-		pkgs.yaml-language-server
-		pkgs.bash-language-server
-		pkgs.dockerfile-language-server-nodejs
-		pkgs.marksman
-		pkgs.terraform-ls
-		pkgs.nixd
-	]
-}"
-
-export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
-
-export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
-
-${landRun} \
-${pkgs.neovim-unwrapped}/bin/nvim \
--u ${./init.lua} \
---cmd 'set packpath^=${packpath} | set runtimepath^=${packpath}' "$@"
-
-	'';
-
-	nvim = pkgs.writeShellScriptBin "nvim" (makeWrapper {landRun = runInLandRun;});
-	nvim_net = pkgs.writeShellScriptBin "nvim-net" (makeWrapper {landRun = runInLandRunWithNet;});
-in
-	{
-		scripts = [
-			nvim
-			nvim_net
-		];
-		inherit landrun_requirements landrun_setup;
-	}
-
+	'');
+	 generate_unsafe = false;
+	})
+]
