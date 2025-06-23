@@ -16,6 +16,7 @@ import ../wrapper.nix {
 			--rwx ~/.local/share/fish \
 			--unrestricted-network \
 			--bind-tcp 8000 \
+			--bind-tcp 8080 \
 			${pkgs.lib.strings.concatMapStringsSep "\\\n" (prg: prg.landrun_requirements) prgs} \
 			--rwx ~/.cache \
 	'';

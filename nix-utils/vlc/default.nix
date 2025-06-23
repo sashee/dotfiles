@@ -2,7 +2,7 @@
 import ../wrapper.nix {
 	name = "vlc";
 	get_landrun_requirements = {pkgs}: ''
-			--rox /usr,/dev,/nix \
+			--rwx /usr,/dev,/nix,/etc,/run,/proc,/sys \
 			--rwx /dev/null \
 			--rwx $HOME/.local/share/vlc \
 			--rwx $HOME/.config/vlc \
@@ -14,6 +14,9 @@ import ../wrapper.nix {
 			--env TMPDIR \
 			--env TERM \
 			--env LANG \
+			--env XDG_CONFIG_HOME \
+			--env XDG_DATA_DIRS \
+			--env XDG_RUNTIME_DIR \
 	'';
 
 	get_landrun_setup = {pkgs}: ''

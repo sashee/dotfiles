@@ -38,7 +38,22 @@ in
 	})
 	(wrapper {
 		name = "npx";
-		inherit get_landrun_requirements get_landrun_setup get_before;
+		inherit get_landrun_requirements get_landrun_setup;
 		get_bin = {pkgs}: "${pkgs.nodePackages_latest.nodejs}/bin/npx";
+		get_before = {pkgs} : (get_before {inherit pkgs;} + ''
+export SKIP_SANDBOX="true"
+		'');
+	})
+	(wrapper {
+		name = "npx-fullnet";
+		inherit get_landrun_setup;
+		get_bin = {pkgs}: "${pkgs.nodePackages_latest.nodejs}/bin/npx";
+		get_before = {pkgs} : (get_before {inherit pkgs;} + ''
+export SKIP_SANDBOX="true"
+		'');
+		get_landrun_requirements = {pkgs}: (get_landrun_requirements {inherit pkgs;} + ''
+			--unrestricted-network \
+		'');
+		generate_unsafe = false;
 	})
 ]

@@ -14,18 +14,29 @@ let
 
 		RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
 
-		echo "Restricting to folder: $RESTRICT_TO"
+		echo "[${bin}] Restricting to folder: $RESTRICT_TO"
 
 		${pkgs.landrun}/bin/landrun \
 			--rwx ''$RESTRICT_TO \
+			--env SKIP_SANDBOX \
 		${landrun_requirements} \
 	'';
 
 	makeWrapper = {landRun}: ''
 
-${before}
-${landRun} \
-${bin} "$@"
+if [[ -z "$SKIP_SANDBOX" ]]; then
+
+	${before}
+
+	${landRun} \
+	${bin} "$@"
+else
+	echo "[${bin}] Skipping sandbox as SKIP_SANDBOX is defined"
+
+	${before}
+
+	${bin} "$@"
+fi
 	'';
 
 	scripts = [
