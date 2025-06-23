@@ -20,6 +20,8 @@ import ../wrapper.nix {
 	'';
 
 	get_landrun_setup = {pkgs}: ''
+		${pkgs.coreutils}/bin/mkdir -p ~/.local/share/vlc
+		${pkgs.coreutils}/bin/mkdir -p ~/.config/vlc
 	'';
 
 	get_before = {pkgs}: ''

@@ -1,4 +1,4 @@
-{name, get_landrun_requirements, get_landrun_setup, get_before, get_bin, generate_unsafe ? true}:
+{name, get_landrun_requirements, get_landrun_setup, get_before, get_bin, generate_unsafe ? true, restrict_to_current_folder ? true}:
 {
 	pkgs
 }:
@@ -13,12 +13,14 @@ let
 	runInLandRun =''
 	${landrun_setup}
 
-		RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
+${if restrict_to_current_folder then ''
+RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
 
-		echo "[${bin}] Restricting to folder: $RESTRICT_TO"
+echo "[${bin}] Restricting to folder: $RESTRICT_TO"
+'' else ''''}
 
 		${pkgs.landrun}/bin/landrun \
-			--rwx ''$RESTRICT_TO \
+${if restrict_to_current_folder then ''--rwx ''$RESTRICT_TO'' else ''''} \
 			--env ${consts.SKIP_SANDBOX_ENV_VAR_NAME} \
 		${landrun_requirements} \
 	'';
