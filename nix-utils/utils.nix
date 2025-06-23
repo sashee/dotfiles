@@ -81,7 +81,6 @@ in
 		];
 		inherit landrun_requirements landrun_setup;
 	}
-
 ;
 in
 	{

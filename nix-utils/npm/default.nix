@@ -1,5 +1,7 @@
 {}:
 let
+	consts = import ../consts.nix;
+
 	get_landrun_requirements = {pkgs}: ''
 			--rox /usr,/dev,/nix \
 			--rwx ~/.npm \
@@ -41,7 +43,7 @@ in
 		inherit get_landrun_requirements get_landrun_setup;
 		get_bin = {pkgs}: "${pkgs.nodePackages_latest.nodejs}/bin/npx";
 		get_before = {pkgs} : (get_before {inherit pkgs;} + ''
-export SKIP_SANDBOX="true"
+export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 		'');
 	})
 	(wrapper {
@@ -49,7 +51,7 @@ export SKIP_SANDBOX="true"
 		inherit get_landrun_setup;
 		get_bin = {pkgs}: "${pkgs.nodePackages_latest.nodejs}/bin/npx";
 		get_before = {pkgs} : (get_before {inherit pkgs;} + ''
-export SKIP_SANDBOX="true"
+export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 		'');
 		get_landrun_requirements = {pkgs}: (get_landrun_requirements {inherit pkgs;} + ''
 			--unrestricted-network \

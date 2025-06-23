@@ -4,6 +4,7 @@
 }:
 let
 	utils = import ./utils.nix {inherit pkgs;};
+	consts = import ./consts.nix;
 	landrun_setup = get_landrun_setup {inherit pkgs;};
 	landrun_requirements = get_landrun_requirements {inherit pkgs;};
 	before = get_before {inherit pkgs;};
@@ -18,20 +19,20 @@ let
 
 		${pkgs.landrun}/bin/landrun \
 			--rwx ''$RESTRICT_TO \
-			--env SKIP_SANDBOX \
+			--env ${consts.SKIP_SANDBOX_ENV_VAR_NAME} \
 		${landrun_requirements} \
 	'';
 
 	makeWrapper = {landRun}: ''
 
-if [[ -z "$SKIP_SANDBOX" ]]; then
+if [[ -z "''$${consts.SKIP_SANDBOX_ENV_VAR_NAME}" ]]; then
 
 	${before}
 
 	${landRun} \
 	${bin} "$@"
 else
-	echo "[${bin}] Skipping sandbox as SKIP_SANDBOX is defined"
+	echo "[${bin}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME} is defined"
 
 	${before}
 
