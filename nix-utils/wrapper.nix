@@ -25,7 +25,7 @@ ${if restrict_to_current_folder then ''--rwx ''$RESTRICT_TO'' else ''''} \
 		${landrun_requirements} \
 	'';
 
-	makeWrapper = {landRun}: ''
+	makeWrapper = {landRun, bin}: ''
 
 if [[ -z "''$${consts.SKIP_SANDBOX_ENV_VAR_NAME}" ]]; then
 
@@ -43,10 +43,11 @@ fi
 	'';
 
 	scripts = [
-		(pkgs.writeShellScriptBin name (makeWrapper {landRun = runInLandRun;}))
-		(pkgs.writeShellScriptBin "${name}-strace" (makeWrapper {landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -o /tmp/strace.log '';}))
+		(pkgs.writeShellScriptBin name (makeWrapper {inherit bin; landRun = runInLandRun;}))
+		(pkgs.writeShellScriptBin "${name}-strace" (makeWrapper {inherit bin; landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -o /tmp/strace.log '';}))
+		(pkgs.writeShellScriptBin "${name}-debug" (makeWrapper {bin = "${pkgs.bash}/bin/bash"; landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -o /tmp/strace.log '';}))
 	] ++ (
-		if generate_unsafe then [(pkgs.writeShellScriptBin "${name}-unsafe" (makeWrapper {landRun = "";}))] else []
+		if generate_unsafe then [(pkgs.writeShellScriptBin "${name}-unsafe" (makeWrapper {inherit bin; landRun = "";}))] else []
 	);
 in
 	{
