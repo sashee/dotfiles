@@ -1,7 +1,7 @@
 {}:
 let
 	get_landrun_requirements = {pkgs}: ''
-			--rox /usr,/dev,/nix \
+			--rox /usr,/dev,/nix,/proc \
 			--rwx /dev/ptmx \
 			--rwx /dev/pts \
 			--rwx /dev/null \
