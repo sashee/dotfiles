@@ -16,7 +16,7 @@ let
 ${if restrict_to_current_folder then ''
 RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
 
-echo "[${bin}] Restricting to folder: $RESTRICT_TO"
+echo "[${bin}] Restricting to folder: $RESTRICT_TO" >&2
 '' else ''''}
 
 		${pkgs.landrun}/bin/landrun \
@@ -34,7 +34,7 @@ if [[ -z "''$${consts.SKIP_SANDBOX_ENV_VAR_NAME}" ]]; then
 	${landRun} \
 	${bin} "$@"
 else
-	echo "[${bin}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME} is defined"
+	echo "[${bin}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME} is defined" >&2
 
 	${before}
 

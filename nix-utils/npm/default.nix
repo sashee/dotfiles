@@ -14,6 +14,10 @@ let
 			--env SSL_CERT_FILE \
 			--env LANG \
 			--env NPM_TOKEN_WEARIN \
+			--env AWS_ACCESS_KEY_ID \
+			--env AWS_SECRET_ACCESS_KEY \
+			--env AWS_SESSION_TOKEN \
+			--env AWS_REGION \
 			--connect-tcp 443 \
 	'';
 

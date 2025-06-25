@@ -120,15 +120,15 @@ in
 	 inherit get_landrun_requirements get_landrun_setup get_before get_bin;
 	})
 	(wrapper {
-	 name = "nvim-net";
-	 inherit get_landrun_setup get_before get_bin;
-	 get_landrun_requirements = {pkgs}: (get_landrun_requirements {inherit pkgs;} + ''
+		name = "nvim-net";
+		inherit get_landrun_setup get_before get_bin;
+		get_landrun_requirements = {pkgs}: (get_landrun_requirements {inherit pkgs;} + ''
 			--connect-tcp 443 \
 			--env AWS_REGION \
 			--env AWS_ACCESS_KEY_ID \
 			--env AWS_SECRET_ACCESS_KEY \
 			--env AWS_SESSION_TOKEN \
-	'');
-	 generate_unsafe = false;
+		'');
+		generate_unsafe = false;
 	})
 ]
