@@ -1,6 +1,6 @@
 let
   nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.05";
-  pkgs = import nixpkgs { config = {}; overlays = []; };
+  pkgs = import nixpkgs { config = {allowUnfree = true;}; overlays = []; };
 
 	prgss = [
 		(import ./nvim {})
@@ -8,6 +8,7 @@ let
 		(import ./npm {})
 		(import ./lazygit {})
 		(import ./vlc {})
+		#(import ./anyk {})
 	];
 
 	prgs = map (a: a {inherit pkgs;}) (builtins.concatLists (map (prg: pkgs.lib.toList prg) prgss));

@@ -1,18 +1,23 @@
 {}: (
 import ../wrapper.nix {
-	name = "keepassxc";
+	name = "anyk";
 	get_landrun_requirements = {pkgs}: ''
-			--unrestricted-filesystem \
+			--rox /usr,/dev,/nix,/etc \
+			--rwx /dev/null \
+			--rwx ~/.abevjava \
+			--rwx ~/abevjava \
+			--ro ~/.Xauthority \
 			--env DISPLAY \
+			--rwx "''${TMPDIR:-/tmp}" \
 			--env HOME \
 			--env PATH \
 			--env TMPDIR \
 			--env TERM \
 			--env LANG \
-			--env SSH_AUTH_SOCK \
 			--env XDG_CONFIG_HOME \
 			--env XDG_DATA_DIRS \
 			--env XDG_RUNTIME_DIR \
+			--connect-tcp 443 \
 	'';
 
 	get_landrun_setup = {pkgs}: ''
@@ -21,7 +26,7 @@ import ../wrapper.nix {
 	get_before = {pkgs}: ''
 	'';
 
-	get_bin = {pkgs}: "${pkgs.keepassxc}/bin/keepassxc";
+	get_bin = {pkgs}: "${pkgs.anyk}/bin/anyk";
 	restrict_to_current_folder = false;
 }
 )

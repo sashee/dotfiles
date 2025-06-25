@@ -10,7 +10,7 @@ import ../wrapper.nix {
 			--rwx "''${TMPDIR:-/tmp}" \
 			--ro /etc/ssl \
 			--ro /etc \
-			--ro $HOME/.ssh/known_hosts \
+			--ro ~/.ssh/known_hosts \
 			--ro ~/.gitconfig \
 			--rwx ~/.config/lazygit \
 			--env HOME \

@@ -4,8 +4,8 @@ import ../wrapper.nix {
 	get_landrun_requirements = {pkgs}: ''
 			--rwx /usr,/dev,/nix,/etc,/run,/proc,/sys \
 			--rwx /dev/null \
-			--rwx $HOME/.local/share/vlc \
-			--rwx $HOME/.config/vlc \
+			--rwx ~/.local/share/vlc \
+			--rwx ~/.config/vlc \
 			--ro ~/.Xauthority \
 			--env DISPLAY \
 			--rwx "''${TMPDIR:-/tmp}" \
