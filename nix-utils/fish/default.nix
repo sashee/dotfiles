@@ -11,8 +11,8 @@ let
 			--env TMPDIR \
 			--env TERM \
 			--env LANG \
-			--env XDG_CONFIG_HOME \
 			--env ${ORIGINAL_XDG_CONFIG_HOME_VAR_NAME} \
+			--env XDG_CONFIG_HOME \
 			--env XDG_DATA_DIRS \
 			--env XDG_RUNTIME_DIR \
 			--rwx ~/.local/share/fish \
