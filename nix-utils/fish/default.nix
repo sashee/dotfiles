@@ -1,6 +1,7 @@
 {prgs}:
 let
 	wrapper = import ../wrapper.nix;
+	ORIGINAL_XDG_CONFIG_HOME_VAR_NAME = "__NIX_UTILS_ORIGINAL_XDG_CONFIG_HOME";
 	get_landrun_requirements = {pkgs}: ''
 			--rwx /usr,/dev,/nix,/etc,/run,/proc,/sys \
 			--rwx ''$RESTRICT_TO \
@@ -11,7 +12,7 @@ let
 			--env TERM \
 			--env LANG \
 			--env XDG_CONFIG_HOME \
-			--env __NIX_UTILS_ORIGINAL_XDG_CONFIG_HOME \
+			--env ${ORIGINAL_XDG_CONFIG_HOME_VAR_NAME} \
 			--env XDG_DATA_DIRS \
 			--env XDG_RUNTIME_DIR \
 			--rwx ~/.local/share/fish \
@@ -32,15 +33,15 @@ let
 		name = "config.fish";
 		text = ''
 fish_add_path $HOME/dotfiles/nix-utils/result/bin
-set -x XDG_CONFIG_HOME $__NIX_UTILS_ORIGINAL_XDG_CONFIG_HOME
-set --erase __NIX_UTILS_ORIGINAL_XDG_CONFIG_HOME
+set -x XDG_CONFIG_HOME ''$${ORIGINAL_XDG_CONFIG_HOME_VAR_NAME}
+set --erase ${ORIGINAL_XDG_CONFIG_HOME_VAR_NAME}
 
 ${pkgs.starship}/bin/starship init fish | source
 		'';
 	};
 
 	in ''
-export __NIX_UTILS_ORIGINAL_XDG_CONFIG_HOME=$XDG_CONFIG_HOME
+export ${ORIGINAL_XDG_CONFIG_HOME_VAR_NAME}=$XDG_CONFIG_HOME
 export XDG_CONFIG_HOME=$(${pkgs.coreutils}/bin/mktemp -d)
 
 ${pkgs.coreutils}/bin/mkdir -p $XDG_CONFIG_HOME/fish
