@@ -14,7 +14,7 @@ let
 	${landrun_setup}
 
 ${if restrict_to_current_folder then ''
-RESTRICT_TO=$(${utils.findGitRoot}/bin/findGitRoot)
+set RESTRICT_TO $(${utils.findGitRoot}/bin/findGitRoot)
 
 echo "[${bin}] Restricting to folder: $RESTRICT_TO" >&2
 '' else ''''}
@@ -26,31 +26,32 @@ ${if restrict_to_current_folder then ''--rwx ''$RESTRICT_TO'' else ''''} \
 	'';
 
 	makeWrapper = {landRun, bin}: ''
+#!${pkgs.fish}/bin/fish
 
-if [[ -z "''$${consts.SKIP_SANDBOX_ENV_VAR_NAME}" ]]; then
+if set -q ${consts.SKIP_SANDBOX_ENV_VAR_NAME}
 
-	${before}
-
-	${landRun} \
-	${bin} "$@"
-else
 	echo "[${bin}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME} is defined" >&2
 
 	${before}
 
-	${bin} "$@"
-fi
+	${bin} $argv
+else
+	${before}
+
+	${landRun} \
+	${bin} $argv
+end
 	'';
 
 	scripts = [
-		(pkgs.writeShellScriptBin name (makeWrapper {inherit bin; landRun = runInLandRun;}))
-		(pkgs.writeShellScriptBin "${name}-strace" (makeWrapper {inherit bin; landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -o /tmp/strace.log '';}))
-		(pkgs.writeShellScriptBin "${name}-debug" (makeWrapper {bin = "${pkgs.bash}/bin/bash"; landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -o /tmp/strace.log '';}))
+		(pkgs.writeScriptBin name (makeWrapper {inherit bin; landRun = runInLandRun;}))
+		(pkgs.writeScriptBin "${name}-strace" (makeWrapper {inherit bin; landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -f -o ''${TMPDIR:-/tmp}/strace.log '';}))
+		(pkgs.writeScriptBin "${name}-debug" (makeWrapper {bin = "${pkgs.bash}/bin/bash"; landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -o /tmp/strace.log '';}))
 	] ++ (
-		if generate_unsafe then [(pkgs.writeShellScriptBin "${name}-unsafe" (makeWrapper {inherit bin; landRun = "";}))] else []
+		if generate_unsafe then [(pkgs.writeScriptBin "${name}-unsafe" (makeWrapper {inherit bin; landRun = "";}))] else []
 	);
 in
 	{
-		inherit scripts landrun_requirements landrun_setup;
+		inherit scripts landrun_requirements landrun_setup name;
 	}
 

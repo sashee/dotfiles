@@ -3,6 +3,7 @@ import ../wrapper.nix {
 	name = "anyk";
 	get_landrun_requirements = {pkgs}: ''
 			--rox /usr,/dev,/nix,/etc \
+			--rwx /usr/share/abevjava \
 			--rwx /dev/null \
 			--rwx ~/.abevjava \
 			--rwx ~/abevjava \

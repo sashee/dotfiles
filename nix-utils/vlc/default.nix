@@ -8,7 +8,7 @@ import ../wrapper.nix {
 			--rwx ~/.config/vlc \
 			--ro ~/.Xauthority \
 			--env DISPLAY \
-			--rwx "''${TMPDIR:-/tmp}" \
+			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
 			--env HOME \
 			--env PATH \
 			--env TMPDIR \

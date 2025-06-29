@@ -5,7 +5,7 @@ let
 	get_landrun_requirements = {pkgs}: ''
 			--rwx /usr,/dev,/nix,/etc,/run,/proc,/sys \
 			--rwx ''$RESTRICT_TO \
-			--rwx "''${TMPDIR:-/tmp}" \
+			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
 			--env HOME \
 			--env PATH \
 			--env TMPDIR \
@@ -19,7 +19,14 @@ let
 			--unrestricted-network \
 			--bind-tcp 8000 \
 			--bind-tcp 8080 \
-			${pkgs.lib.strings.concatMapStringsSep "\\\n" (prg: prg.landrun_requirements) prgs} \
+			${pkgs.lib.strings.concatMapStringsSep "\\\n" (req: '' \
+			${pkgs.lib.strings.concatStringsSep " \\\n " req.requirements}'') (map (prg: {name = prg.name; requirements = (
+			(builtins.filter (l: !(pkgs.lib.strings.hasInfix "--unrestricted-filesystem") l)
+				(map pkgs.lib.strings.trim
+					(pkgs.lib.strings.splitString "\\\n" prg.landrun_requirements)
+				)
+			)
+			);}) prgs)} \
 			--rwx ~/.cache \
 	'';
 

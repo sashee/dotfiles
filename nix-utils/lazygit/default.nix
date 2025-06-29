@@ -7,7 +7,7 @@ import ../wrapper.nix {
 			--rwx /dev/ptmx \
 			--rwx /dev/pts \
 			--rwx /dev/tty \
-			--rwx "''${TMPDIR:-/tmp}" \
+			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
 			--ro /etc/ssl \
 			--ro /etc \
 			--ro ~/.ssh/known_hosts \

@@ -5,7 +5,7 @@ import ../wrapper.nix {
 			--rox /usr,/dev,/nix \
 			--rwx ~/.aws \
 			--rwx /dev/null \
-			--rwx "''${TMPDIR:-/tmp}" \
+			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
 			--ro /etc/ssl \
 			--env HOME \
 			--env PATH \

@@ -5,7 +5,7 @@ let
 			--rwx /dev/ptmx \
 			--rwx /dev/pts \
 			--rwx /dev/null \
-			--rwx "''${TMPDIR:-/tmp}" \
+			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
 			--rwx ~/.local/state/nvim \
 			--rwx ~/.cache \
 			--ro ~/eslint.config.js \
