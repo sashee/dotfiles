@@ -4,7 +4,7 @@ let
 	consts = import ../consts.nix;
 	ORIGINAL_XDG_CONFIG_HOME_VAR_NAME = "__NIX_UTILS_ORIGINAL_XDG_CONFIG_HOME";
 	get_landrun_requirements = {pkgs}: ''
-			--rwx /usr,/dev,/nix,/etc,/run,/proc,/sys \
+			--rwx /usr,/dev,/nix,/etc,/run,/proc,/sys,/var \
 			--rwx ''$${consts.RESTRICT_TO_ENV_VAR_NAME} \
 			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
 			--env HOME \

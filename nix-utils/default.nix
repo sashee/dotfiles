@@ -8,6 +8,7 @@ let
 		(import ./npm {})
 		(import ./lazygit {})
 		(import ./vlc {})
+		#(import ./vkquake {})
 		#(import ./anyk {})
 	];
 

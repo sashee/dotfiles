@@ -45,7 +45,7 @@ end
 
 	scripts = [
 		(pkgs.writeScriptBin name (makeWrapper {inherit bin; landRun = runInLandRun;}))
-		(pkgs.writeScriptBin "${name}-strace" (makeWrapper {inherit bin; landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -f -o ''${TMPDIR:-/tmp}/strace.log '';}))
+		(pkgs.writeScriptBin "${name}-strace" (makeWrapper {inherit bin; landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -f -o (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end)/strace.log '';}))
 		(pkgs.writeScriptBin "${name}-debug" (makeWrapper {bin = "${pkgs.bash}/bin/bash"; landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -o /tmp/strace.log '';}))
 	] ++ (
 		if generate_unsafe then [(pkgs.writeScriptBin "${name}-unsafe" (makeWrapper {inherit bin; landRun = "";}))] else []
