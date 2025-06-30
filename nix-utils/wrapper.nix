@@ -14,13 +14,13 @@ let
 	${landrun_setup}
 
 ${if restrict_to_current_folder then ''
-set RESTRICT_TO $(${utils.findGitRoot}/bin/findGitRoot)
+set -x ${consts.RESTRICT_TO_ENV_VAR_NAME} $(${utils.findGitRoot}/bin/findGitRoot)
 
-echo "[${bin}] Restricting to folder: $RESTRICT_TO" >&2
+echo "[${bin}] Restricting to folder: ''$${consts.RESTRICT_TO_ENV_VAR_NAME}" >&2
 '' else ''''}
 
 		${pkgs.landrun}/bin/landrun \
-${if restrict_to_current_folder then ''--rwx ''$RESTRICT_TO'' else ''''} \
+${if restrict_to_current_folder then ''--rwx ''$${consts.RESTRICT_TO_ENV_VAR_NAME}'' else ''''} \
 			--env ${consts.SKIP_SANDBOX_ENV_VAR_NAME} \
 		${landrun_requirements} \
 	'';

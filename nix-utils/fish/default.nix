@@ -1,16 +1,19 @@
 {prgs}:
 let
 	wrapper = import ../wrapper.nix;
+	consts = import ../consts.nix;
 	ORIGINAL_XDG_CONFIG_HOME_VAR_NAME = "__NIX_UTILS_ORIGINAL_XDG_CONFIG_HOME";
 	get_landrun_requirements = {pkgs}: ''
 			--rwx /usr,/dev,/nix,/etc,/run,/proc,/sys \
-			--rwx ''$RESTRICT_TO \
+			--rwx ''$${consts.RESTRICT_TO_ENV_VAR_NAME} \
 			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
 			--env HOME \
 			--env PATH \
 			--env TMPDIR \
 			--env TERM \
 			--env LANG \
+			--env STARSHIP_CONFIG \
+			--env ${consts.RESTRICT_TO_ENV_VAR_NAME} \
 			--env ${ORIGINAL_XDG_CONFIG_HOME_VAR_NAME} \
 			--env XDG_CONFIG_HOME \
 			--env XDG_DATA_DIRS \
@@ -28,6 +31,8 @@ let
 			)
 			);}) prgs)} \
 			--rwx ~/.cache \
+			--rwx ~/.wine \
+			--rwx ~/.vkquake \
 	'';
 
 	get_landrun_setup = {pkgs}: ''
@@ -40,6 +45,7 @@ let
 		name = "config.fish";
 		text = ''
 fish_add_path $HOME/dotfiles/nix-utils/result/bin
+
 set -x XDG_CONFIG_HOME ''$${ORIGINAL_XDG_CONFIG_HOME_VAR_NAME}
 set --erase ${ORIGINAL_XDG_CONFIG_HOME_VAR_NAME}
 
@@ -47,13 +53,19 @@ ${pkgs.starship}/bin/starship init fish | source
 		'';
 	};
 
+	starship_config = pkgs.writeTextFile {
+		name = "starship.toml";
+		text = ''
+		'';
+	};
+
 	in ''
 export ${ORIGINAL_XDG_CONFIG_HOME_VAR_NAME}=$XDG_CONFIG_HOME
 export XDG_CONFIG_HOME=$(${pkgs.coreutils}/bin/mktemp -d)
+export STARSHIP_CONFIG=${starship_config}
 
 ${pkgs.coreutils}/bin/mkdir -p $XDG_CONFIG_HOME/fish
 ${pkgs.coreutils}/bin/ln -s ${config} $XDG_CONFIG_HOME/fish/config.fish
-${pkgs.coreutils}/bin/ln -s ${./functions} $XDG_CONFIG_HOME/fish/functions
 	'';
 
 	get_bin = {pkgs}: "${pkgs.fish}/bin/fish";
