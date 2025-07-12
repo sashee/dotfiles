@@ -19,8 +19,16 @@ set -x ${consts.RESTRICT_TO_ENV_VAR_NAME} $(${utils.findGitRoot}/bin/findGitRoot
 echo "[${bin}] Restricting to folder: ''$${consts.RESTRICT_TO_ENV_VAR_NAME}" >&2
 '' else ''''}
 
+function pass_all_env_variables
+	for i in $(set -gx --names);
+		echo -n -- "--env $i ";
+	end
+end
+
 		${pkgs.landrun}/bin/landrun \
+		--best-effort \
 ${if restrict_to_current_folder then ''--rwx ''$${consts.RESTRICT_TO_ENV_VAR_NAME}'' else ''''} \
+			(string split " " -- (string trim -- (pass_all_env_variables))) \
 			--env ${consts.SKIP_SANDBOX_ENV_VAR_NAME} \
 		${landrun_requirements} \
 	'';

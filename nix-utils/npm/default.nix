@@ -3,9 +3,10 @@ let
 	consts = import ../consts.nix;
 
 	get_landrun_requirements = {pkgs}: ''
-			--rox /usr,/dev,/nix \
+			--rox /usr,/dev,/nix,/etc \
 			--rwx ~/.npm \
 			--rwx ~/.npmrc \
+			--rwx ~/.cache \
 			--rwx /dev/null \
 			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
 			--rox /etc/fonts \
@@ -27,14 +28,17 @@ let
 			--env XDG_CACHE_DIR \
 			\
 			--connect-tcp 443 \
+			--connect-tcp 8883 \
 	'';
 
 	get_landrun_setup = {pkgs}: ''
 export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+export NODE_EXTRA_CA_CERTS=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 	'';
 
 	get_before = {pkgs}: ''
 export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+export NODE_EXTRA_CA_CERTS=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 	'';
 
 	wrapper = import ../wrapper.nix;

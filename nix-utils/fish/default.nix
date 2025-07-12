@@ -33,6 +33,7 @@ let
 			--rwx ~/.cache \
 			--rwx ~/.wine \
 			--rwx ~/.vkquake \
+			--rwx ~/.config/transmission \
 	'';
 
 	get_landrun_setup = {pkgs}: ''
@@ -78,7 +79,7 @@ in
 	(wrapper {
 		name = "fish-nonet";
 		inherit get_landrun_setup get_before get_landrun_requirements;
-		get_bin = {pkgs}: "${pkgs.landrun}/bin/landrun --unrestricted-filesystem ${get_bin {inherit pkgs;}}";
+		get_bin = {pkgs}: "${pkgs.landrun}/bin/landrun --best-effort --unrestricted-filesystem ${get_bin {inherit pkgs;}}";
 		generate_unsafe = false;
 	 })
 ]

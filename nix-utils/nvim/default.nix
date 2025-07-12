@@ -37,6 +37,7 @@ export PATH="${
 		pkgs.man
 		pkgs.coreutils
 		pkgs.gzip
+		pkgs.unzip
 		pkgs.unixtools.ping
 		pkgs.curl
 		pkgs.netcat
@@ -124,6 +125,7 @@ in
 		inherit get_landrun_setup get_before get_bin;
 		get_landrun_requirements = {pkgs}: (get_landrun_requirements {inherit pkgs;} + ''
 			--connect-tcp 443 \
+			--connect-tcp 8883 \
 			--env AWS_REGION \
 			--env AWS_ACCESS_KEY_ID \
 			--env AWS_SECRET_ACCESS_KEY \
