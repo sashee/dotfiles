@@ -17,13 +17,14 @@ let
 
 	prgs = map (a: a {inherit pkgs;}) (builtins.concatLists (map (prg: pkgs.lib.toList prg) prgss));
 
-	outside_prgss = [
-		(import ./keepassxc {})
-		(import ./fish {inherit prgs;})
-		(import ./libreoffice {inherit pkgs;})
-	];
+	outside_prgss = rec {
+		keepassxc = (import ./keepassxc {});
+		fish = (import ./fish {inherit prgs;});
+		libreoffice = (import ./libreoffice {inherit pkgs;});
+		tmux = (import ./tmux {inherit fish;});
+	};
 
-	outside_prgs = map (a: a {inherit pkgs;}) (builtins.concatLists (map (prg: pkgs.lib.toList prg) outside_prgss));
+	outside_prgs = map (a: a {inherit pkgs;}) (builtins.concatLists (map (prg: pkgs.lib.toList prg) (builtins.attrValues outside_prgss)));
 in
 	pkgs.symlinkJoin {
 		name = "nix-utils-custom";
