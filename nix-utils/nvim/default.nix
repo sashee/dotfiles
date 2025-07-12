@@ -44,6 +44,7 @@ export PATH="${
 		pkgs.eslint
 		pkgs.vscode-langservers-extracted
 		pkgs.rust-analyzer
+		pkgs.cargo
 		pkgs.yaml-language-server
 		pkgs.bash-language-server
 		pkgs.dockerfile-language-server-nodejs
