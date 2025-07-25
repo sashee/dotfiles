@@ -19,7 +19,7 @@ let
 
 	outside_prgss = rec {
 		keepassxc = (import ./keepassxc {});
-		fish = (import ./fish {inherit prgs;});
+		#fish = (import ./fish {inherit prgs;});
 		zsh = (import ./zsh {inherit prgs;});
 		libreoffice = (import ./libreoffice {inherit pkgs;});
 		tmux = (import ./tmux {inherit zsh;});
