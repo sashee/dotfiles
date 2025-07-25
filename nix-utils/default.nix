@@ -20,8 +20,9 @@ let
 	outside_prgss = rec {
 		keepassxc = (import ./keepassxc {});
 		fish = (import ./fish {inherit prgs;});
+		zsh = (import ./zsh {inherit prgs;});
 		libreoffice = (import ./libreoffice {inherit pkgs;});
-		tmux = (import ./tmux {inherit fish;});
+		tmux = (import ./tmux {inherit zsh;});
 	};
 
 	outside_prgs = map (a: a {inherit pkgs;}) (builtins.concatLists (map (prg: pkgs.lib.toList prg) (builtins.attrValues outside_prgss)));

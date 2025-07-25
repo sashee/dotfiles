@@ -1,4 +1,4 @@
-{fish}:
+{zsh}:
 let
 	wrapper = import ../wrapper.nix;
 
@@ -32,7 +32,7 @@ bind-key -T copy-mode-vi 'y' send -X copy-selection-and-cancel
 
 set -sg escape-time 10
 
-set-option -g default-shell ${builtins.head ((builtins.head fish) {inherit pkgs;}).scripts}/bin/fish
+set-option -g default-shell ${builtins.head ((builtins.head zsh) {inherit pkgs;}).scripts}/bin/zsh
 
 set-option -g mouse off
 
@@ -48,8 +48,8 @@ in
 [
 	(wrapper {
 		name = "tmux";
-		get_landrun_requirements = {pkgs}: ((builtins.head fish) {inherit pkgs;}).landrun_requirements;
-		get_landrun_setup = {pkgs}: ((builtins.head fish) {inherit pkgs;}).landrun_setup;
+		get_landrun_requirements = {pkgs}: ((builtins.head zsh) {inherit pkgs;}).landrun_requirements;
+		get_landrun_setup = {pkgs}: ((builtins.head zsh) {inherit pkgs;}).landrun_setup;
 		inherit get_before get_bin;
 	})
 ]
