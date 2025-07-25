@@ -67,6 +67,9 @@ vi-mode
 bindkey -M vicmd "^V" edit-command-line
 export EDITOR='nvim'
 
+fpath+=${pkgs.zsh-completions}/share/zsh/site-functions
+autoload -U compinit && compinit
+
 source ${pkgs.oh-my-zsh}/share/oh-my-zsh/oh-my-zsh.sh
 
 autoload -U up-line-or-beginning-search
@@ -81,8 +84,6 @@ export DISABLE_FZF_KEY_BINDINGS="true"
 bindkey '^P' fzf-history-widget
 
 autoload -U +X bashcompinit && bashcompinit
-complete -o nospace -C ~/.terraform/terraform terraform
-
 
 export PROMPT="$PROMPT_PREF$PROMPT"
 			'';
