@@ -12,6 +12,9 @@ let
 		(import ./lazygit {})
 		(import ./vlc {})
 		(import ./fx {})
+		(import ./duckdb {})
+# does not work with 25.05, will work with next version
+		#(import ./harlequin {})
 		#(import ./vkquake {})
 		#(import ./anyk {})
 	];
