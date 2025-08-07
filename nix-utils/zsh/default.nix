@@ -18,6 +18,7 @@ let
 			--unrestricted-network \
 			--bind-tcp 8000 \
 			--bind-tcp 8080 \
+			--bind-tcp 8081 \
 			--rwx $HOME/.local/share/zsh \
 			${pkgs.lib.strings.concatMapStringsSep "\\\n" (req: '' \
 			${pkgs.lib.strings.concatStringsSep " \\\n " req.requirements}'') (map (prg: {name = prg.name; requirements = (

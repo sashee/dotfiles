@@ -10,6 +10,7 @@ let
 		(import ./aws {})
 		(import ./npm {})
 		(import ./lazygit {})
+		(import ./isd {})
 		(import ./vlc {})
 		(import ./fx {})
 		(import ./duckdb {})
