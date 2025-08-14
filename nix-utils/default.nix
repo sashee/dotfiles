@@ -14,6 +14,7 @@ let
 		(import ./vlc {})
 		(import ./fx {})
 		(import ./duckdb {})
+		(import ./k2pdfopt {})
 # does not work with 25.05, will work with next version
 		#(import ./harlequin {})
 		#(import ./vkquake {})
