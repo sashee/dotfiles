@@ -17,6 +17,14 @@ import ../wrapper.nix {
 export DUCKDB_HISTORY=/tmp/.duckdb_history
 	'';
 
-	get_bin = {pkgs}: "${pkgs.duckdb}/bin/duckdb -init /dev/null";
+	get_bin = {pkgs}: 
+	let
+		config = pkgs.writeTextFile {
+			name = "duckdbrc";
+			text = ''
+			'';
+		};
+	in
+	"${pkgs.duckdb}/bin/duckdb -init ${config}";
 }
 
