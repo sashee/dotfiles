@@ -20,6 +20,7 @@ import ../wrapper.nix {
 			--env LANG \
 			--env SSH_AUTH_SOCK \
 			--connect-tcp 22 \
+			--connect-tcp 443 \
 	'';
 
 	get_landrun_setup = {pkgs}: ''
