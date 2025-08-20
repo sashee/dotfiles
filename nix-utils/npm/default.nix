@@ -29,6 +29,7 @@ let
 			\
 			--connect-tcp 443 \
 			--connect-tcp 8883 \
+			--bind-tcp 8080 \
 	'';
 
 	get_landrun_setup = {pkgs}: ''

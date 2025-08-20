@@ -32,6 +32,7 @@ let
 			--rwx ~/.wine \
 			--rwx ~/.vkquake \
 			--rwx ~/.local/share/freeorion \
+			--rwx ~/.config/freeorion \
 			--rwx ~/.config/transmission \
 	'';
 
