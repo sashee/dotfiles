@@ -1,6 +1,6 @@
 {}:
 import ../wrapper.nix {
-	name = "harlequin";
+	name = "lazysql";
 	get_landrun_requirements = {pkgs}: ''
 			--rox /nix,/dev,/usr,/proc,/sys,/etc \
 			--rwx /dev/null \
@@ -15,7 +15,8 @@ import ../wrapper.nix {
 	get_before = {pkgs}: ''
 	'';
 
-	get_bin = {pkgs}: "${pkgs.harlequin}/bin/harlequin";
+	get_bin = {pkgs}: "${pkgs.lazysql}/bin/lazysql";
 }
+
 
 
