@@ -105,10 +105,10 @@ in
 	 inherit get_landrun_requirements get_landrun_setup get_before get_bin;
 	})
 	(wrapper {
-		name = "zsh-nonet";
+		name = "zsh-nonet-fullfs";
 		inherit get_landrun_setup get_before get_landrun_requirements;
 		get_bin = {pkgs}: "${pkgs.landrun}/bin/landrun --best-effort --unrestricted-filesystem ${get_bin {inherit pkgs;}}";
 		generate_unsafe = false;
-	 })
+	})
 ]
 
