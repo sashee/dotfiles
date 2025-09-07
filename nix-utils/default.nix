@@ -14,6 +14,7 @@ let
 		(import ./vlc {})
 		(import ./fx {})
 		(import ./duckdb {})
+		(import ./bluetuith {})
 		(import ./k2pdfopt {})
 		(import ./lazysql {})
 		#(import ./vkquake {})
