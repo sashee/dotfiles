@@ -15,6 +15,7 @@ let
 		(import ./fx {})
 		(import ./duckdb {})
 		(import ./bluetuith {})
+		(import ./flameshot {})
 		(import ./k2pdfopt {})
 		(import ./lazysql {})
 		#(import ./vkquake {})
