@@ -2,7 +2,7 @@
 import ../wrapper.nix {
 	name = "aws";
 	get_landrun_requirements = {pkgs}: ''
-			--rox /usr,/dev,/nix \
+			--rox /usr,/dev,/nix,/run/systemd/resolve \
 			--rwx ~/.aws \
 			--rwx /dev/null \
 			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \

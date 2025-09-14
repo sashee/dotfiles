@@ -2,7 +2,7 @@
 import ../wrapper.nix {
 	name = "lazygit";
 	get_landrun_requirements = {pkgs}: ''
-			--rox /usr,/dev,/nix \
+			--rox /usr,/dev,/nix,/run/systemd/resolve \
 			--rwx /dev/null \
 			--rwx /dev/ptmx \
 			--rwx /dev/pts \

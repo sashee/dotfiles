@@ -3,7 +3,7 @@ let
 	consts = import ../consts.nix;
 
 	get_landrun_requirements = {pkgs}: ''
-			--rox /usr,/dev,/nix,/etc \
+			--rox /usr,/dev,/nix,/etc,/run/systemd/resolve \
 			--rwx ~/.npm \
 			--rwx ~/.npmrc \
 			--rwx ~/.cache \
