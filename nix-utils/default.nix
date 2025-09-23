@@ -18,6 +18,7 @@ let
 		(import ./flameshot {})
 		(import ./k2pdfopt {})
 		(import ./lazysql {})
+		(import ./magic-wormhole {})
 		#(import ./vkquake {})
 		#(import ./anyk {})
 	];
