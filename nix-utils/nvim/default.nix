@@ -38,6 +38,7 @@ export PATH="${
 		pkgs.coreutils
 		pkgs.gzip
 		pkgs.unzip
+		pkgs.gnutar
 		pkgs.unixtools.ping
 		pkgs.curl
 		pkgs.netcat
