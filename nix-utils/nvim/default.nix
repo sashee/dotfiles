@@ -125,6 +125,7 @@ in
 		name = "nvim-net";
 		inherit get_landrun_setup get_before get_bin;
 		get_landrun_requirements = {pkgs}: (get_landrun_requirements {inherit pkgs;} + ''
+			--rox /run/systemd/resolve \
 			--connect-tcp 443 \
 			--connect-tcp 8883 \
 			--env AWS_REGION \
