@@ -62,6 +62,9 @@ export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
 	get_bin = {pkgs}: let
 	packageName = "nvim-custom";
 
+  nixpkgs2 = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-unstable";
+  pkgs2 = import nixpkgs2 { config = {allowUnfree = true;}; overlays = [];};
+
 	startPlugins = [
     pkgs.vimPlugins.nvim-surround
     pkgs.vimPlugins.gitsigns-nvim
@@ -72,8 +75,8 @@ export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
     pkgs.vimPlugins.nvim-autopairs
     pkgs.vimPlugins.rainbow-delimiters-nvim
     pkgs.vimPlugins.nvim-nio
-    pkgs.vimPlugins.neotest
-    pkgs.vimPlugins.neotest-jest
+    pkgs2.vimPlugins.neotest
+    pkgs2.vimPlugins.neotest-jest
     pkgs.vimPlugins.telescope-nvim
     pkgs.vimPlugins.nvim-treesitter
 		pkgs.vimPlugins.nvim-treesitter.withAllGrammars
