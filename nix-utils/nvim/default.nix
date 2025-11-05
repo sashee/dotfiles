@@ -1,5 +1,8 @@
 {}:
 let
+  nixpkgs2 = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-unstable";
+  pkgs2 = import nixpkgs2 { config = {allowUnfree = true;}; overlays = [];};
+
 	get_landrun_requirements = {pkgs}: ''
 			--rox /usr,/dev,/nix,/proc \
 			--rwx /dev/ptmx \
@@ -61,9 +64,6 @@ export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
 
 	get_bin = {pkgs}: let
 	packageName = "nvim-custom";
-
-  nixpkgs2 = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-unstable";
-  pkgs2 = import nixpkgs2 { config = {allowUnfree = true;}; overlays = [];};
 
 	startPlugins = [
     pkgs.vimPlugins.nvim-surround

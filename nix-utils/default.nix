@@ -20,6 +20,8 @@ let
 		(import ./k2pdfopt {})
 		(import ./lazysql {})
 		(import ./magic-wormhole {})
+		(import ./opencode {})
+		(import ./github-copilot-cli {})
 		#(import ./vkquake {})
 		#(import ./anyk {})
 	];
