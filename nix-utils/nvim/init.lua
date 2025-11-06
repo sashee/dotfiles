@@ -259,3 +259,16 @@ vim.keymap.set('n', '<Leader>Te', ':Texplore<CR>')
 -- for https://github.com/rachartier/tiny-inline-diagnostic.nvim
 vim.diagnostic.config({ virtual_text = false })
 require('tiny-inline-diagnostic').setup()
+
+vim.o.autoread = true
+
+-- Auto-reload buffers when changed externally
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
+	pattern = "*",
+	callback = function()
+		if vim.fn.mode() ~= 'c' then
+			vim.cmd("checktime")
+		end
+	end,
+})
+
