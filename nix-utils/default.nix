@@ -21,16 +21,12 @@ let
 		(import ./lazysql {})
 		(import ./magic-wormhole {})
 		(import ./opencode {})
-		(import ./github-copilot-cli {})
-		#(import ./vkquake {})
-		#(import ./anyk {})
 	];
 
 	prgs = map (a: a {inherit pkgs;}) (builtins.concatLists (map (prg: pkgs.lib.toList prg) prgss));
 
 	outside_prgss = rec {
 		keepassxc = (import ./keepassxc {});
-		#fish = (import ./fish {inherit prgs;});
 		zsh = (import ./zsh {inherit prgs;});
 		libreoffice = (import ./libreoffice {inherit pkgs;});
 		tmux = (import ./tmux {inherit zsh;});
