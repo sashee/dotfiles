@@ -19,7 +19,6 @@ let
 			"/etc/fonts" = "rox";
 			"/etc/ssl" = "ro";
 		};
-		env = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "LANG" "NPM_TOKEN_WEARIN" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" "AWS_REGION" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "XDG_CACHE_DIR"];
 		network = {
 			tcp = {
 				connect = [443 8883];
