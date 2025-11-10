@@ -1,24 +1,35 @@
-{}:
-import ../wrapper.nix {
-	name = "wormhole";
-	get_landrun_requirements = {pkgs}: ''
-			--rox /nix,/dev,/usr,/proc,/sys,/etc,/run/systemd/resolve \
-			--rwx /dev/null \
-			--rwx /dev/tty \
-			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
-			--env TERM \
-			--unrestricted-network \
+{
+	pkgs,
+}:
+let
+	bin = "${pkgs.magic-wormhole}/bin/wormhole";
+	landrun_restrictions = {
+		fs = {
+			"/nix" = "rox";
+			"/dev" = "rox";
+			"/usr" = "rox";
+			"/proc" = "rox";
+			"/sys" = "rox";
+			"/etc" = "rox";
+			"/run/systemd/resolve" = "rox";
+			"/dev/null" = "rwx";
+			"/dev/tty" = "rwx";
+			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
+		};
+		env = ["TERM"];
+	};
+	before = ''
+
 	'';
 
-	get_landrun_setup = {pkgs}: ''
-	'';
+	landrun_setup = ''
 
-	get_before = {pkgs}: ''
 	'';
-
-	get_bin = {pkgs}: "${pkgs.magic-wormhole}/bin/wormhole";
+in
+{
+	scripts = (import ../wrapper.nix {
+		name = "wormhole";
+		inherit pkgs bin landrun_restrictions before landrun_setup;
+	}).scripts;
+	inherit landrun_restrictions;
 }
-
-
-
-

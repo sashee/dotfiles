@@ -1,48 +1,50 @@
-{prgs}:
+{
+	prgs ? [],
+	pkgs,
+}:
 let
-	wrapper = import ../wrapper.nix;
 	consts = import ../consts.nix;
-	get_landrun_requirements = {pkgs}: ''
-			--rwx /usr,/dev,/nix,/etc,/run,/proc,/sys,/var \
-			--rwx ''$${consts.RESTRICT_TO_ENV_VAR_NAME} \
-			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
-			--env HOME \
-			--env PATH \
-			--env TMPDIR \
-			--env TERM \
-			--env LANG \
-			--env ${consts.RESTRICT_TO_ENV_VAR_NAME} \
-			--env XDG_CONFIG_HOME \
-			--env XDG_DATA_DIRS \
-			--env XDG_RUNTIME_DIR \
-			--unrestricted-network \
-			--bind-tcp 8000 \
-			--bind-tcp 8080 \
-			--bind-tcp 8081 \
-			--rwx $HOME/.local/share/zsh \
-			${pkgs.lib.strings.concatMapStringsSep "\\\n" (req: '' \
-			${pkgs.lib.strings.concatStringsSep " \\\n " req.requirements}'') (map (prg: {name = prg.name; requirements = (
-			(builtins.filter (l: !(pkgs.lib.strings.hasInfix "--unrestricted-filesystem") l)
-				(map pkgs.lib.strings.trim
-					(pkgs.lib.strings.splitString "\\\n" prg.landrun_requirements)
-				)
-			)
-			);}) prgs)} \
-			--rwx ~/.cache \
-			--rwx ~/.wine \
-			--rwx ~/.vkquake \
-			--rwx ~/.local/share/freeorion \
-			--rwx ~/.config/freeorion \
-			--rwx ~/.config/transmission \
-	'';
 
-	get_landrun_setup = {pkgs}: ''
-		${pkgs.lib.strings.concatMapStringsSep "\n" (prg: prg.landrun_setup) prgs}
-	'';
+	# Base filesystem restrictions for zsh
+	base_fs = {
+		"/usr" = "rwx";
+		"/dev" = "rwx";
+		"/nix" = "rwx";
+		"/etc" = "rwx";
+		"/run" = "rwx";
+		"/proc" = "rwx";
+		"/sys" = "rwx";
+		"/var" = "rwx";
+		"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
+		"~/.local/share/zsh" = "rwx";
+		"~/.cache" = "rwx";
+		"~/.wine" = "rwx";
+		"~/.vkquake" = "rwx";
+		"~/.local/share/freeorion" = "rwx";
+		"~/.config/freeorion" = "rwx";
+		"~/.config/transmission" = "rwx";
+	};
 
+	base_env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "${consts.RESTRICT_TO_ENV_VAR_NAME}" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "ZDOTDIR"];
 
-	get_before = {pkgs}: let
-		config = pkgs.writeTextDir ".zshrc" ''
+	# Merge landrun_restrictions from all programs
+	# Skip programs with unrestricted access (empty landrun_restrictions)
+	filtered_prgs = builtins.filter (prg: prg.landrun_restrictions != {}) prgs;
+
+	merged_restrictions = builtins.foldl' (acc: prg:
+		let
+			prg_restrictions = prg.landrun_restrictions or {};
+		in
+		{
+			fs = acc.fs // (prg_restrictions.fs or {});
+			env = acc.env ++ (prg_restrictions.env or []);
+		}
+	) {
+		fs = base_fs;
+		env = base_env;
+	} filtered_prgs;
+
+	config = pkgs.writeTextDir ".zshrc" ''
 export LANG="en_US.UTF-8"
 export LC_COLLATE="en_US.UTF-8"
 export LC_CTYPE="en_US.UTF-8"
@@ -89,26 +91,35 @@ bindkey '^P' fzf-history-widget
 autoload -U +X bashcompinit && bashcompinit
 
 export PROMPT="$PROMPT_PREF$PROMPT"
-			'';
-	in ''
+	'';
+
+	bin = "${pkgs.zsh}/bin/zsh";
+
+	before = ''
 	mkdir -p ~/.local/share/zsh/zsh_history
 	export ZDOTDIR=${config}
 	'';
 
-	get_bin = {pkgs}: let
-	in
-	"${pkgs.zsh}/bin/zsh";
-in
-[
-	(wrapper {
-	 name = "zsh";
-	 inherit get_landrun_requirements get_landrun_setup get_before get_bin;
-	})
-	(wrapper {
-		name = "zsh-nonet-fullfs";
-		inherit get_landrun_setup get_before get_landrun_requirements;
-		get_bin = {pkgs}: "${pkgs.landrun}/bin/landrun --best-effort --unrestricted-filesystem ${get_bin {inherit pkgs;}}";
-		generate_unsafe = false;
-	})
-]
+	landrun_setup = ''
+		${builtins.concatStringsSep "\n" (map (prg: prg.landrun_setup or "") prgs)}
+	'';
 
+	zsh_scripts = (import ../wrapper.nix {
+		name = "zsh";
+		inherit pkgs bin;
+		landrun_restrictions = merged_restrictions;
+		inherit before landrun_setup;
+	}).scripts;
+
+	zsh_nonet_fullfs_scripts = (import ../wrapper.nix {
+		name = "zsh-nonet-fullfs";
+		inherit pkgs bin;
+		landrun_restrictions = {};  # unrestricted filesystem and network
+		inherit before landrun_setup;
+		generate_unsafe = false;
+	}).scripts;
+in
+{
+	scripts = zsh_scripts ++ zsh_nonet_fullfs_scripts;
+	landrun_restrictions = merged_restrictions;
+}

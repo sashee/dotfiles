@@ -1,22 +1,40 @@
-{}:
-import ../wrapper.nix {
-	name = "lazysql";
-	get_landrun_requirements = {pkgs}: ''
-			--rox /nix,/dev,/usr,/proc,/sys,/etc \
-			--rwx /dev/null \
-			--rwx /dev/tty \
-			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
-			--env TERM \
+{
+	pkgs,
+}:
+let
+	bin = "${pkgs.lazysql}/bin/lazysql";
+	landrun_restrictions = {
+		fs = {
+			"/nix" = "rox";
+			"/dev" = "rox";
+			"/usr" = "rox";
+			"/proc" = "rox";
+			"/sys" = "rox";
+			"/etc" = "rox";
+			"/dev/null" = "rwx";
+			"/dev/tty" = "rwx";
+			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
+		};
+		env = ["TERM" "HOME" "PATH"];
+		network = {};
+	};
+	before = ''
+export PATH="${
+	pkgs.lib.makeBinPath [
+		pkgs.ncurses
+	]
+}"
+
 	'';
 
-	get_landrun_setup = {pkgs}: ''
-	'';
+	landrun_setup = ''
 
-	get_before = {pkgs}: ''
 	'';
-
-	get_bin = {pkgs}: "${pkgs.lazysql}/bin/lazysql";
+in
+{
+	scripts = (import ../wrapper.nix {
+		name = "lazysql";
+		inherit pkgs bin landrun_restrictions before landrun_setup;
+	}).scripts;
+	inherit landrun_restrictions;
 }
-
-
-

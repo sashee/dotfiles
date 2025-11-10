@@ -1,33 +1,33 @@
-{}: (
-import ../wrapper.nix {
-	name = "lazygit";
-	get_landrun_requirements = {pkgs}: ''
-			--rox /usr,/dev,/nix,/run/systemd/resolve \
-			--rwx /dev/null \
-			--rwx /dev/ptmx \
-			--rwx /dev/pts \
-			--rwx /dev/tty \
-			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
-			--ro /etc/ssl \
-			--ro /etc \
-			--ro ~/.ssh/known_hosts \
-			--ro ~/.gitconfig \
-			--rwx ~/.config/lazygit \
-			--env HOME \
-			--env PATH \
-			--env TMPDIR \
-			--env TERM \
-			--env LANG \
-			--env SSH_AUTH_SOCK \
-			--connect-tcp 22 \
-			--connect-tcp 443 \
-	'';
-
-	get_landrun_setup = {pkgs}: ''
-		${pkgs.coreutils}/bin/mkdir -p ~/.config/lazygit
-	'';
-
-	get_before = {pkgs}: ''
+{
+	pkgs,
+}:
+let
+	bin = "${pkgs.lazygit}/bin/lazygit";
+	landrun_restrictions = {
+		fs = {
+			"/usr" = "rox";
+			"/dev" = "rox";
+			"/nix" = "rox";
+			"/run/systemd/resolve" = "rox";
+			"/dev/null" = "rwx";
+			"/dev/ptmx" = "rwx";
+			"/dev/pts" = "rwx";
+			"/dev/tty" = "rwx";
+			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
+			"/etc/ssl" = "ro";
+			"/etc" = "ro";
+			"~/.ssh/known_hosts" = "ro";
+			"~/.gitconfig" = "ro";
+			"~/.config/lazygit" = "rwx";
+		};
+		env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"];
+		network = {
+			tcp = {
+				connect = [22 443];
+			};
+		};
+	};
+	before = ''
 export PATH="${
 	pkgs.lib.makeBinPath [
 		pkgs.git
@@ -36,6 +36,14 @@ export PATH="${
 }"
 	'';
 
-	get_bin = {pkgs}: "${pkgs.lazygit}/bin/lazygit";
+	landrun_setup = ''
+		${pkgs.coreutils}/bin/mkdir -p ~/.config/lazygit
+	'';
+in
+{
+	scripts = (import ../wrapper.nix {
+		name = "lazygit";
+		inherit pkgs bin landrun_restrictions before landrun_setup;
+	}).scripts;
+	inherit landrun_restrictions;
 }
-)

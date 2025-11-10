@@ -1,87 +1,95 @@
-{}:
+{
+	pkgs,
+}:
 let
 	consts = import ../consts.nix;
 
-	get_landrun_requirements = {pkgs}: ''
-			--rox /usr,/dev,/nix,/etc,/run/systemd/resolve \
-			--rwx ~/.npm \
-			--rwx ~/.npmrc \
-			--rwx ~/.cache \
-			--rwx /dev/null \
-			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
-			--rox /etc/fonts \
-			--ro /etc/ssl \
-			--env HOME \
-			--env PATH \
-			--env TMPDIR \
-			--env SSL_CERT_FILE \
-			--env LANG \
-			--env NPM_TOKEN_WEARIN \
-			--env AWS_ACCESS_KEY_ID \
-			--env AWS_SECRET_ACCESS_KEY \
-			--env AWS_SESSION_TOKEN \
-			--env AWS_REGION \
-			\
-			--env XDG_CONFIG_HOME \
-			--env XDG_DATA_DIRS \
-			--env XDG_RUNTIME_DIR \
-			--env XDG_CACHE_DIR \
-			\
-			--connect-tcp 443 \
-			--connect-tcp 8883 \
-			--bind-tcp 8080 \
-	'';
+	base_landrun_restrictions = {
+		fs = {
+			"/usr" = "rox";
+			"/dev" = "rox";
+			"/nix" = "rox";
+			"/etc" = "rox";
+			"/run/systemd/resolve" = "rox";
+			"~/.npm" = "rwx";
+			"~/.npmrc" = "rwx";
+			"~/.cache" = "rwx";
+			"/dev/null" = "rwx";
+			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
+			"/etc/fonts" = "rox";
+			"/etc/ssl" = "ro";
+		};
+		env = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "LANG" "NPM_TOKEN_WEARIN" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" "AWS_REGION" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "XDG_CACHE_DIR"];
+		network = {
+			tcp = {
+				connect = [443 8883];
+				bind = [8080];
+			};
+		};
+	};
 
-	get_landrun_setup = {pkgs}: ''
+	base_before = ''
 export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 export NODE_EXTRA_CA_CERTS=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 	'';
 
-	get_before = {pkgs}: ''
+	base_landrun_setup = ''
 export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 export NODE_EXTRA_CA_CERTS=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 	'';
 
-	wrapper = import ../wrapper.nix;
-in
-[
-	(wrapper {
-	 name = "npm";
-	 inherit get_landrun_requirements get_landrun_setup get_before;
-	 get_bin = {pkgs}: "${pkgs.nodePackages_latest.nodejs}/bin/npm";
-	})
-	(wrapper {
+	npx_before = base_before + ''
+export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
+	'';
+
+	npm_scripts = (import ../wrapper.nix {
+		name = "npm";
+		inherit pkgs;
+		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npm";
+		landrun_restrictions = base_landrun_restrictions;
+		before = base_before;
+		landrun_setup = base_landrun_setup;
+	}).scripts;
+
+	node_scripts = (import ../wrapper.nix {
 		name = "node";
-		inherit get_landrun_requirements get_landrun_setup get_before;
-		get_bin = {pkgs}: "${pkgs.nodePackages_latest.nodejs}/bin/node";
-	})
-	(wrapper {
+		inherit pkgs;
+		bin = "${pkgs.nodePackages_latest.nodejs}/bin/node";
+		landrun_restrictions = base_landrun_restrictions;
+		before = base_before;
+		landrun_setup = base_landrun_setup;
+	}).scripts;
+
+	node_nonet_scripts = (import ../wrapper.nix {
 		name = "node-nonet";
-		inherit get_landrun_setup get_before;
-		get_bin = {pkgs}: "${pkgs.nodePackages_latest.nodejs}/bin/node";
-		get_landrun_requirements = {pkgs}: (get_landrun_requirements {inherit pkgs;} + ''
-			--unrestricted-filesystem \
-		'');
+		inherit pkgs;
+		bin = "${pkgs.nodePackages_latest.nodejs}/bin/node";
+		landrun_restrictions = {};  # unrestricted filesystem
+		before = base_before;
+		landrun_setup = base_landrun_setup;
 		generate_unsafe = false;
-	})
-	(wrapper {
+	}).scripts;
+
+	npx_scripts = (import ../wrapper.nix {
 		name = "npx";
-		inherit get_landrun_requirements get_landrun_setup;
-		get_bin = {pkgs}: "${pkgs.nodePackages_latest.nodejs}/bin/npx";
-		get_before = {pkgs} : (get_before {inherit pkgs;} + ''
-export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
-		'');
-	})
-	(wrapper {
+		inherit pkgs;
+		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
+		landrun_restrictions = base_landrun_restrictions;
+		before = npx_before;
+		landrun_setup = base_landrun_setup;
+	}).scripts;
+
+	npx_fullnet_scripts = (import ../wrapper.nix {
 		name = "npx-fullnet";
-		inherit get_landrun_setup;
-		get_bin = {pkgs}: "${pkgs.nodePackages_latest.nodejs}/bin/npx";
-		get_before = {pkgs} : (get_before {inherit pkgs;} + ''
-export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
-		'');
-		get_landrun_requirements = {pkgs}: (get_landrun_requirements {inherit pkgs;} + ''
-			--unrestricted-network \
-		'');
+		inherit pkgs;
+		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
+		landrun_restrictions = base_landrun_restrictions // { network = {}; };  # unrestricted network
+		before = npx_before;
+		landrun_setup = base_landrun_setup;
 		generate_unsafe = false;
-	})
-]
+	}).scripts;
+in
+{
+	scripts = npm_scripts ++ node_scripts ++ node_nonet_scripts ++ npx_scripts ++ npx_fullnet_scripts;
+	landrun_restrictions = base_landrun_restrictions;
+}

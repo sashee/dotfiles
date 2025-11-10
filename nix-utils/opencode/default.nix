@@ -1,9 +1,11 @@
-{}:
+{
+	pkgs,
+}:
 let
-  nixpkgs2 = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-unstable";
-  pkgs2 = import nixpkgs2 { config = {allowUnfree = true;}; overlays = [];};
+	nixpkgs2 = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-unstable";
+	pkgs2 = import nixpkgs2 { config = {allowUnfree = true;}; overlays = [];};
 
-	config = pkgs2.writeTextFile {
+	config = pkgs.writeTextFile {
 		name = "opencode.conf";
 		text = ''
 {
@@ -21,39 +23,40 @@ let
 }
 		'';
 	};
-in
-import ../wrapper.nix {
-	name = "opencode";
-	get_landrun_requirements = {pkgs}: ''
-			--rox /usr,/dev,/nix,/run/systemd/resolve \
-			--rox /proc \
-			--rwx ~/.local/share/opencode \
-			--rwx ~/.config/opencode \
-			--rwx ~/.local/state/opencode \
-			--rwx ~/.cache/opencode \
-			--rwx /dev/null \
-			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
-			--ro /etc/ssl \
-			--env HOME \
-			--env PATH \
-			--env TMPDIR \
-			--env SSL_CERT_FILE \
-			--env LANG \
-			--env TERM \
-			--env OPENCODE_CONFIG \
-			--unrestricted-network \
+
+	bin = "${pkgs2.opencode}/bin/opencode";
+	landrun_restrictions = {
+		fs = {
+			"/usr" = "rox";
+			"/dev" = "rox";
+			"/nix" = "rox";
+			"/run/systemd/resolve" = "rox";
+			"/proc" = "rox";
+			"~/.local/share/opencode" = "rwx";
+			"~/.config/opencode" = "rwx";
+			"~/.local/state/opencode" = "rwx";
+			"~/.cache/opencode" = "rwx";
+			"/dev/null" = "rwx";
+			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
+			"/etc/ssl" = "ro";
+		};
+		env = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "LANG" "TERM" "OPENCODE_CONFIG"];
+	};
+	before = ''
+export OPENCODE_CONFIG=${config}
 	'';
 
-	get_landrun_setup = {pkgs}: ''
+	landrun_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p ~/.config/opencode
 		${pkgs.coreutils}/bin/mkdir -p ~/.local/share/opencode
 		${pkgs.coreutils}/bin/mkdir -p ~/.local/state/opencode
 		${pkgs.coreutils}/bin/mkdir -p ~/.cache/opencode
 	'';
-
-	get_before = {pkgs}: ''
-export OPENCODE_CONFIG=${config}
-	'';
-
-	get_bin = {pkgs}: "/usr/bin/opencode";
+in
+{
+	scripts = (import ../wrapper.nix {
+		name = "opencode";
+		inherit pkgs bin landrun_restrictions before landrun_setup;
+	}).scripts;
+	inherit landrun_restrictions;
 }

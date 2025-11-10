@@ -1,28 +1,31 @@
-{}:
-import ../wrapper.nix {
-	name = "flameshot";
-	get_landrun_requirements = {pkgs}: ''
-			--rox /nix,/proc,/sys \
-			--rwx /dev/null \
-			--rwx /dev/tty \
-			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
-			--env TERM \
+{
+	pkgs,
+}:
+let
+	bin = "${pkgs.flameshot}/bin/flameshot";
+	landrun_restrictions = {
+		fs = {
+			"/nix" = "rox";
+			"/proc" = "rox";
+			"/sys" = "rox";
+			"/dev/null" = "rwx";
+			"/dev/tty" = "rwx";
+			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
+		};
+		network = {};
+	};
+	before = ''
+
 	'';
 
-	get_landrun_setup = {pkgs}: ''
-	'';
+	landrun_setup = ''
 
-	get_before = {pkgs}: 
-	let
-	in
-	''
 	'';
-
-	get_bin = {pkgs}: 
-	let
-	in
-	"${pkgs.flameshot}/bin/flameshot";
+in
+{
+	scripts = (import ../wrapper.nix {
+		name = "flameshot";
+		inherit pkgs bin landrun_restrictions before landrun_setup;
+	}).scripts;
+	inherit landrun_restrictions;
 }
-
-
-

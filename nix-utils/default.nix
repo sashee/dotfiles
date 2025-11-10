@@ -5,39 +5,37 @@ let
 		(final: prev: {landrun = prev.landrun.overrideAttrs (old: {postInstallCheck = "";});})
 	]; };
 
-	prgss = [
-		(import ./nvim {})
-		(import ./aws {})
-		(import ./npm {})
-		(import ./lazygit {})
-		(import ./isd {})
-		(import ./vlc {})
-		(import ./fx {})
-		(import ./duckdb {})
-		(import ./bluetuith {})
-		(import ./chromium {})
-		(import ./flameshot {})
-		(import ./k2pdfopt {})
-		(import ./lazysql {})
-		(import ./magic-wormhole {})
-		(import ./opencode {})
+	# Programs to pass to zsh for dynamic requirements merging
+	zsh_programs = [
+		(import ./aws/default.nix { inherit pkgs; })
+		(import ./duckdb/default.nix { inherit pkgs; })
+		(import ./flameshot/default.nix { inherit pkgs; })
+		(import ./fx/default.nix { inherit pkgs; })
+		(import ./isd/default.nix { inherit pkgs; })
+		(import ./k2pdfopt/default.nix { inherit pkgs; })
+		(import ./lazygit/default.nix { inherit pkgs; })
+		(import ./lazysql/default.nix { inherit pkgs; })
+		(import ./magic-wormhole/default.nix { inherit pkgs; })
+		(import ./opencode/default.nix { inherit pkgs; })
+		(import ./vlc/default.nix { inherit pkgs; })
+		(import ./nvim/default.nix { inherit pkgs; })
+		(import ./npm/default.nix { inherit pkgs; })
 	];
 
-	prgs = map (a: a {inherit pkgs;}) (builtins.concatLists (map (prg: pkgs.lib.toList prg) prgss));
+	# Programs not passed to zsh (have unrestricted filesystem)
+	other_programs = [
+		(import ./chromium/default.nix { inherit pkgs; })
+		(import ./keepassxc/default.nix { inherit pkgs; })
+		(import ./libreoffice/default.nix { inherit pkgs; })
+		(import ./bluetuith/default.nix { inherit pkgs; })
+	];
 
-	outside_prgss = rec {
-		keepassxc = (import ./keepassxc {});
-		zsh = (import ./zsh {inherit prgs;});
-		libreoffice = (import ./libreoffice {inherit pkgs;});
-		tmux = (import ./tmux {inherit zsh;});
-	};
+	zsh = import ./zsh/default.nix { inherit pkgs; prgs = zsh_programs; };
+	tmux = import ./tmux/default.nix { inherit zsh pkgs; };
 
-	outside_prgs = map (a: a {inherit pkgs;}) (builtins.concatLists (map (prg: pkgs.lib.toList prg) (builtins.attrValues outside_prgss)));
+	programs = zsh_programs ++ other_programs ++ [zsh tmux];
 in
-	pkgs.symlinkJoin {
-		name = "nix-utils-custom";
-		paths = builtins.concatLists [
-			(map (prg: prg.scripts) prgs)
-			(map (prg: prg.scripts) outside_prgs)
-		];
+	pkgs.buildEnv {
+		name = "scripts-env";
+		paths = builtins.concatLists (map (p: p.scripts) programs);
 	}

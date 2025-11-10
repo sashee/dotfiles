@@ -1,31 +1,39 @@
-{}:
-import ../wrapper.nix {
-	name = "aws";
-	get_landrun_requirements = {pkgs}: ''
-			--rox /usr,/dev,/nix,/run/systemd/resolve \
-			--rwx ~/.aws \
-			--rwx /dev/null \
-			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
-			--ro /etc/ssl \
-			--env HOME \
-			--env PATH \
-			--env TMPDIR \
-			--env SSL_CERT_FILE \
-			--env AWS_ACCESS_KEY_ID \
-			--env AWS_SECRET_ACCESS_KEY \
-			--env AWS_SESSION_TOKEN \
-			--env AWS_REGION \
-			--env LANG \
-			--env TERM \
-			--connect-tcp 443 \
-	'';
-
-	get_landrun_setup = {pkgs}: ''
-	'';
-
-	get_before = {pkgs}: ''
+{
+	pkgs,
+}:
+let
+	bin = "${pkgs.awscli2}/bin/aws";
+	landrun_restrictions = {
+		fs = {
+			"/usr" = "rox";
+			"/dev" = "rox";
+			"/nix" = "rox";
+			"/run/systemd/resolve" = "rox";
+			"~/.aws" = "rwx";
+			"/dev/null" = "rwx";
+			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
+			"/etc/ssl" = "ro";
+		};
+		env = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" "AWS_REGION" "LANG" "TERM"];
+		network = {
+			tcp = {
+				connect = [443];
+			};
+		};
+	};
+	before = ''
 export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 	'';
 
-	get_bin = {pkgs}: "${pkgs.awscli2}/bin/aws";
+	landrun_setup = ''
+
+	'';
+in
+{
+	scripts = (import ../wrapper.nix {
+		name = "aws";
+		inherit pkgs bin landrun_restrictions before landrun_setup;
+	}).scripts;
+	inherit landrun_restrictions;
 }
+

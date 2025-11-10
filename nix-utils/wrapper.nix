@@ -1,14 +1,7 @@
-{name, get_landrun_requirements, get_landrun_setup, get_before, get_bin, generate_unsafe ? true, restrict_to_current_folder ? true}:
-{
-	pkgs
-}:
+{pkgs, name, landrun_restrictions, landrun_setup, before, bin, generate_unsafe ? true, restrict_to_current_folder ? true}:
 let
 	utils = import ./utils.nix {inherit pkgs;};
 	consts = import ./consts.nix;
-	landrun_setup = get_landrun_setup {inherit pkgs;};
-	landrun_requirements = get_landrun_requirements {inherit pkgs;};
-	before = get_before {inherit pkgs;};
-	bin = get_bin {inherit pkgs;};
 
 	runInLandRun =''
 	${landrun_setup}
@@ -26,11 +19,34 @@ function pass_all_env_variables
 end
 
 		${pkgs.landrun}/bin/landrun \
-		--best-effort \
-${if restrict_to_current_folder then ''--rwx ''$${consts.RESTRICT_TO_ENV_VAR_NAME}'' else ''''} \
-			(string split " " -- (string trim -- (pass_all_env_variables))) \
-			--env ${consts.SKIP_SANDBOX_ENV_VAR_NAME} \
-		${landrun_requirements} \
+${builtins.concatStringsSep " " [
+"--best-effort"
+(if restrict_to_current_folder then ''--rwx ''$${consts.RESTRICT_TO_ENV_VAR_NAME}'' else '''')
+(if
+	(builtins.hasAttr "fs" landrun_restrictions) then
+	(builtins.concatStringsSep " " (map (n: ''--${builtins.getAttr n landrun_restrictions.fs} ${n}'') (builtins.attrNames landrun_restrictions.fs)))
+	else "--unrestricted-filesystem"
+)
+(if
+	(builtins.hasAttr "env" landrun_restrictions) then
+	(builtins.concatStringsSep " " (map (n: ''--env ${n}'') landrun_restrictions.env)) else
+	''(string split " " -- (string trim -- (pass_all_env_variables)))''
+)
+"--env ${consts.SKIP_SANDBOX_ENV_VAR_NAME}"
+(if
+	(builtins.hasAttr "network" landrun_restrictions) then
+	(if (builtins.hasAttr "tcp" landrun_restrictions.network) then
+		''${builtins.concatStringsSep " " (
+			builtins.concatLists [
+				(if (builtins.hasAttr "connect" landrun_restrictions.network.tcp) then (map (port: "--connect-tcp ${builtins.toString port}") landrun_restrictions.network.tcp.connect) else [])
+				(if (builtins.hasAttr "bind" landrun_restrictions.network.tcp) then (map (port: "--bind-tcp ${builtins.toString port}") landrun_restrictions.network.tcp.bind) else [])
+			]
+		)}''
+		else "")
+	else "--unrestricted-network"
+)
+
+]} \
 	'';
 
 	makeWrapper = {landRun, bin}: ''
@@ -60,6 +76,6 @@ end
 	);
 in
 	{
-		inherit scripts landrun_requirements landrun_setup name;
+		inherit scripts;
 	}
 

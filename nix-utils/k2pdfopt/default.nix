@@ -1,22 +1,35 @@
-{}:
-import ../wrapper.nix {
-	name = "k2pdfopt";
-	get_landrun_requirements = {pkgs}: ''
-			--rox /nix,/dev,/usr,/proc,/sys,/etc \
-			--rwx /dev/null \
-			--rwx /dev/tty \
-			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
-			--env TERM \
+{
+	pkgs,
+}:
+let
+	bin = "${pkgs.k2pdfopt}/bin/k2pdfopt";
+	landrun_restrictions = {
+		fs = {
+			"/nix" = "rox";
+			"/dev" = "rox";
+			"/usr" = "rox";
+			"/proc" = "rox";
+			"/sys" = "rox";
+			"/etc" = "rox";
+			"/dev/null" = "rwx";
+			"/dev/tty" = "rwx";
+			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
+		};
+		env = ["TERM"];
+		network = {};
+	};
+	before = ''
+
 	'';
 
-	get_landrun_setup = {pkgs}: ''
-	'';
+	landrun_setup = ''
 
-	get_before = {pkgs}: ''
 	'';
-
-	get_bin = {pkgs}: "${pkgs.k2pdfopt}/bin/k2pdfopt";
+in
+{
+	scripts = (import ../wrapper.nix {
+		name = "k2pdfopt";
+		inherit pkgs bin landrun_restrictions before landrun_setup;
+	}).scripts;
+	inherit landrun_restrictions;
 }
-
-
-

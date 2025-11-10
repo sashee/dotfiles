@@ -1,25 +1,12 @@
-{}:
-import ../wrapper.nix {
-	name = "chromium";
-	get_landrun_requirements = {pkgs}: ''
-			--unrestricted-filesystem \
-			--unrestricted-network \
-			--env HOME \
-			--env XDG_CONFIG_HOME \
-			--env XDG_DATA_DIRS \
-			--env XDG_RUNTIME_DIR \
-	'';
-
-	get_landrun_setup = {pkgs}: ''
-	'';
-
-	get_before = {pkgs}: "";
-
-	get_bin = {pkgs}: 
-	let
-		config = pkgs.writeTextFile {
-			name = "profile.conf";
-			text = ''
+{
+	pkgs,
+}:
+let
+	bin =
+		let
+			config = pkgs.writeTextFile {
+				name = "profile.conf";
+				text = ''
 noblacklist ~/.config/chromium
 noblacklist ~/.config/Google
 
@@ -49,12 +36,22 @@ whitelist ''${RUNUSER}/ssh-agent.socket
 env AWSKEYS=""
 
 include ${pkgs.firejail}/etc/firejail/chromium.profile
-		'';
-	};
-	in
-	"firejail --profile=${config} ${pkgs.ungoogled-chromium}/bin/chromium";
-	restrict_to_current_folder = false;
+			'';
+		};
+		in
+		"firejail --profile=${config} ${pkgs.ungoogled-chromium}/bin/chromium";
+	landrun_restrictions = {};
+	before = "";
+
+	landrun_setup = ''
+
+	'';
+in
+{
+	scripts = (import ../wrapper.nix {
+		name = "chromium";
+		inherit pkgs bin landrun_restrictions before landrun_setup;
+		restrict_to_current_folder = false;
+	}).scripts;
+	inherit landrun_restrictions;
 }
-
-
-

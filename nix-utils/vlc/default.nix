@@ -1,33 +1,39 @@
-{}: (
-import ../wrapper.nix {
-	name = "vlc";
-	get_landrun_requirements = {pkgs}: ''
-			--rwx /usr,/dev,/nix,/etc,/run,/proc,/sys \
-			--rwx /dev/null \
-			--rwx ~/.local/share/vlc \
-			--rwx ~/.config/vlc \
-			--ro ~/.Xauthority \
-			--env DISPLAY \
-			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
-			--env HOME \
-			--env PATH \
-			--env TMPDIR \
-			--env TERM \
-			--env LANG \
-			--env XDG_CONFIG_HOME \
-			--env XDG_DATA_DIRS \
-			--env XDG_RUNTIME_DIR \
+{
+	pkgs,
+}:
+let
+	bin = "${pkgs.vlc}/bin/vlc";
+	landrun_restrictions = {
+		fs = {
+			"/usr" = "rwx";
+			"/dev" = "rwx";
+			"/nix" = "rwx";
+			"/etc" = "rwx";
+			"/run" = "rwx";
+			"/proc" = "rwx";
+			"/sys" = "rwx";
+			"/dev/null" = "rwx";
+			"~/.local/share/vlc" = "rwx";
+			"~/.config/vlc" = "rwx";
+			"~/.Xauthority" = "ro";
+			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
+		};
+		env = ["DISPLAY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
+		network = {};
+	};
+	before = ''
+
 	'';
 
-	get_landrun_setup = {pkgs}: ''
+	landrun_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p ~/.local/share/vlc
 		${pkgs.coreutils}/bin/mkdir -p ~/.config/vlc
 	'';
-
-	get_before = {pkgs}: ''
-	'';
-
-	get_bin = {pkgs}: "${pkgs.vlc}/bin/vlc";
+in
+{
+	scripts = (import ../wrapper.nix {
+		name = "vlc";
+		inherit pkgs bin landrun_restrictions before landrun_setup;
+	}).scripts;
+	inherit landrun_restrictions;
 }
-)
-

@@ -1,20 +1,30 @@
-{}:
-import ../wrapper.nix {
-	name = "fx";
-	get_landrun_requirements = {pkgs}: ''
-			--rox /nix \
-			--rwx /dev/null \
-			--rwx /dev/tty \
-			--rwx (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end) \
-			--env TERM \
+{
+	pkgs,
+}:
+let
+	bin = "${pkgs.fx}/bin/fx";
+	landrun_restrictions = {
+		fs = {
+			"/nix" = "rox";
+			"/dev/null" = "rwx";
+			"/dev/tty" = "rwx";
+			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
+		};
+		env = ["TERM" "HOME"];
+		network = {};
+	};
+	before = ''
+
 	'';
 
-	get_landrun_setup = {pkgs}: ''
-	'';
+	landrun_setup = ''
 
-	get_before = {pkgs}: ''
 	'';
-
-	get_bin = {pkgs}: "${pkgs.fx}/bin/fx";
+in
+{
+	scripts = (import ../wrapper.nix {
+		name = "fx";
+		inherit pkgs bin landrun_restrictions before landrun_setup;
+	}).scripts;
+	inherit landrun_restrictions;
 }
-

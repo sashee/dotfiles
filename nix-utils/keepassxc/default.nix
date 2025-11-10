@@ -1,28 +1,25 @@
-{}: (
-import ../wrapper.nix {
-	name = "keepassxc";
-	get_landrun_requirements = {pkgs}: ''
-			--unrestricted-filesystem \
-			--env DISPLAY \
-			--env HOME \
-			--env PATH \
-			--env TMPDIR \
-			--env TERM \
-			--env LANG \
-			--env SSH_AUTH_SOCK \
-			--env XDG_CONFIG_HOME \
-			--env XDG_DATA_DIRS \
-			--env XDG_RUNTIME_DIR \
+{
+	pkgs,
+}:
+let
+	bin = "${pkgs.keepassxc}/bin/keepassxc";
+	landrun_restrictions = {
+		env = ["DISPLAY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
+		network = {};
+	};
+	before = ''
+
 	'';
 
-	get_landrun_setup = {pkgs}: ''
-	'';
+	landrun_setup = ''
 
-	get_before = {pkgs}: ''
 	'';
-
-	get_bin = {pkgs}: "${pkgs.keepassxc}/bin/keepassxc";
-	restrict_to_current_folder = false;
+in
+{
+	scripts = (import ../wrapper.nix {
+		name = "keepassxc";
+		inherit pkgs bin landrun_restrictions before landrun_setup;
+		restrict_to_current_folder = false;
+	}).scripts;
+	inherit landrun_restrictions;
 }
-)
-
