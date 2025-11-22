@@ -10,16 +10,8 @@ let
 		text = ''
 {
   "$schema": "https://opencode.ai/schema.json",
-  "provider": {
-    "openrouter": {
-			"model": {
-				"gemini": {
-					"provider": "openrouter",
-					"model": "google/gemini-pro"
-				}
-			}
-    }
-  }
+	"autoupdate": false,
+	"share": "disabled"
 }
 		'';
 	};
