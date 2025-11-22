@@ -32,8 +32,9 @@ let
 
 	zsh = import ./zsh/default.nix { inherit pkgs; prgs = zsh_programs; };
 	tmux = import ./tmux/default.nix { inherit zsh pkgs; };
+	zellij = import ./zellij/default.nix { inherit zsh pkgs; };
 
-	programs = zsh_programs ++ other_programs ++ [zsh tmux];
+	programs = zsh_programs ++ other_programs ++ [zsh tmux zellij];
 in
 	pkgs.buildEnv {
 		name = "scripts-env";
