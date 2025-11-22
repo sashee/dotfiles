@@ -17,12 +17,20 @@ keybinds {
 		bind "Ctrl h" { GoToPreviousTab; }
 		bind "Ctrl l" { GoToNextTab; }
 	}
+	shared_except "locked" {
+		bind "Ctrl b" { SwitchToMode "Locked"; }
+		bind "Alt n" { NewPane; SwitchToMode "Locked"; }
+	}
 	locked {
 		bind "Ctrl h" { GoToPreviousTab; }
 		bind "Ctrl l" { GoToNextTab; }
+		bind "Ctrl b" { SwitchToMode "Normal"; }
 	}
 	search {
 		bind "N" { Search "up"; }
+	}
+	tab {
+		bind "n" { NewTab; SwitchToMode "Locked"; }
 	}
 }
 		'';
