@@ -19,7 +19,9 @@ keybinds {
 	}
 	shared_except "locked" {
 		bind "Ctrl b" { SwitchToMode "Locked"; }
-		bind "Alt n" { NewPane; SwitchToMode "Locked"; }
+	}
+	pane {
+		bind "n" { NewPane; SwitchToMode "Locked"; }
 	}
 	locked {
 		bind "Ctrl h" { GoToPreviousTab; }
