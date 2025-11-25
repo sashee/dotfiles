@@ -59,15 +59,15 @@ export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 		landrun_setup = base_landrun_setup;
 	}).scripts;
 
-	node_nonet_scripts = (import ../wrapper.nix {
-		name = "node-nonet";
-		inherit pkgs;
-		bin = "${pkgs.nodePackages_latest.nodejs}/bin/node";
-		landrun_restrictions = {};  # unrestricted filesystem
-		before = base_before;
-		landrun_setup = base_landrun_setup;
-		generate_unsafe = false;
-	}).scripts;
+ 	node_nonet_scripts = (import ../wrapper.nix {
+ 		name = "node-nonet";
+ 		inherit pkgs;
+ 		bin = "${pkgs.nodePackages_latest.nodejs}/bin/node";
+ 		landrun_restrictions = { network = {}; };  # unrestricted filesystem, no network
+ 		before = base_before;
+ 		landrun_setup = base_landrun_setup;
+ 		generate_unsafe = false;
+ 	}).scripts;
 
 	npx_scripts = (import ../wrapper.nix {
 		name = "npx";

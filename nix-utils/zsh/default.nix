@@ -111,15 +111,23 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 		inherit before landrun_setup;
 	}).scripts;
 
-	zsh_nonet_fullfs_scripts = (import ../wrapper.nix {
-		name = "zsh-nonet-fullfs";
-		inherit pkgs bin;
-		landrun_restrictions = {};  # unrestricted filesystem and network
-		inherit before landrun_setup;
-		generate_unsafe = false;
-	}).scripts;
-in
-{
-	scripts = zsh_scripts ++ zsh_nonet_fullfs_scripts;
-	landrun_restrictions = merged_restrictions;
-}
+ 	zsh_nonet_fullfs_scripts = (import ../wrapper.nix {
+ 		name = "zsh-nonet-fullfs";
+ 		inherit pkgs bin;
+ 		landrun_restrictions = { network = {}; };  # unrestricted filesystem, no network
+ 		inherit before landrun_setup;
+ 		generate_unsafe = false;
+ 	}).scripts;
+
+ 	zsh_nonet_scripts = (import ../wrapper.nix {
+ 		name = "zsh-nonet";
+ 		inherit pkgs bin;
+ 		landrun_restrictions = merged_restrictions // { network = {}; };  # same fs/env as zsh, no network
+ 		inherit before landrun_setup;
+ 		generate_unsafe = false;
+ 	}).scripts;
+ in
+ {
+ 	scripts = zsh_scripts ++ zsh_nonet_fullfs_scripts ++ zsh_nonet_scripts;
+ 	landrun_restrictions = merged_restrictions;
+ }
