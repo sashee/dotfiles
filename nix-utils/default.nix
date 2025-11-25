@@ -8,6 +8,7 @@ let
 	# Programs to pass to zsh for dynamic requirements merging
 	zsh_programs = [
 		(import ./aws/default.nix { inherit pkgs; })
+		(import ./awslogs/default.nix { inherit pkgs; })
 		(import ./duckdb/default.nix { inherit pkgs; })
 		(import ./flameshot/default.nix { inherit pkgs; })
 		(import ./fx/default.nix { inherit pkgs; })
