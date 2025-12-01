@@ -273,6 +273,7 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold" }, {
 })
 
 -- otherwise zellij clipboard does not work
+-- https://github.com/zellij-org/zellij/issues/3951
 vim.g.clipboard = {
   name = 'OSC 52',
   copy = {
