@@ -2,9 +2,6 @@
 	pkgs,
 }:
 let
-	nixpkgs2 = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-unstable";
-	pkgs2 = import nixpkgs2 { config = {allowUnfree = true;}; overlays = [];};
-
 	packageName = "nvim-custom";
 
 	startPlugins = [
@@ -17,8 +14,8 @@ let
 		pkgs.vimPlugins.nvim-autopairs
 		pkgs.vimPlugins.rainbow-delimiters-nvim
 		pkgs.vimPlugins.nvim-nio
-		pkgs2.vimPlugins.neotest
-		pkgs2.vimPlugins.neotest-jest
+		pkgs.vimPlugins.neotest
+		pkgs.vimPlugins.neotest-jest
 		pkgs.vimPlugins.telescope-nvim
 		pkgs.vimPlugins.nvim-treesitter
 		pkgs.vimPlugins.nvim-treesitter.withAllGrammars

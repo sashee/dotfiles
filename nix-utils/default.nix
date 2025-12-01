@@ -1,5 +1,5 @@
 let
-  nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.05";
+  nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.11";
   pkgs = import nixpkgs { config = {allowUnfree = true;}; overlays = [
 		# postInstallCheck fails on rpi kernel, disable it here
 		(final: prev: {landrun = prev.landrun.overrideAttrs (old: {postInstallCheck = "";});})
@@ -15,7 +15,7 @@ let
 		(import ./flameshot/default.nix { inherit pkgs; })
 		(import ./fx/default.nix { inherit pkgs; })
 		(import ./isd/default.nix { inherit pkgs; })
-		(import ./k2pdfopt/default.nix { inherit pkgs; })
+		#(import ./k2pdfopt/default.nix { inherit pkgs; })
 		(import ./lazygit/default.nix { inherit pkgs; })
 		(import ./lazysql/default.nix { inherit pkgs; })
 		(import ./magic-wormhole/default.nix { inherit pkgs; })
