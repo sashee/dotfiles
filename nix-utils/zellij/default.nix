@@ -1,6 +1,7 @@
 {
 	zsh,
 	pkgs,
+	nvim,
 }:
 let
 	config = pkgs.writeTextFile {
@@ -11,6 +12,7 @@ show_startup_tips false
 show_release_notes false
 pane_frames false
 default_mode "locked"
+scrollback_editor "${builtins.elemAt nvim.scripts 0}/bin/nvim"
 
 keybinds {
 	normal {
@@ -19,6 +21,8 @@ keybinds {
 	}
 	shared_except "locked" {
 		bind "Ctrl b" { SwitchToMode "Locked"; }
+		unbind "Ctrl g"
+		unbind "Ctrl q"
 	}
 	pane {
 		bind "n" { NewPane; SwitchToMode "Locked"; }
@@ -33,6 +37,9 @@ keybinds {
 	}
 	tab {
 		bind "n" { NewTab; SwitchToMode "Locked"; }
+	}
+	scroll {
+		bind "e" { EditScrollback; SwitchToMode "Locked"; }
 	}
 }
 		'';

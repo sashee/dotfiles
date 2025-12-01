@@ -5,6 +5,8 @@ let
 		(final: prev: {landrun = prev.landrun.overrideAttrs (old: {postInstallCheck = "";});})
 	]; };
 
+	nvim = import ./nvim/default.nix { inherit pkgs; };
+
 	# Programs to pass to zsh for dynamic requirements merging
 	zsh_programs = [
 		(import ./aws/default.nix { inherit pkgs; })
@@ -19,7 +21,7 @@ let
 		(import ./magic-wormhole/default.nix { inherit pkgs; })
 		(import ./opencode/default.nix { inherit pkgs; })
 		(import ./vlc/default.nix { inherit pkgs; })
-		(import ./nvim/default.nix { inherit pkgs; })
+		nvim
 		(import ./npm/default.nix { inherit pkgs; })
 	];
 
@@ -33,7 +35,7 @@ let
 
 	zsh = import ./zsh/default.nix { inherit pkgs; prgs = zsh_programs; };
 	tmux = import ./tmux/default.nix { inherit zsh pkgs; };
-	zellij = import ./zellij/default.nix { inherit zsh pkgs; };
+	zellij = import ./zellij/default.nix { inherit zsh pkgs nvim; };
 
 	programs = zsh_programs ++ other_programs ++ [zsh tmux zellij];
 in
