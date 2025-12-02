@@ -101,7 +101,7 @@ export PATH="${
 		pkgs.cargo
 		pkgs.yaml-language-server
 		pkgs.bash-language-server
-		pkgs.dockerfile-language-server-nodejs
+		pkgs.dockerfile-language-server
 		pkgs.marksman
 		pkgs.terraform-ls
 		pkgs.nixd
