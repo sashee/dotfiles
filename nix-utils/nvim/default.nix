@@ -69,6 +69,7 @@ let
 			"/dev/null" = "rwx";
 			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
 			"~/.local/state/nvim" = "rwx";
+			"~/.local/share/nvim" = "rwx";
 			"~/.cache" = "rwx";
 			"~/eslint.config.js" = "ro";
 			"~/.gitconfig" = "ro";
