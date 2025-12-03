@@ -12,6 +12,7 @@ show_startup_tips false
 show_release_notes false
 pane_frames false
 default_mode "locked"
+scroll_buffer_size 100000
 scrollback_editor "${builtins.elemAt nvim.scripts 0}/bin/nvim"
 
 keybinds {
