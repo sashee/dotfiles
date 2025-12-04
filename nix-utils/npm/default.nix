@@ -82,7 +82,7 @@ export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 		name = "npx-fullnet";
 		inherit pkgs;
 		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
-		landrun_restrictions = base_landrun_restrictions // { network = {}; };  # unrestricted network
+		landrun_restrictions = builtins.removeAttrs base_landrun_restrictions ["network"];  # unrestricted network
 		before = npx_before;
 		landrun_setup = base_landrun_setup;
 		generate_unsafe = false;
