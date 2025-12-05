@@ -5,12 +5,13 @@ let
 	bin = "${pkgs.vlc}/bin/vlc";
 	sandbox_restrictions = {
 		fs = {
+			"/tmp/.X11-unix" = "ro";
+			"~/.Xauthority" = "ro";
 			"~/.local/share/vlc" = "rw";
 			"~/.config/vlc" = "rw";
-			"~/.Xauthority" = "ro";
 		};
-		env = ["DISPLAY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
-		network = {};
+		env = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
+		network = false;
 	};
 	before = ''
 

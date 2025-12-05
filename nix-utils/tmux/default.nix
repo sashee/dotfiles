@@ -52,7 +52,7 @@ in
 	scripts = (import ../wrapper.nix {
 		name = "tmux";
 		inherit pkgs bin;
-		sandbox_restrictions = zsh.sandbox_restrictions // { network = {}; };
+		sandbox_restrictions = zsh.sandbox_restrictions // { network = true; };
 		inherit before sandbox_setup;
 	}).scripts;
 	inherit (zsh) sandbox_restrictions;

@@ -55,8 +55,8 @@ keybinds {
 	sandbox_setup = zsh.sandbox_setup or ''
 
 	'';
-	base_sandbox_restrictions = {
-		fs = {
+	merged_sandbox_restrictions = zsh.sandbox_restrictions // {
+		fs = (zsh.sandbox_restrictions.fs or {}) // {
 			"/run" = "rw";
 		};
 	};
@@ -65,8 +65,8 @@ in
 	scripts = (import ../wrapper.nix {
 		name = "zellij";
 		inherit pkgs bin;
-		sandbox_restrictions = zsh.sandbox_restrictions // base_sandbox_restrictions // { network = {}; };
+		sandbox_restrictions = merged_sandbox_restrictions // { network = true; allow_nested_sandbox = true; };
 		inherit before sandbox_setup;
 	}).scripts;
-	sandbox_restrictions = zsh.sandbox_restrictions // base_sandbox_restrictions;
+	sandbox_restrictions = merged_sandbox_restrictions;
 }

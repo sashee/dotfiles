@@ -13,7 +13,7 @@ let
 		"${pkgs.duckdb}/bin/duckdb -init ${config}";
 	sandbox_restrictions = {
 		env = ["TERM" "DUCKDB_HISTORY"];
-		network = {};
+		network = false;
 	};
 	before = ''
 export DUCKDB_HISTORY=/tmp/.duckdb_history

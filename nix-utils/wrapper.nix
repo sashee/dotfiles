@@ -18,7 +18,7 @@ let
 --uid (${pkgs.coreutils}/bin/id -u) \
 --gid (${pkgs.coreutils}/bin/id -g) \
     ${if
-      (builtins.hasAttr "network" sandbox_restrictions) then
+      (builtins.hasAttr "network" sandbox_restrictions) && sandbox_restrictions.network then
       ''
 --share-net \
 			''
@@ -27,10 +27,10 @@ let
     }\
 --ro-bind / / \
 --tmpfs /home \
---dev /dev \
+${if (builtins.hasAttr "mount_dev" sandbox_restrictions) && sandbox_restrictions.mount_dev then "--dev-bind /dev /dev" else "--dev /dev"} \
 --proc /proc \
 --tmpfs /tmp \
-(if set -q TMPDIR; and test "$TMPDIR" != "/tmp"; echo "--tmpfs $TMPDIR"; end) \
+(if set -q TMPDIR; and test -n "$TMPDIR"; and test "$TMPDIR" != "/tmp"; echo "--tmpfs $TMPDIR"; end) \
     ${if restrict_to_current_folder then ''--bind "''$${consts.RESTRICT_TO_ENV_VAR_NAME}" "''$${consts.RESTRICT_TO_ENV_VAR_NAME}" \
 '' else ""}\
     ${if
@@ -62,7 +62,8 @@ let
 '' ) sandbox_restrictions.env)
       else ""
     }\
-    --setenv "${consts.SKIP_SANDBOX_ENV_VAR_NAME}" "''$${consts.SKIP_SANDBOX_ENV_VAR_NAME}" \
+${if (builtins.hasAttr "allow_nested_sandbox" sandbox_restrictions) && sandbox_restrictions.allow_nested_sandbox then "" else ''--setenv "${consts.SKIP_SANDBOX_ENV_VAR_NAME}" "''$${consts.SKIP_SANDBOX_ENV_VAR_NAME}" \
+''}\
 --tmpfs /etc/ssh/ssh_config.d \
     '';
 

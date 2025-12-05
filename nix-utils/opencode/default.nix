@@ -25,7 +25,7 @@ let
 			"~/.cache/opencode" = "rw";
 		};
 		env = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "LANG" "TERM" "OPENCODE_CONFIG"];
-		network = {};
+		network = true;
 	};
 	before = ''
 export OPENCODE_CONFIG=${config}

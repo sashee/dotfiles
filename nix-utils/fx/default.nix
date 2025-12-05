@@ -5,7 +5,7 @@ let
 	bin = "${pkgs.fx}/bin/fx";
 	sandbox_restrictions = {
 		env = ["TERM" "HOME"];
-		network = {};
+		network = false;
 	};
 	before = ''
 

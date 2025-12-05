@@ -95,7 +95,7 @@ export default [
 			"/home/sashee/eslint.config.js" = "${eslintConfig}";
 		};
 		env = ["HOME" "PATH" "NVIM_RPLUGIN_MANIFEST" "TMPDIR" "SSL_CERT_FILE" "TERM" "LANG"];
-		network = {};
+		network = true;
 	};
 
 	base_before = ''
@@ -151,7 +151,7 @@ export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
 		inherit pkgs bin;
 		sandbox_restrictions = base_sandbox_restrictions // {
 			env = base_sandbox_restrictions.env ++ ["AWS_REGION" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN"];
-			network = {};
+			network = true;
 		};
 		before = base_before;
 		sandbox_setup = base_sandbox_setup;

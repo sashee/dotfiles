@@ -5,7 +5,7 @@ let
 	bin = "${pkgs.k2pdfopt}/bin/k2pdfopt";
 	sandbox_restrictions = {
 		env = ["TERM"];
-		network = {};
+		network = false;
 	};
 	before = ''
 

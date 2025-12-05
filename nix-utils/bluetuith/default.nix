@@ -4,7 +4,7 @@
 let
 	bin = "${pkgs.bluetuith}/bin/bluetuith";
 	sandbox_restrictions = {
-		network = {};
+		network = false;
 	};
 	before = 
 		let

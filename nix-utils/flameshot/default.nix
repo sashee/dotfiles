@@ -4,14 +4,20 @@
 let
 	bin = "${pkgs.flameshot}/bin/flameshot";
 	sandbox_restrictions = {
-		network = {};
+		fs = {
+			"/tmp/.X11-unix" = "ro";
+			"~/.Xauthority" = "ro";
+			"~/.config/flameshot" = "rw";
+		};
+		env = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
+		network = false;
 	};
 	before = ''
 
 	'';
 
 	sandbox_setup = ''
-
+		${pkgs.coreutils}/bin/mkdir -p ~/.config/flameshot
 	'';
 in
 {

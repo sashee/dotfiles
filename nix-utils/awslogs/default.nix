@@ -8,7 +8,7 @@ let
 			"~/.aws" = "ro";
 		};
 		env = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" "AWS_REGION" "LANG" "TERM"];
-		network = {};
+		network = true;
 	};
 	before = ''
 export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt

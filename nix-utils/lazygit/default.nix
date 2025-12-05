@@ -12,7 +12,7 @@ let
 			"$SSH_AUTH_SOCK" = "rw";
 		};
 		env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"];
-		network = {};
+		network = true;
 	};
  	before = ''
 export PATH="${

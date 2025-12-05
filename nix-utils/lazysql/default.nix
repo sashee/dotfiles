@@ -5,7 +5,7 @@ let
 	bin = "${pkgs.lazysql}/bin/lazysql";
 	sandbox_restrictions = {
 		env = ["TERM" "HOME" "PATH"];
-		network = {};
+		network = false;
 	};
 	before = ''
 export PATH="${

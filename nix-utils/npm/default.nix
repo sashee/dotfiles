@@ -10,7 +10,7 @@ let
 			"~/.npmrc" = "rw";
 			"~/.cache" = "rw";
 		};
-		network = {};
+		network = true;
 	};
 
 	base_before = ''
@@ -68,7 +68,7 @@ export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 		name = "npx-fullnet";
 		inherit pkgs;
 		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
-		sandbox_restrictions = base_sandbox_restrictions // { network = {}; };  # with network
+		sandbox_restrictions = base_sandbox_restrictions // { network = true; };  # with network
 		before = npx_before;
 		sandbox_setup = base_sandbox_setup;
 		generate_unsafe = false;

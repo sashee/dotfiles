@@ -10,7 +10,7 @@ let
 			"~/.cache/isd_tui" = "rw";
 		};
 		env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG"];
-		network = {};
+		network = false;
 	};
 	before = ''
 

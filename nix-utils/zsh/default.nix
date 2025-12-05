@@ -102,14 +102,14 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 	zsh_scripts = (import ../wrapper.nix {
 		name = "zsh";
 		inherit pkgs bin;
-		sandbox_restrictions = merged_restrictions // { network = {}; };  # with network
+		sandbox_restrictions = merged_restrictions // { network = true; allow_nested_sandbox = true; };  # with network
 		inherit before sandbox_setup;
 	}).scripts;
 
  	zsh_nonet_fullfs_scripts = (import ../wrapper.nix {
  		name = "zsh-nonet-fullfs";
  		inherit pkgs bin;
- 		sandbox_restrictions = {};  # unrestricted filesystem, no network (no network key = no network in bwrap)
+ 		sandbox_restrictions = { allow_nested_sandbox = true; };  # unrestricted filesystem, no network (no network key = no network in bwrap)
  		inherit before sandbox_setup;
  		generate_unsafe = false;
  	}).scripts;
@@ -117,7 +117,7 @@ export PROMPT="$PROMPT_PREF$PROMPT"
  	zsh_nonet_scripts = (import ../wrapper.nix {
  		name = "zsh-nonet";
  		inherit pkgs bin;
- 		sandbox_restrictions = merged_restrictions;  # same fs/env as zsh, no network (no network key)
+ 		sandbox_restrictions = merged_restrictions // { allow_nested_sandbox = true; };  # same fs/env as zsh, no network (no network key)
  		inherit before sandbox_setup;
  		generate_unsafe = false;
  	}).scripts;

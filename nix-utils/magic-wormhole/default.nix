@@ -5,7 +5,7 @@ let
 	bin = "${pkgs.magic-wormhole}/bin/wormhole";
 	sandbox_restrictions = {
 		env = ["TERM"];
-		network = {};
+		network = true;
 	};
 	before = ''
 

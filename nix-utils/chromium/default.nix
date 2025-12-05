@@ -43,12 +43,14 @@ include ${pkgs.firejail}/etc/firejail/chromium.profile
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "ro";
+			"~/.Xauthority" = "ro";
 			"~/.config/chromium" = "rw";
+			"~/Downloads" = "rw";
 			"~/.cache/chromium" = "rw";
 			"~/.local/share/chromium" = "rw";
 		};
 		env = ["DISPLAY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XAUTHORITY" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
-		network = {};
+		network = true;
 	};
 	before = "";
 
