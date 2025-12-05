@@ -11,15 +11,7 @@ let
 			};
 		in
 		"${pkgs.duckdb}/bin/duckdb -init ${config}";
-	landrun_restrictions = {
-		fs = {
-			"/nix" = "rox";
-			"/proc" = "rox";
-			"/sys" = "rox";
-			"/dev/null" = "rwx";
-			"/dev/tty" = "rwx";
-			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
-		};
+	sandbox_restrictions = {
 		env = ["TERM" "DUCKDB_HISTORY"];
 		network = {};
 	};
@@ -27,14 +19,14 @@ let
 export DUCKDB_HISTORY=/tmp/.duckdb_history
 	'';
 
-	landrun_setup = ''
+	sandbox_setup = ''
 
 	'';
 in
 {
 	scripts = (import ../wrapper.nix {
 		name = "duckdb";
-		inherit pkgs bin landrun_restrictions before landrun_setup;
+		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 	}).scripts;
-	inherit landrun_restrictions;
+	inherit sandbox_restrictions;
 }

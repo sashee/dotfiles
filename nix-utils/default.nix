@@ -1,9 +1,6 @@
 let
   nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.11";
-  pkgs = import nixpkgs { config = {allowUnfree = true;}; overlays = [
-		# postInstallCheck fails on rpi kernel, disable it here
-		(final: prev: {landrun = prev.landrun.overrideAttrs (old: {postInstallCheck = "";});})
-	]; };
+  pkgs = import nixpkgs { config = {allowUnfree = true;}; overlays = []; };
 
 	nvim = import ./nvim/default.nix { inherit pkgs; };
 

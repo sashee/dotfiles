@@ -1,81 +1,100 @@
-{pkgs, name, landrun_restrictions, landrun_setup, before, bin, generate_unsafe ? true, restrict_to_current_folder ? true}:
+{pkgs, name, sandbox_restrictions, sandbox_setup, before, bin, generate_unsafe ? true, restrict_to_current_folder ? true}:
 let
-	utils = import ./utils.nix {inherit pkgs;};
-	consts = import ./consts.nix;
+  utils = import ./utils.nix {inherit pkgs;};
+  consts = import ./consts.nix;
 
-	runInLandRun =''
-	${landrun_setup}
+  runInBwrap = ''
+    ${sandbox_setup}
 
-${if restrict_to_current_folder then ''
-set -x ${consts.RESTRICT_TO_ENV_VAR_NAME} $(${utils.findGitRoot}/bin/findGitRoot)
+    ${if restrict_to_current_folder then ''
+    set -x ${consts.RESTRICT_TO_ENV_VAR_NAME} $(${utils.findGitRoot}/bin/findGitRoot)
 
-echo "[${bin}] Restricting to folder: ''$${consts.RESTRICT_TO_ENV_VAR_NAME}" >&2
-'' else ''''}
+    echo "[${bin}] Restricting to folder: ''$${consts.RESTRICT_TO_ENV_VAR_NAME}" >&2
+    '' else ''''}
 
-function pass_all_env_variables
-	for i in $(set -gx --names);
-		echo -n -- "--env $i ";
-	end
-end
+    ${pkgs.bubblewrap}/bin/bwrap \
+--unshare-all \
+--die-with-parent \
+--uid (${pkgs.coreutils}/bin/id -u) \
+--gid (${pkgs.coreutils}/bin/id -g) \
+    ${if
+      (builtins.hasAttr "network" sandbox_restrictions) then
+      ''
+--share-net \
+			''
+      else
+      ""
+    }\
+--ro-bind / / \
+--tmpfs /home \
+--dev /dev \
+--proc /proc \
+--tmpfs /tmp \
+(if set -q TMPDIR; and test "$TMPDIR" != "/tmp"; echo "--tmpfs $TMPDIR"; end) \
+    ${if restrict_to_current_folder then ''--bind "''$${consts.RESTRICT_TO_ENV_VAR_NAME}" "''$${consts.RESTRICT_TO_ENV_VAR_NAME}" \
+'' else ""}\
+    ${if
+      (builtins.hasAttr "fs" sandbox_restrictions) then
+      builtins.concatStringsSep "" (map (n:
+        let perm = builtins.getAttr n sandbox_restrictions.fs; in
+        if perm == "ro" then
+          ''--ro-bind ${n} ${n} \
+''
+        else
+          ''--bind ${n} ${n} \
+''
+      ) (builtins.attrNames sandbox_restrictions.fs))
+      else ""
+    }\
+    ${if
+      (builtins.hasAttr "files" sandbox_restrictions) then
+      builtins.concatStringsSep "" (map (dest:
+        let src = builtins.getAttr dest sandbox_restrictions.files; in
+          ''--ro-bind ${src} ${dest} \
+''
+      ) (builtins.attrNames sandbox_restrictions.files))
+      else ""
+    }\
+    ${if
+      (builtins.hasAttr "env" sandbox_restrictions) then
+      ''--clearenv \
+'' + builtins.concatStringsSep "" (map (n: ''--setenv "${n}" "''$${n}" \
+'' ) sandbox_restrictions.env)
+      else ""
+    }\
+    --setenv "${consts.SKIP_SANDBOX_ENV_VAR_NAME}" "''$${consts.SKIP_SANDBOX_ENV_VAR_NAME}" \
+--tmpfs /etc/ssh/ssh_config.d \
+    '';
 
-		${pkgs.landrun}/bin/landrun \
-${builtins.concatStringsSep " " [
-"--best-effort"
-(if restrict_to_current_folder then ''--rwx ''$${consts.RESTRICT_TO_ENV_VAR_NAME}'' else '''')
-(if
-	(builtins.hasAttr "fs" landrun_restrictions) then
-	(builtins.concatStringsSep " " (map (n: ''--${builtins.getAttr n landrun_restrictions.fs} ${n}'') (builtins.attrNames landrun_restrictions.fs)))
-	else "--unrestricted-filesystem"
-)
-(if
-	(builtins.hasAttr "env" landrun_restrictions) then
-	(builtins.concatStringsSep " " (map (n: ''--env ${n}'') landrun_restrictions.env)) else
-	''(string split " " -- (string trim -- (pass_all_env_variables)))''
-)
-"--env ${consts.SKIP_SANDBOX_ENV_VAR_NAME}"
-(if
-	(builtins.hasAttr "network" landrun_restrictions) then
-	(if (builtins.hasAttr "tcp" landrun_restrictions.network) then
-		''${builtins.concatStringsSep " " (
-			builtins.concatLists [
-				(if (builtins.hasAttr "connect" landrun_restrictions.network.tcp) then (map (port: "--connect-tcp ${builtins.toString port}") landrun_restrictions.network.tcp.connect) else [])
-				(if (builtins.hasAttr "bind" landrun_restrictions.network.tcp) then (map (port: "--bind-tcp ${builtins.toString port}") landrun_restrictions.network.tcp.bind) else [])
-			]
-		)}''
-		else "")
-	else "--unrestricted-network"
-)
+  makeWrapper = {bwrapCmd, bin}: ''
+    #!${pkgs.fish}/bin/fish
 
-]} \
-	'';
+    if set -q ${consts.SKIP_SANDBOX_ENV_VAR_NAME}
 
-	makeWrapper = {landRun, bin}: ''
-#!${pkgs.fish}/bin/fish
+      echo "[${bin}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME} is defined" >&2
 
-if set -q ${consts.SKIP_SANDBOX_ENV_VAR_NAME}
+      ${before}
 
-	echo "[${bin}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME} is defined" >&2
+      ${bin} $argv
+    else
+      ${before}
 
-	${before}
+      ${bwrapCmd} \
+      ${bin} $argv
+    end
+    '';
 
-	${bin} $argv
-else
-	${before}
-
-	${landRun} \
-	${bin} $argv
-end
-	'';
-
-	scripts = [
-		(pkgs.writeScriptBin name (makeWrapper {inherit bin; landRun = runInLandRun;}))
-		(pkgs.writeScriptBin "${name}-strace" (makeWrapper {inherit bin; landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -f -e trace=%network,%file,%desc,%process -s 2000 -yy -o (if set -q TMPDIR; echo $TMPDIR; else; echo "/tmp"; end)/strace.log '';}))
-		(pkgs.writeScriptBin "${name}-debug" (makeWrapper {bin = "${pkgs.bash}/bin/bash"; landRun = runInLandRun + '' ${pkgs.strace}/bin/strace -o /tmp/strace.log '';}))
-	] ++ (
-		if generate_unsafe then [(pkgs.writeScriptBin "${name}-unsafe" (makeWrapper {inherit bin; landRun = "";}))] else []
-	);
+  scripts = [
+    (pkgs.writeScriptBin name (makeWrapper {inherit bin; bwrapCmd = runInBwrap;}))
+    (pkgs.writeScriptBin "${name}-strace" (makeWrapper {inherit bin; bwrapCmd = ''
+    ${pkgs.coreutils}/bin/touch /tmp/strace.log
+    '' + runInBwrap + '' --bind /tmp/strace.log /tmp/strace.log ${pkgs.strace}/bin/strace -f -e trace=%network,%file,%desc,%process -s 2000 -yy -o /tmp/strace.log '';}))
+    (pkgs.writeScriptBin "${name}-debug" (makeWrapper {bin = "${pkgs.bash}/bin/bash"; bwrapCmd = runInBwrap + '' ${pkgs.strace}/bin/strace -o /tmp/strace.log '';}))
+    (pkgs.writeScriptBin "${name}-ranger" (makeWrapper {bin = "${pkgs.ranger}/bin/ranger"; bwrapCmd = runInBwrap;}))
+  ] ++ (
+    if generate_unsafe then [(pkgs.writeScriptBin "${name}-unsafe" (makeWrapper {inherit bin; bwrapCmd = "";}))] else []
+  );
 in
-	{
-		inherit scripts;
-	}
-
+  {
+    inherit scripts;
+  }

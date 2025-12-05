@@ -44,7 +44,7 @@ set-option -ga update-environment ' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_
 
 	'';
 
-	landrun_setup = zsh.landrun_setup or ''
+	sandbox_setup = zsh.sandbox_setup or ''
 
 	'';
 in
@@ -52,8 +52,8 @@ in
 	scripts = (import ../wrapper.nix {
 		name = "tmux";
 		inherit pkgs bin;
-		landrun_restrictions = zsh.landrun_restrictions;
-		inherit before landrun_setup;
+		sandbox_restrictions = zsh.sandbox_restrictions // { network = {}; };
+		inherit before sandbox_setup;
 	}).scripts;
-	inherit (zsh) landrun_restrictions;
+	inherit (zsh) sandbox_restrictions;
 }

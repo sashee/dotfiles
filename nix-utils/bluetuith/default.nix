@@ -3,7 +3,7 @@
 }:
 let
 	bin = "${pkgs.bluetuith}/bin/bluetuith";
-	landrun_restrictions = {
+	sandbox_restrictions = {
 		network = {};
 	};
 	before = 
@@ -17,7 +17,7 @@ let
 		export XDG_CONFIG_HOME=${config}
 		'';
 
-	landrun_setup = ''
+	sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p ~/.config/bluetuith
 
 	'';
@@ -25,7 +25,7 @@ in
 {
 	scripts = (import ../wrapper.nix {
 		name = "bluetuith";
-		inherit pkgs bin landrun_restrictions before landrun_setup;
+		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 	}).scripts;
-	inherit landrun_restrictions;
+	inherit sandbox_restrictions;
 }

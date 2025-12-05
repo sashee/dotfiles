@@ -40,18 +40,29 @@ include ${pkgs.firejail}/etc/firejail/chromium.profile
 		};
 		in
 		"firejail --profile=${config} ${pkgs.ungoogled-chromium}/bin/chromium";
-	landrun_restrictions = {};
+	sandbox_restrictions = {
+		fs = {
+			"/tmp/.X11-unix" = "ro";
+			"~/.config/chromium" = "rw";
+			"~/.cache/chromium" = "rw";
+			"~/.local/share/chromium" = "rw";
+		};
+		env = ["DISPLAY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XAUTHORITY" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
+		network = {};
+	};
 	before = "";
 
-	landrun_setup = ''
-
+	sandbox_setup = ''
+		${pkgs.coreutils}/bin/mkdir -p ~/.config/chromium
+		${pkgs.coreutils}/bin/mkdir -p ~/.cache/chromium
+		${pkgs.coreutils}/bin/mkdir -p ~/.local/share/chromium
 	'';
 in
 {
 	scripts = (import ../wrapper.nix {
 		name = "chromium";
-		inherit pkgs bin landrun_restrictions before landrun_setup;
+		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 		restrict_to_current_folder = false;
 	}).scripts;
-	inherit landrun_restrictions;
+	inherit sandbox_restrictions;
 }

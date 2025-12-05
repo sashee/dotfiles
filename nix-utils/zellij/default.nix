@@ -52,16 +52,21 @@ keybinds {
 
 	'';
 
-	landrun_setup = zsh.landrun_setup or ''
+	sandbox_setup = zsh.sandbox_setup or ''
 
 	'';
+	base_sandbox_restrictions = {
+		fs = {
+			"/run" = "rw";
+		};
+	};
 in
 {
 	scripts = (import ../wrapper.nix {
 		name = "zellij";
 		inherit pkgs bin;
-		landrun_restrictions = zsh.landrun_restrictions;
-		inherit before landrun_setup;
+		sandbox_restrictions = zsh.sandbox_restrictions // base_sandbox_restrictions // { network = {}; };
+		inherit before sandbox_setup;
 	}).scripts;
-	inherit (zsh) landrun_restrictions;
+	sandbox_restrictions = zsh.sandbox_restrictions // base_sandbox_restrictions;
 }

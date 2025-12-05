@@ -4,6 +4,32 @@
 let
 	packageName = "nvim-custom";
 
+	eslintConfig = pkgs.writeText "eslint.config.js" ''
+export default [
+	{
+		"rules": {
+		"indent": [
+		    "error",
+		    "tab"
+		],
+		"linebreak-style": [
+		    "error",
+		    "unix"
+		],
+		"quotes": [
+		    "error",
+		    "double"
+		],
+		"semi": [
+		    "error",
+		    "always"
+		],
+					"no-console": "off"
+	    }
+	},
+];
+'';
+
 	startPlugins = [
 		pkgs.vimPlugins.nvim-surround
 		pkgs.vimPlugins.gitsigns-nvim
@@ -58,21 +84,15 @@ let
 		--cmd 'set packpath^=${packpath} | set runtimepath^=${packpath}' \
 	'';
 
-	base_landrun_restrictions = {
+	base_sandbox_restrictions = {
 		fs = {
-			"/usr" = "rox";
-			"/dev" = "rox";
-			"/nix" = "rox";
-			"/proc" = "rox";
-			"/dev/ptmx" = "rwx";
-			"/dev/pts" = "rwx";
-			"/dev/null" = "rwx";
-			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
-			"~/.local/state/nvim" = "rwx";
-			"~/.local/share/nvim" = "rwx";
-			"~/.cache" = "rwx";
-			"~/eslint.config.js" = "ro";
+			"~/.local/state/nvim" = "rw";
+			"~/.local/share/nvim" = "rw";
+			"~/.cache" = "rw";
 			"~/.gitconfig" = "ro";
+		};
+		files = {
+			"/home/sashee/eslint.config.js" = "${eslintConfig}";
 		};
 		env = ["HOME" "PATH" "NVIM_RPLUGIN_MANIFEST" "TMPDIR" "SSL_CERT_FILE" "TERM" "LANG"];
 		network = {};
@@ -113,7 +133,7 @@ export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
 	'';
 
-	base_landrun_setup = ''
+	base_sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p ~/.local/state/nvim
 		${pkgs.coreutils}/bin/mkdir -p ~/.cache
 	'';
@@ -121,31 +141,24 @@ export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
 	nvim_scripts = (import ../wrapper.nix {
 		name = "nvim";
 		inherit pkgs bin;
-		landrun_restrictions = base_landrun_restrictions;
+		sandbox_restrictions = base_sandbox_restrictions;
 		before = base_before;
-		landrun_setup = base_landrun_setup;
+		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
 	nvim_net_scripts = (import ../wrapper.nix {
 		name = "nvim-net";
 		inherit pkgs bin;
-		landrun_restrictions = base_landrun_restrictions // {
-			fs = base_landrun_restrictions.fs // {
-				"/run/systemd/resolve" = "rox";
-			};
-			env = base_landrun_restrictions.env ++ ["AWS_REGION" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN"];
-			network = {
-				tcp = {
-					connect = [443 8883];
-				};
-			};
+		sandbox_restrictions = base_sandbox_restrictions // {
+			env = base_sandbox_restrictions.env ++ ["AWS_REGION" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN"];
+			network = {};
 		};
 		before = base_before;
-		landrun_setup = base_landrun_setup;
+		sandbox_setup = base_sandbox_setup;
 		generate_unsafe = false;
 	}).scripts;
 in
 {
 	scripts = nvim_scripts ++ nvim_net_scripts;
-	landrun_restrictions = base_landrun_restrictions;
+	sandbox_restrictions = base_sandbox_restrictions;
 }

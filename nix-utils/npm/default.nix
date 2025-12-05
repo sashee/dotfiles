@@ -4,27 +4,13 @@
 let
 	consts = import ../consts.nix;
 
-	base_landrun_restrictions = {
+	base_sandbox_restrictions = {
 		fs = {
-			"/usr" = "rox";
-			"/dev" = "rox";
-			"/nix" = "rox";
-			"/etc" = "rox";
-			"/run/systemd/resolve" = "rox";
-			"~/.npm" = "rwx";
-			"~/.npmrc" = "rwx";
-			"~/.cache" = "rwx";
-			"/dev/null" = "rwx";
-			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
-			"/etc/fonts" = "rox";
-			"/etc/ssl" = "ro";
+			"~/.npm" = "rw";
+			"~/.npmrc" = "rw";
+			"~/.cache" = "rw";
 		};
-		network = {
-			tcp = {
-				connect = [443 8883];
-				bind = [8080];
-			};
-		};
+		network = {};
 	};
 
 	base_before = ''
@@ -32,7 +18,7 @@ export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 export NODE_EXTRA_CA_CERTS=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 	'';
 
-	base_landrun_setup = ''
+	base_sandbox_setup = ''
 export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 export NODE_EXTRA_CA_CERTS=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 	'';
@@ -45,27 +31,27 @@ export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 		name = "npm";
 		inherit pkgs;
 		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npm";
-		landrun_restrictions = base_landrun_restrictions;
+		sandbox_restrictions = base_sandbox_restrictions;
 		before = base_before;
-		landrun_setup = base_landrun_setup;
+		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
 	node_scripts = (import ../wrapper.nix {
 		name = "node";
 		inherit pkgs;
 		bin = "${pkgs.nodePackages_latest.nodejs}/bin/node";
-		landrun_restrictions = base_landrun_restrictions;
+		sandbox_restrictions = base_sandbox_restrictions;
 		before = base_before;
-		landrun_setup = base_landrun_setup;
+		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
  	node_nonet_scripts = (import ../wrapper.nix {
  		name = "node-nonet";
  		inherit pkgs;
  		bin = "${pkgs.nodePackages_latest.nodejs}/bin/node";
- 		landrun_restrictions = { network = {}; };  # unrestricted filesystem, no network
+ 		sandbox_restrictions = {};  # unrestricted filesystem, no network
  		before = base_before;
- 		landrun_setup = base_landrun_setup;
+ 		sandbox_setup = base_sandbox_setup;
  		generate_unsafe = false;
  	}).scripts;
 
@@ -73,22 +59,22 @@ export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 		name = "npx";
 		inherit pkgs;
 		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
-		landrun_restrictions = base_landrun_restrictions;
+		sandbox_restrictions = base_sandbox_restrictions;
 		before = npx_before;
-		landrun_setup = base_landrun_setup;
+		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
 	npx_fullnet_scripts = (import ../wrapper.nix {
 		name = "npx-fullnet";
 		inherit pkgs;
 		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
-		landrun_restrictions = builtins.removeAttrs base_landrun_restrictions ["network"];  # unrestricted network
+		sandbox_restrictions = base_sandbox_restrictions // { network = {}; };  # with network
 		before = npx_before;
-		landrun_setup = base_landrun_setup;
+		sandbox_setup = base_sandbox_setup;
 		generate_unsafe = false;
 	}).scripts;
 in
 {
 	scripts = npm_scripts ++ node_scripts ++ node_nonet_scripts ++ npx_scripts ++ npx_fullnet_scripts;
-	landrun_restrictions = base_landrun_restrictions;
+	sandbox_restrictions = base_sandbox_restrictions;
 }

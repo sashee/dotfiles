@@ -3,13 +3,7 @@
 }:
 let
 	bin = "${pkgs.fx}/bin/fx";
-	landrun_restrictions = {
-		fs = {
-			"/nix" = "rox";
-			"/dev/null" = "rwx";
-			"/dev/tty" = "rwx";
-			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
-		};
+	sandbox_restrictions = {
 		env = ["TERM" "HOME"];
 		network = {};
 	};
@@ -17,14 +11,14 @@ let
 
 	'';
 
-	landrun_setup = ''
+	sandbox_setup = ''
 
 	'';
 in
 {
 	scripts = (import ../wrapper.nix {
 		name = "fx";
-		inherit pkgs bin landrun_restrictions before landrun_setup;
+		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 	}).scripts;
-	inherit landrun_restrictions;
+	inherit sandbox_restrictions;
 }

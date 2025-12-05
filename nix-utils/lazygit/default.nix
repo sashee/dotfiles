@@ -3,13 +3,13 @@
 }:
 let
 	bin = "${pkgs.lazygit}/bin/lazygit";
-	landrun_restrictions = {
+	sandbox_restrictions = {
 		fs = {
 			"~/.ssh/known_hosts" = "ro";
 			"~/.gitconfig" = "ro";
-			"~/.config/lazygit" = "rwx";
-			"~/.local/state/lazygit" = "rwx";
-			"$SSH_AUTH_SOCK" = "rwx";
+			"~/.config/lazygit" = "rw";
+			"~/.local/state/lazygit" = "rw";
+			"$SSH_AUTH_SOCK" = "rw";
 		};
 		env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"];
 		network = {};
@@ -24,14 +24,14 @@ export PATH="${
 }"
 	'';
 
-	landrun_setup = ''
+	sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p ~/.config/lazygit
 	'';
 in
 {
-	scripts = (import ../wrapper2.nix {
+	scripts = (import ../wrapper.nix {
 		name = "lazygit";
-		inherit pkgs bin landrun_restrictions before landrun_setup;
+		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 	}).scripts;
-	inherit landrun_restrictions;
+	inherit sandbox_restrictions;
 }

@@ -17,28 +17,21 @@ let
 	};
 
 	bin = "${pkgs2.opencode}/bin/opencode";
-	landrun_restrictions = {
+	sandbox_restrictions = {
 		fs = {
-			"/usr" = "rox";
-			"/dev" = "rox";
-			"/nix" = "rox";
-			"/run/systemd/resolve" = "rox";
-			"/proc" = "rox";
-			"~/.local/share/opencode" = "rwx";
-			"~/.config/opencode" = "rwx";
-			"~/.local/state/opencode" = "rwx";
-			"~/.cache/opencode" = "rwx";
-			"/dev/null" = "rwx";
-			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
-			"/etc/ssl" = "ro";
+			"~/.local/share/opencode" = "rw";
+			"~/.config/opencode" = "rw";
+			"~/.local/state/opencode" = "rw";
+			"~/.cache/opencode" = "rw";
 		};
 		env = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "LANG" "TERM" "OPENCODE_CONFIG"];
+		network = {};
 	};
 	before = ''
 export OPENCODE_CONFIG=${config}
 	'';
 
-	landrun_setup = ''
+	sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p ~/.config/opencode
 		${pkgs.coreutils}/bin/mkdir -p ~/.local/share/opencode
 		${pkgs.coreutils}/bin/mkdir -p ~/.local/state/opencode
@@ -48,7 +41,7 @@ in
 {
 	scripts = (import ../wrapper.nix {
 		name = "opencode";
-		inherit pkgs bin landrun_restrictions before landrun_setup;
+		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 	}).scripts;
-	inherit landrun_restrictions;
+	inherit sandbox_restrictions;
 }

@@ -6,41 +6,36 @@ let
 	consts = import ../consts.nix;
 
 	# Base filesystem restrictions for zsh
+	# Note: bwrap does --ro-bind / / so system paths are already available read-only
+	# We only need to specify home directory paths that need write access
 	base_fs = {
-		"/usr" = "rwx";
-		"/dev" = "rwx";
-		"/nix" = "rwx";
-		"/etc" = "rwx";
-		"/run" = "rwx";
-		"/proc" = "rwx";
-		"/sys" = "rwx";
-		"/var" = "rwx";
-		"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
-		"~/.local/share/zsh" = "rwx";
-		"~/.cache" = "rwx";
-		"~/.wine" = "rwx";
-		"~/.vkquake" = "rwx";
-		"~/.local/share/freeorion" = "rwx";
-		"~/.config/freeorion" = "rwx";
-		"~/.config/transmission" = "rwx";
+		"~/.local/share/zsh" = "rw";
+		"~/.cache" = "rw";
+		"~/.wine" = "rw";
+		"~/.vkquake" = "rw";
+		"~/.local/share/freeorion" = "rw";
+		"~/.config/freeorion" = "rw";
+		"~/.config/transmission" = "rw";
 	};
 
-	base_env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "${consts.RESTRICT_TO_ENV_VAR_NAME}" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "ZDOTDIR"];
+	base_env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "USER" "SHELL" "${consts.RESTRICT_TO_ENV_VAR_NAME}" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "ZDOTDIR"];
 
-	# Merge landrun_restrictions from all programs
-	# Skip programs with unrestricted access (empty landrun_restrictions)
-	filtered_prgs = builtins.filter (prg: prg.landrun_restrictions != {}) prgs;
+	# Merge sandbox_restrictions from all programs
+	# Skip programs with unrestricted access (empty sandbox_restrictions)
+	filtered_prgs = builtins.filter (prg: prg.sandbox_restrictions != {}) prgs;
 
 	merged_restrictions = builtins.foldl' (acc: prg:
 		let
-			prg_restrictions = prg.landrun_restrictions or {};
+			prg_restrictions = prg.sandbox_restrictions or {};
 		in
 		{
 			fs = acc.fs // (prg_restrictions.fs or {});
+			files = acc.files // (prg_restrictions.files or {});
 			env = acc.env ++ (prg_restrictions.env or []);
 		}
 	) {
 		fs = base_fs;
+		files = {};
 		env = base_env;
 	} filtered_prgs;
 
@@ -100,34 +95,35 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 	export ZDOTDIR=${config}
 	'';
 
-	landrun_setup = ''
-		${builtins.concatStringsSep "\n" (map (prg: prg.landrun_setup or "") prgs)}
+	sandbox_setup = ''
+		${builtins.concatStringsSep "\n" (map (prg: prg.sandbox_setup or "") prgs)}
 	'';
 
 	zsh_scripts = (import ../wrapper.nix {
 		name = "zsh";
 		inherit pkgs bin;
-		landrun_restrictions = merged_restrictions;
-		inherit before landrun_setup;
+		sandbox_restrictions = merged_restrictions // { network = {}; };  # with network
+		inherit before sandbox_setup;
 	}).scripts;
 
  	zsh_nonet_fullfs_scripts = (import ../wrapper.nix {
  		name = "zsh-nonet-fullfs";
  		inherit pkgs bin;
- 		landrun_restrictions = { network = {}; };  # unrestricted filesystem, no network
- 		inherit before landrun_setup;
+ 		sandbox_restrictions = {};  # unrestricted filesystem, no network (no network key = no network in bwrap)
+ 		inherit before sandbox_setup;
  		generate_unsafe = false;
  	}).scripts;
 
  	zsh_nonet_scripts = (import ../wrapper.nix {
  		name = "zsh-nonet";
  		inherit pkgs bin;
- 		landrun_restrictions = merged_restrictions // { network = {}; };  # same fs/env as zsh, no network
- 		inherit before landrun_setup;
+ 		sandbox_restrictions = merged_restrictions;  # same fs/env as zsh, no network (no network key)
+ 		inherit before sandbox_setup;
  		generate_unsafe = false;
  	}).scripts;
  in
  {
  	scripts = zsh_scripts ++ zsh_nonet_fullfs_scripts ++ zsh_nonet_scripts;
- 	landrun_restrictions = merged_restrictions;
+ 	sandbox_restrictions = merged_restrictions;
+ 	sandbox_setup = sandbox_setup;
  }

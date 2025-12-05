@@ -3,29 +3,21 @@
 }:
 let
 	bin = "${pkgs.flameshot}/bin/flameshot";
-	landrun_restrictions = {
-		fs = {
-			"/nix" = "rox";
-			"/proc" = "rox";
-			"/sys" = "rox";
-			"/dev/null" = "rwx";
-			"/dev/tty" = "rwx";
-			"(if set -q TMPDIR; echo $TMPDIR; else; echo \"/tmp\"; end)" = "rwx";
-		};
+	sandbox_restrictions = {
 		network = {};
 	};
 	before = ''
 
 	'';
 
-	landrun_setup = ''
+	sandbox_setup = ''
 
 	'';
 in
 {
 	scripts = (import ../wrapper.nix {
 		name = "flameshot";
-		inherit pkgs bin landrun_restrictions before landrun_setup;
+		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 	}).scripts;
-	inherit landrun_restrictions;
+	inherit sandbox_restrictions;
 }
