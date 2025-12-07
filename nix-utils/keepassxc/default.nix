@@ -11,6 +11,7 @@ let
 			"~/laptop-backup" = "rw";
 			"~/safe" = "rw";
 			"~/.cache/keepassxc" = "rw";
+			"/run/user/1000/ssh-agent.socket" = "ro";
 		};
 		env = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
 		network = false;
