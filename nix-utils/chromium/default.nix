@@ -39,7 +39,7 @@ include ${pkgs.firejail}/etc/firejail/chromium.profile
 			'';
 		};
 		in
-		"firejail --profile=${config} ${pkgs.ungoogled-chromium}/bin/chromium";
+		"${pkgs.ungoogled-chromium}/bin/chromium";
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "ro";
@@ -48,9 +48,19 @@ include ${pkgs.firejail}/etc/firejail/chromium.profile
 			"~/Downloads" = "rw";
 			"~/.cache/chromium" = "rw";
 			"~/.local/share/chromium" = "rw";
+			"/etc/hostname" = "ro";
+			"/run/user/1000" = "ro";
+			"/run/user/1000/bus" = "ro";
+			"/run/dbus/system_bus_socket" = "ro";
+			"/run/user/1000/pipewire-0" = "ro";
+			"/run/user/1000/pipewire-0-manager" = "ro";
+			"/run/user/1000/pulse" = "ro";
+			"/tmp" = "rw";
 		};
-		env = ["DISPLAY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XAUTHORITY" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
+		env = ["DISPLAY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XAUTHORITY" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
 		network = true;
+		share_ipc = true;
+		share_pid = true;
 	};
 	before = "";
 

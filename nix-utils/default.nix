@@ -35,8 +35,52 @@ let
 	zellij = import ./zellij/default.nix { inherit zsh pkgs nvim; };
 
 	programs = zsh_programs ++ other_programs ++ [zsh tmux zellij];
+
+	consts = import ./consts.nix;
+
+	# Get all scripts from all programs
+	allScripts = builtins.concatLists (map (p: p.scripts) programs);
+	
+	# Filter to only *-info scripts (by checking if name ends with -info)
+	infoScripts = builtins.filter (s: pkgs.lib.hasSuffix "-info" s.name) allScripts;
+
+	# Script to run all -info programs and create a table
+	allInfoScript = pkgs.writeScriptBin "all-info" ''
+		#!${pkgs.bash}/bin/bash
+		
+		# Collect all JSON outputs
+		json_outputs=""
+		${builtins.concatStringsSep "\n" (map (s: ''
+		output=$(${pkgs.coreutils}/bin/timeout 10s ${s}/bin/${s.name} 2>/dev/null)
+		if [ -n "$output" ]; then
+			if [ -n "$json_outputs" ]; then
+				json_outputs="$json_outputs,$output"
+			else
+				json_outputs="$output"
+			fi
+		fi
+		'') infoScripts)}
+		
+		# Create array and format as TSV for visidata
+		echo "[$json_outputs]" | ${pkgs.jq}/bin/jq -r '
+			# Header
+			(["Name", "Network", "Real Dev", "share_user", "share_uts", "share_cgroup", "share_pid", "share_ipc", ${builtins.concatStringsSep ", " (map (pp: "\"${pp.path}\"") consts.protectedPaths)}] | @tsv),
+			# Data rows
+			(.[] | [
+				.name,
+				(if .network_access then "yes" else "no" end),
+				(if .real_dev then "yes" else "no" end),
+				(if .share_user then "yes" else "no" end),
+				(if .share_uts then "yes" else "no" end),
+				(if .share_cgroup then "yes" else "no" end),
+				(if .share_pid then "yes" else "no" end),
+				(if .share_ipc then "yes" else "no" end),
+				${builtins.concatStringsSep ", " (map (pp: "(if .protected_paths[\"${pp.path}\"] then \"yes\" else \"no\" end)") consts.protectedPaths)}
+			] | @tsv)
+		' | ${pkgs.visidata}/bin/vd -f tsv
+	'';
 in
 	pkgs.buildEnv {
 		name = "scripts-env";
-		paths = builtins.concatLists (map (p: p.scripts) programs);
+		paths = builtins.concatLists (map (p: p.scripts) programs) ++ [allInfoScript];
 	}

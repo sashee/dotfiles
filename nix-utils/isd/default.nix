@@ -8,8 +8,10 @@ let
 			"~/.config/isd_tui" = "rw";
 			"~/.local/share/isd_tui" = "rw";
 			"~/.cache/isd_tui" = "rw";
+			"/run/user/1000/bus" = "ro";
+			"/run/dbus/system_bus_socket" = "ro";
 		};
-		env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG"];
+		env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "DBUS_SESSION_BUS_ADDRESS"];
 		network = false;
 	};
 	before = ''
