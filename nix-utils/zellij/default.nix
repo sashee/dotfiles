@@ -57,7 +57,7 @@ keybinds {
 	'';
 	merged_sandbox_restrictions = zsh.sandbox_restrictions // {
 		fs = (zsh.sandbox_restrictions.fs or {}) // {
-			"/run/user/1000/zellij" = "rw";
+			"/run/user/1000" = "rw";
 		};
 	};
 in

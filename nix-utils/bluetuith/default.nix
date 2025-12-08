@@ -4,6 +4,10 @@
 let
 	bin = "${pkgs.bluetuith}/bin/bluetuith";
 	sandbox_restrictions = {
+		fs = {
+			"/run/user/1000/bus" = "ro";
+			"/run/dbus/system_bus_socket" = "ro";
+		};
 		network = false;
 	};
 	before = 

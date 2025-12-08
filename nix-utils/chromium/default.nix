@@ -55,6 +55,7 @@ include ${pkgs.firejail}/etc/firejail/chromium.profile
 			"/run/user/1000/pipewire-0" = "ro";
 			"/run/user/1000/pipewire-0-manager" = "ro";
 			"/run/user/1000/pulse" = "ro";
+			"/run" = "ro";
 			"/tmp" = "rw";
 		};
 		env = ["DISPLAY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XAUTHORITY" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
