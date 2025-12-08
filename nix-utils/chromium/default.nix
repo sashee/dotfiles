@@ -55,13 +55,14 @@ include ${pkgs.firejail}/etc/firejail/chromium.profile
 			"/run/user/1000/pipewire-0" = "ro";
 			"/run/user/1000/pipewire-0-manager" = "ro";
 			"/run/user/1000/pulse" = "ro";
-			"/run" = "ro";
 			"/tmp" = "rw";
 		};
-		env = ["DISPLAY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XAUTHORITY" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
+		#env = ["DISPLAY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XAUTHORITY" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"
+		#"XDG_SESSION_ID" "XDG_VTNR" "USER" "WINDOWPATH" "XDG_SEAT" "WINDOWID"];
 		network = true;
-		share_ipc = true;
-		share_pid = true;
+		share_ipc = false;
+		share_pid = false;
+		mount_dev = true;
 	};
 	before = "";
 
