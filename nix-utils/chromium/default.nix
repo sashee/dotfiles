@@ -2,44 +2,7 @@
 	pkgs,
 }:
 let
-	bin =
-		let
-			config = pkgs.writeTextFile {
-				name = "profile.conf";
-				text = ''
-noblacklist ~/.config/chromium
-noblacklist ~/.config/Google
-
-# keyd compose file (unicode characters)
-whitelist /usr/share/keyd
-noblacklist /usr/share/keyd/keyd.compose
-
-noblacklist ~/.ssh/known_hosts
-blacklist ~/.ssh/*
-blacklist ~/*.kdbx
-blacklist ~/**/*.kdbx
-blacklist ~/.config/chromium
-blacklist ~/.config/Google
-blacklist ~/.config/keepassxc
-blacklist ~/.config/syncthing
-blacklist ~/.gnupg
-blacklist ~/laptop-backup
-blacklist ~/Mobile-backup
-blacklist ~/safe
-
-read-only ~/dotfiles
-read-only ~/private_scripts
-
-noblacklist ''${RUNUSER}/ssh-agent.socket
-whitelist ''${RUNUSER}/ssh-agent.socket
-
-env AWSKEYS=""
-
-include ${pkgs.firejail}/etc/firejail/chromium.profile
-			'';
-		};
-		in
-		"${pkgs.ungoogled-chromium}/bin/chromium";
+	bin = "${pkgs.ungoogled-chromium}/bin/chromium";
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "ro";
@@ -57,11 +20,7 @@ include ${pkgs.firejail}/etc/firejail/chromium.profile
 			"/run/user/1000/pulse" = "ro";
 			"/tmp" = "rw";
 		};
-		#env = ["DISPLAY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XAUTHORITY" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"
-		#"XDG_SESSION_ID" "XDG_VTNR" "USER" "WINDOWPATH" "XDG_SEAT" "WINDOWID"];
 		network = true;
-		share_ipc = false;
-		share_pid = false;
 		mount_dev = true;
 	};
 	before = "";

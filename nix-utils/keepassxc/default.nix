@@ -17,7 +17,10 @@ let
 			"/run/udev" = "ro";
 		};
 		seccomp = {
-			block_inet = true;
+			block = {
+				AF_INET = true;
+				AF_INET6 = true;
+			};
 		};
 		env = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
 		network = true;  # Allow network namespace (for udev/netlink), but block inet via seccomp

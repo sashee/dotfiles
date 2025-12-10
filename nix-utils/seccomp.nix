@@ -3,8 +3,23 @@
 	options ? {},
 }:
 let
-	# Build the C source based on options
-	block_inet = options.block_inet or false;
+	# Address family mappings
+	afMap = {
+		AF_INET = 2;
+		AF_INET6 = 10;
+		AF_UNIX = 1;
+		AF_NETLINK = 16;
+		AF_PACKET = 17;
+		AF_BLUETOOTH = 31;
+	};
+
+	# Get block options
+	blockOpts = options.block or {};
+
+	# Collect blocked AF numbers
+	blocked_af = builtins.map (name: afMap.${name}) (
+		builtins.filter (name: blockOpts.${name} or false) (builtins.attrNames afMap)
+	);
 
 	cSource = ''
 #include <seccomp.h>
@@ -12,8 +27,6 @@ let
 #include <stdio.h>
 #include <errno.h>
 
-#define AF_INET  2
-#define AF_INET6 10
 #define EACCES   13
 
 int main() {
@@ -23,21 +36,14 @@ int main() {
         return 1;
     }
 
-${if block_inet then ''
-    // Block socket(AF_INET, ...) - return EACCES
+${builtins.concatStringsSep "\n" (map (af: ''
+    // Block socket(${toString af}, ...) - return EACCES
     if (seccomp_rule_add(ctx, SCMP_ACT_ERRNO(EACCES), SCMP_SYS(socket), 1,
-                         SCMP_A0(SCMP_CMP_EQ, AF_INET)) < 0) {
-        fprintf(stderr, "Failed to add AF_INET socket rule\n");
+                          SCMP_A0(SCMP_CMP_EQ, ${toString af})) < 0) {
+        fprintf(stderr, "Failed to add socket rule for AF ${toString af}\n");
         return 1;
     }
-
-    // Block socket(AF_INET6, ...) - return EACCES
-    if (seccomp_rule_add(ctx, SCMP_ACT_ERRNO(EACCES), SCMP_SYS(socket), 1,
-                         SCMP_A0(SCMP_CMP_EQ, AF_INET6)) < 0) {
-        fprintf(stderr, "Failed to add AF_INET6 socket rule\n");
-        return 1;
-    }
-'' else ""}
+'') blocked_af)}
 
     if (seccomp_export_bpf(ctx, STDOUT_FILENO) < 0) {
         fprintf(stderr, "seccomp_export_bpf failed\n");

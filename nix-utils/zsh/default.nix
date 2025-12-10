@@ -106,14 +106,6 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 		inherit before sandbox_setup;
 	}).scripts;
 
- 	zsh_nonet_fullfs_scripts = (import ../wrapper.nix {
- 		name = "zsh-nonet-fullfs";
- 		inherit pkgs bin;
- 		sandbox_restrictions = { allow_nested_sandbox = true; };  # unrestricted filesystem, no network (no network key = no network in bwrap)
- 		inherit before sandbox_setup;
- 		generate_unsafe = false;
- 	}).scripts;
-
  	zsh_nonet_scripts = (import ../wrapper.nix {
  		name = "zsh-nonet";
  		inherit pkgs bin;
@@ -123,7 +115,7 @@ export PROMPT="$PROMPT_PREF$PROMPT"
  	}).scripts;
  in
  {
- 	scripts = zsh_scripts ++ zsh_nonet_fullfs_scripts ++ zsh_nonet_scripts;
+ 	scripts = zsh_scripts ++ zsh_nonet_scripts;
  	sandbox_restrictions = merged_restrictions;
  	sandbox_setup = sandbox_setup;
  }

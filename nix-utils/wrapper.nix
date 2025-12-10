@@ -3,11 +3,20 @@ let
   utils = import ./utils.nix {inherit pkgs;};
   consts = import ./consts.nix;
 
-  # Always generate seccomp filter (no-op if no restrictions specified)
-  seccompFilter = import ./seccomp.nix {
-    inherit pkgs;
-    options = sandbox_restrictions.seccomp or {};
-  };
+   # Always generate seccomp filter (no-op if no restrictions specified)
+   seccompFilter = let
+     baseSeccomp = sandbox_restrictions.seccomp or {};
+     autoBlock = if !(sandbox_restrictions.network or false) then {
+       AF_INET = true;
+       AF_INET6 = true;
+       AF_PACKET = true;
+     } else {};
+     mergedBlock = (baseSeccomp.block or {}) // autoBlock;
+     seccompOptions = baseSeccomp // { block = mergedBlock; };
+   in import ./seccomp.nix {
+     inherit pkgs;
+     options = seccompOptions;
+   };
 
   runInBwrap = ''
     ${sandbox_setup}
@@ -151,26 +160,32 @@ ${if (builtins.hasAttr "allow_nested_sandbox" sandbox_restrictions) && sandbox_r
     (pkgs.writeScriptBin "${name}-ranger" (makeWrapper {bin = "${pkgs.ranger}/bin/ranger"; bwrapCmd = runInBwrap;}))
     (let
       jqFilter = ''{
-  name: $name,
-  unix_sockets: $sockets,
-  network_access: $network,
-  seccomp: {
-    inet_blocked: $inet_blocked,
-    inet6_blocked: $inet6_blocked
-  },
-  real_dev: $real_dev,
-  share_user: ${if (builtins.hasAttr "share_user" sandbox_restrictions) && sandbox_restrictions.share_user then "true" else "false"},
-  share_uts: ${if (builtins.hasAttr "share_uts" sandbox_restrictions) && sandbox_restrictions.share_uts then "true" else "false"},
-  share_cgroup: ${if (builtins.hasAttr "share_cgroup" sandbox_restrictions) && sandbox_restrictions.share_cgroup then "true" else "false"},
-  share_pid: ${if (builtins.hasAttr "share_pid" sandbox_restrictions) && sandbox_restrictions.share_pid then "true" else "false"},
-  share_ipc: ${if (builtins.hasAttr "share_ipc" sandbox_restrictions) && sandbox_restrictions.share_ipc then "true" else "false"},
-  protected_paths: {
+   name: $name,
+   unix_sockets: $sockets,
+   network_access: $network,
+   real_dev: $real_dev,
+   seccomp: {
+     inet_blocked: $inet_blocked,
+     inet6_blocked: $inet6_blocked,
+     unix_blocked: $unix_blocked,
+     netlink_blocked: $netlink_blocked,
+     packet_blocked: $packet_blocked,
+     bluetooth_blocked: $bluetooth_blocked
+   },
+   share: {
+     user: ${if (builtins.hasAttr "share_user" sandbox_restrictions) && sandbox_restrictions.share_user then "true" else "false"},
+     uts: ${if (builtins.hasAttr "share_uts" sandbox_restrictions) && sandbox_restrictions.share_uts then "true" else "false"},
+     cgroup: ${if (builtins.hasAttr "share_cgroup" sandbox_restrictions) && sandbox_restrictions.share_cgroup then "true" else "false"},
+     pid: ${if (builtins.hasAttr "share_pid" sandbox_restrictions) && sandbox_restrictions.share_pid then "true" else "false"},
+     ipc: ${if (builtins.hasAttr "share_ipc" sandbox_restrictions) && sandbox_restrictions.share_ipc then "true" else "false"}
+   },
+   protected_paths: {
 ${builtins.concatStringsSep ",\n" (builtins.genList (i:
   let
     pp = builtins.elemAt consts.protectedPaths i;
   in ''    "${pp.path}": $prot_${toString i}'') (builtins.length consts.protectedPaths))}
-  }
-}'';
+   }
+ }'';
       jqFilterFile = pkgs.writeText "${name}-info-filter.jq" jqFilter;
       protectedChecks = builtins.concatStringsSep "" (builtins.genList (i:
         let
@@ -206,32 +221,60 @@ if [ "$iface_count" -gt 0 ]; then
   network_access=true
 fi
 
-real_dev=false
-if [ -e /dev/input ]; then
-  real_dev=true
-fi
+ real_dev=false
+ if [ -e /dev/input ]; then
+   real_dev=true
+ fi
 
-# Check if AF_INET sockets are blocked (seccomp returns EACCES=13)
-inet_blocked=false
-if ! ${pkgs.python3}/bin/python3 -c "import socket; s=socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.close()" 2>/dev/null; then
-  inet_blocked=true
-fi
+ # Check if AF_INET sockets are blocked (seccomp returns EACCES=13)
+ inet_blocked=false
+ if ! ${pkgs.python3}/bin/python3 -c "import socket; s=socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.close()" 2>/dev/null; then
+   inet_blocked=true
+ fi
 
-# Check if AF_INET6 sockets are blocked
-inet6_blocked=false
-if ! ${pkgs.python3}/bin/python3 -c "import socket; s=socket.socket(socket.AF_INET6, socket.SOCK_STREAM); s.close()" 2>/dev/null; then
-  inet6_blocked=true
-fi
+ # Check if AF_INET6 sockets are blocked
+ inet6_blocked=false
+ if ! ${pkgs.python3}/bin/python3 -c "import socket; s=socket.socket(socket.AF_INET6, socket.SOCK_STREAM); s.close()" 2>/dev/null; then
+   inet6_blocked=true
+ fi
+
+ # Check if AF_UNIX sockets are blocked
+ unix_blocked=false
+ if ! ${pkgs.python3}/bin/python3 -c "import socket; s=socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.close()" 2>/dev/null; then
+   unix_blocked=true
+ fi
+
+ # Check if AF_NETLINK sockets are blocked
+ netlink_blocked=false
+ if ! ${pkgs.python3}/bin/python3 -c "import socket; s=socket.socket(socket.AF_NETLINK, socket.SOCK_DGRAM, 0); s.close()" 2>/dev/null; then
+   netlink_blocked=true
+ fi
+
+ # Check if AF_PACKET sockets are blocked
+ packet_blocked=false
+ if ! ${pkgs.python3}/bin/python3 -c "import socket; s=socket.socket(socket.AF_PACKET, socket.SOCK_RAW, 0); s.close()" 2>/dev/null; then
+   packet_blocked=true
+ fi
+
+ # Check if AF_BLUETOOTH sockets are blocked
+ bluetooth_blocked=false
+ if ! ${pkgs.python3}/bin/python3 -c "import socket; s=socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, 0); s.close()" 2>/dev/null; then
+   bluetooth_blocked=true
+ fi
 
 ${protectedChecks}
-${pkgs.jq}/bin/jq -n \
-  --arg name "${name}" \
-  --argjson sockets "$sockets" \
-  --argjson network "$network_access" \
-  --argjson inet_blocked "$inet_blocked" \
-  --argjson inet6_blocked "$inet6_blocked" \
-  --argjson real_dev "$real_dev" \
-${protectedArgs}  -f ${jqFilterFile}
+ ${pkgs.jq}/bin/jq -n \
+   --arg name "${name}" \
+   --argjson sockets "$sockets" \
+   --argjson network "$network_access" \
+   --argjson inet_blocked "$inet_blocked" \
+   --argjson inet6_blocked "$inet6_blocked" \
+   --argjson unix_blocked "$unix_blocked" \
+   --argjson netlink_blocked "$netlink_blocked" \
+   --argjson packet_blocked "$packet_blocked" \
+   --argjson bluetooth_blocked "$bluetooth_blocked" \
+   --argjson real_dev "$real_dev" \
+ ${protectedArgs}  -f ${jqFilterFile}
 '';
     in pkgs.writeScriptBin "${name}-info" (makeWrapper {
       bin = "${infoScript}";

@@ -5,9 +5,10 @@ let
 	bin = "${pkgs.flameshot}/bin/flameshot";
 	sandbox_restrictions = {
 		fs = {
-			"/tmp/.X11-unix" = "ro";
+			"/tmp/.X11-unix" = "rw";
 			"~/.Xauthority" = "ro";
 			"~/.config/flameshot" = "rw";
+			"/run/user/1000/bus" = "rw";
 		};
 		env = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
 		network = false;
