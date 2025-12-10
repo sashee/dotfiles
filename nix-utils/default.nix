@@ -61,23 +61,27 @@ let
 		fi
 		'') infoScripts)}
 		
-		# Create array and format as TSV for visidata
-		echo "[$json_outputs]" | ${pkgs.jq}/bin/jq -r '
-			# Header
-			(["Name", "Network", "Real Dev", "share_user", "share_uts", "share_cgroup", "share_pid", "share_ipc", ${builtins.concatStringsSep ", " (map (pp: "\"${pp.path}\"") consts.protectedPaths)}] | @tsv),
-			# Data rows
-			(.[] | [
-				.name,
-				(if .network_access then "yes" else "no" end),
-				(if .real_dev then "yes" else "no" end),
-				(if .share_user then "yes" else "no" end),
-				(if .share_uts then "yes" else "no" end),
-				(if .share_cgroup then "yes" else "no" end),
-				(if .share_pid then "yes" else "no" end),
-				(if .share_ipc then "yes" else "no" end),
-				${builtins.concatStringsSep ", " (map (pp: "(if .protected_paths[\"${pp.path}\"] then \"yes\" else \"no\" end)") consts.protectedPaths)}
-			] | @tsv)
-		' | ${pkgs.visidata}/bin/vd -f tsv
+		# Create array and restructure JSON with nested objects for visidata
+		echo "[$json_outputs]" | ${pkgs.jq}/bin/jq '[.[] | {
+			name,
+			network_access,
+			real_dev,
+			seccomp,
+			share: {
+				user: .share_user,
+				uts: .share_uts,
+				cgroup: .share_cgroup,
+				pid: .share_pid,
+				ipc: .share_ipc
+			},
+			protected_paths
+		}]' | ${pkgs.bubblewrap}/bin/bwrap \
+			--unshare-all \
+			--ro-bind / / \
+			--dev /dev \
+			--proc /proc \
+			--die-with-parent \
+			${pkgs.visidata}/bin/vd -f json
 	'';
 in
 	pkgs.buildEnv {

@@ -3,6 +3,12 @@ let
   utils = import ./utils.nix {inherit pkgs;};
   consts = import ./consts.nix;
 
+  # Always generate seccomp filter (no-op if no restrictions specified)
+  seccompFilter = import ./seccomp.nix {
+    inherit pkgs;
+    options = sandbox_restrictions.seccomp or {};
+  };
+
   runInBwrap = ''
     ${sandbox_setup}
 
@@ -13,15 +19,13 @@ let
     '' else ''''}
 
     ${pkgs.bubblewrap}/bin/bwrap \
-${if (builtins.hasAttr "share_user" sandbox_restrictions) && sandbox_restrictions.share_user then "" else "--unshare-user"} \
+${if (builtins.hasAttr "share_user" sandbox_restrictions) && sandbox_restrictions.share_user then "" else "--unshare-user --uid (${pkgs.coreutils}/bin/id -u) --gid (${pkgs.coreutils}/bin/id -g)"} \
 ${if (builtins.hasAttr "share_uts" sandbox_restrictions) && sandbox_restrictions.share_uts then "" else "--unshare-uts"} \
 ${if (builtins.hasAttr "share_cgroup" sandbox_restrictions) && sandbox_restrictions.share_cgroup then "" else "--unshare-cgroup-try"} \
 ${if (builtins.hasAttr "share_pid" sandbox_restrictions) && sandbox_restrictions.share_pid then "" else "--unshare-pid"} \
 ${if (builtins.hasAttr "share_ipc" sandbox_restrictions) && sandbox_restrictions.share_ipc then "" else "--unshare-ipc"} \
 ${if (builtins.hasAttr "network" sandbox_restrictions) && sandbox_restrictions.network then "" else "--unshare-net"} \
 --die-with-parent \
---uid (${pkgs.coreutils}/bin/id -u) \
---gid (${pkgs.coreutils}/bin/id -g) \
 --ro-bind / / \
 --tmpfs /home \
 ${if (builtins.hasAttr "mount_dev" sandbox_restrictions) && sandbox_restrictions.mount_dev then "--dev-bind /dev /dev" else "--dev /dev"} \
@@ -117,6 +121,7 @@ ${if (builtins.hasAttr "mount_dev" sandbox_restrictions) && sandbox_restrictions
 ${if (builtins.hasAttr "allow_nested_sandbox" sandbox_restrictions) && sandbox_restrictions.allow_nested_sandbox then "" else ''--setenv "${consts.SKIP_SANDBOX_ENV_VAR_NAME}" "''$${consts.SKIP_SANDBOX_ENV_VAR_NAME}" \
 ''}\
 --tmpfs /etc/ssh/ssh_config.d \
+--seccomp 3 \
     '';
 
   makeWrapper = {bwrapCmd, bin}: ''
@@ -133,7 +138,7 @@ ${if (builtins.hasAttr "allow_nested_sandbox" sandbox_restrictions) && sandbox_r
       ${before}
 
       ${bwrapCmd} \
-      ${bin} $argv
+      ${bin} $argv 3< ${seccompFilter}/filter.bpf
     end
     '';
 
@@ -149,6 +154,10 @@ ${if (builtins.hasAttr "allow_nested_sandbox" sandbox_restrictions) && sandbox_r
   name: $name,
   unix_sockets: $sockets,
   network_access: $network,
+  seccomp: {
+    inet_blocked: $inet_blocked,
+    inet6_blocked: $inet6_blocked
+  },
   real_dev: $real_dev,
   share_user: ${if (builtins.hasAttr "share_user" sandbox_restrictions) && sandbox_restrictions.share_user then "true" else "false"},
   share_uts: ${if (builtins.hasAttr "share_uts" sandbox_restrictions) && sandbox_restrictions.share_uts then "true" else "false"},
@@ -202,11 +211,25 @@ if [ -e /dev/input ]; then
   real_dev=true
 fi
 
+# Check if AF_INET sockets are blocked (seccomp returns EACCES=13)
+inet_blocked=false
+if ! ${pkgs.python3}/bin/python3 -c "import socket; s=socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.close()" 2>/dev/null; then
+  inet_blocked=true
+fi
+
+# Check if AF_INET6 sockets are blocked
+inet6_blocked=false
+if ! ${pkgs.python3}/bin/python3 -c "import socket; s=socket.socket(socket.AF_INET6, socket.SOCK_STREAM); s.close()" 2>/dev/null; then
+  inet6_blocked=true
+fi
+
 ${protectedChecks}
 ${pkgs.jq}/bin/jq -n \
   --arg name "${name}" \
   --argjson sockets "$sockets" \
   --argjson network "$network_access" \
+  --argjson inet_blocked "$inet_blocked" \
+  --argjson inet6_blocked "$inet6_blocked" \
   --argjson real_dev "$real_dev" \
 ${protectedArgs}  -f ${jqFilterFile}
 '';

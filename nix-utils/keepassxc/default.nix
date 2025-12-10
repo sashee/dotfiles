@@ -12,10 +12,21 @@ let
 			"~/safe" = "rw";
 			"~/.cache/keepassxc" = "rw";
 			"/run/user/1000/ssh-agent.socket" = "ro";
+			"/run/user/1000/bus" = "ro";
+			"/run/dbus/system_bus_socket" = "ro";
+			"/run/udev" = "ro";
 		};
-		env = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
-		network = false;
+		seccomp = {
+			block_inet = true;
+		};
+		env = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
+		network = true;  # Allow network namespace (for udev/netlink), but block inet via seccomp
 		mount_dev = true;
+		share_user = false;
+		share_ipc = false;
+		share_pid = false;
+		share_cgroup = false;
+		share_uts = false;
 	};
 	before = ''
 
