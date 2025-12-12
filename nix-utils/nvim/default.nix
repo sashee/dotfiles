@@ -54,6 +54,7 @@ export default [
 		pkgs.vimPlugins.lsp_signature-nvim
 		pkgs.vimPlugins.tiny-inline-diagnostic-nvim
 		pkgs.vimPlugins.nvim-web-devicons
+		pkgs.vimPlugins.blame-nvim
 	];
 
 	foldPlugins = builtins.foldl' (
