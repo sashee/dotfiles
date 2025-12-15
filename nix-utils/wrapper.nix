@@ -98,7 +98,7 @@ ${if (builtins.hasAttr "mount_dev" sandbox_restrictions) && sandbox_restrictions
       if entry.perm == "block" then
         # Block: use --tmpfs for dirs, --ro-bind /dev/null for files
         if entry.type == "dir" then
-          ''--tmpfs ${entry.path} \
+          ''(if test -e "${entry.path}"; echo -- --tmpfs; echo -- "${entry.path}"; end) \
 ''
         else
           ''(if test -e "${entry.path}"; echo -- --ro-bind; echo -- /dev/null; echo -- ${entry.path}; end) \
