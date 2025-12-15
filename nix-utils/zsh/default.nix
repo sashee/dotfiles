@@ -18,7 +18,6 @@ let
 		"~/.config/transmission" = "rw";
 	};
 
-	base_env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "USER" "SHELL" "${consts.RESTRICT_TO_ENV_VAR_NAME}" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "ZDOTDIR"];
 
 	# Merge sandbox_restrictions from all programs
 	# Skip programs with unrestricted access (empty sandbox_restrictions)
@@ -31,12 +30,10 @@ let
 		{
 			fs = acc.fs // (prg_restrictions.fs or {});
 			files = acc.files // (prg_restrictions.files or {});
-			env = acc.env ++ (prg_restrictions.env or []);
 		}
 	) {
 		fs = base_fs;
 		files = {};
-		env = base_env;
 	} filtered_prgs;
 
 	config = pkgs.writeTextDir ".zshrc" ''
