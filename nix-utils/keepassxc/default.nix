@@ -11,7 +11,7 @@ let
 			"~/laptop-backup" = "rw";
 			"~/safe" = "rw";
 			"~/.cache/keepassxc" = "rw";
-			"/run/user/1000/ssh-agent.socket" = "ro";
+			"$SSH_AUTH_SOCK" = "ro";
 			"/run/user/1000/bus" = "ro";
 			"/run/dbus/system_bus_socket" = "ro";
 			"/run/udev" = "ro";

@@ -10,7 +10,6 @@
 		# High risk sockets
 		{ path = "/run/docker.sock"; type = "file"; }
 		{ path = "/run/user/1000/gnupg"; type = "dir"; }
-		{ path = "/run/user/1000/ssh-agent.socket"; type = "file"; }
 		{ path = "/run/user/1000/bus"; type = "file"; }
 		{ path = "/run/dbus/system_bus_socket"; type = "file"; }
 		# Medium risk sockets

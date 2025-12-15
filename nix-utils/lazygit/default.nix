@@ -9,7 +9,7 @@ let
 			"~/.gitconfig" = "ro";
 			"~/.config/lazygit" = "rw";
 			"~/.local/state/lazygit" = "rw";
-			"/run/user/1000/ssh-agent.socket" = "rw";
+			"$SSH_AUTH_SOCK" = "rw";
 		};
 		env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"];
 		network = true;
