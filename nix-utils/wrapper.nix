@@ -101,7 +101,7 @@ ${if (builtins.hasAttr "mount_dev" sandbox_restrictions) && sandbox_restrictions
           ''--tmpfs ${entry.path} \
 ''
         else
-          ''--ro-bind /dev/null ${entry.path} \
+          ''(if test -e "${entry.path}"; echo -- --ro-bind; echo -- /dev/null; echo -- ${entry.path}; end) \
 ''
        else if entry.perm == "ro" then
          ''--ro-bind-try ${entry.path} ${entry.path} \
