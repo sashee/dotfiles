@@ -103,11 +103,11 @@ ${if (builtins.hasAttr "mount_dev" sandbox_restrictions) && sandbox_restrictions
         else
           ''--ro-bind /dev/null ${entry.path} \
 ''
-      else if entry.perm == "ro" then
-        ''--ro-bind ${entry.path} ${entry.path} \
+       else if entry.perm == "ro" then
+         ''--ro-bind-try ${entry.path} ${entry.path} \
 ''
-      else
-        ''--bind ${entry.path} ${entry.path} \
+       else
+         ''--bind-try ${entry.path} ${entry.path} \
 ''
     ) sortedEntries)
     }\
@@ -115,7 +115,7 @@ ${if (builtins.hasAttr "mount_dev" sandbox_restrictions) && sandbox_restrictions
       (builtins.hasAttr "files" sandbox_restrictions) then
       builtins.concatStringsSep "" (map (dest:
         let src = builtins.getAttr dest sandbox_restrictions.files; in
-          ''--ro-bind ${src} ${dest} \
+          ''--ro-bind-try ${src} ${dest} \
 ''
       ) (builtins.attrNames sandbox_restrictions.files))
       else ""
