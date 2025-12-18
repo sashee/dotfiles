@@ -19,6 +19,8 @@ let
 			"/run/user/1000/pipewire-0-manager" = "ro";
 			"/run/user/1000/pulse" = "ro";
 			"/tmp" = "rw";
+			"/usr/share/keyd" = "ro";
+			"/usr/share/keyd/keyd.compose" = "ro";
 		};
 		network = true;
 		mount_dev = true;
