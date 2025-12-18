@@ -7,6 +7,7 @@ let
 		fs = {
 			"/tmp/.X11-unix" = "ro";
 			"~/.Xauthority" = "ro";
+			"~/.XCompose" = "ro";
 			"~/.config/chromium" = "rw";
 			"~/Downloads" = "rw";
 			"~/.cache/chromium" = "rw";
