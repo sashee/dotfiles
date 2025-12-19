@@ -3,22 +3,144 @@ let
   utils = import ./utils.nix {inherit pkgs;};
   consts = import ./consts.nix;
 
-   # Always generate seccomp filter (no-op if no restrictions specified)
-   seccompFilter = let
-     baseSeccomp = sandbox_restrictions.seccomp or {};
-     autoBlock = if !(sandbox_restrictions.network or false) then {
-       AF_INET = true;
-       AF_INET6 = true;
-       AF_PACKET = true;
-     } else {};
-     mergedBlock = (baseSeccomp.block or {}) // autoBlock;
-     seccompOptions = baseSeccomp // { block = mergedBlock; };
-   in import ./seccomp.nix {
-     inherit pkgs;
-     options = seccompOptions;
-   };
+    # Always generate seccomp filter (no-op if no restrictions specified)
+    seccompFilter = let
+      baseSeccomp = sandbox_restrictions.seccomp or {};
+      autoBlock = if !(sandbox_restrictions.network or false) then {
+        AF_INET = true;
+        AF_INET6 = true;
+        AF_PACKET = true;
+      } else {};
+      mergedBlock = (baseSeccomp.block or {}) // autoBlock;
+      seccompOptions = baseSeccomp // { block = mergedBlock; };
+    in import ./seccomp.nix {
+      inherit pkgs;
+      options = seccompOptions;
+    };
 
-  runInBwrap = ''
+    # Build bwrap arguments array outside of the string
+    bwrapArgs = let
+      # Create complete arguments array all at once, preserving exact order
+      args = [
+        # Namespace arguments (same order as current)
+        (if (builtins.hasAttr "share_user" sandbox_restrictions) && sandbox_restrictions.share_user then "" else "--unshare-user --uid (${pkgs.coreutils}/bin/id -u) --gid (${pkgs.coreutils}/bin/id -g)")
+        (if (builtins.hasAttr "share_uts" sandbox_restrictions) && sandbox_restrictions.share_uts then "" else "--unshare-uts")
+        (if (builtins.hasAttr "share_cgroup" sandbox_restrictions) && sandbox_restrictions.share_cgroup then "" else "--unshare-cgroup-try")
+        (if (builtins.hasAttr "share_pid" sandbox_restrictions) && sandbox_restrictions.share_pid then "" else "--unshare-pid")
+        (if (builtins.hasAttr "share_ipc" sandbox_restrictions) && sandbox_restrictions.share_ipc then "" else "--unshare-ipc")
+        (if (builtins.hasAttr "network" sandbox_restrictions) && sandbox_restrictions.network then "" else "--unshare-net")
+
+        # Basic filesystem bindings
+        "--die-with-parent"
+        "--ro-bind / /"
+        "--tmpfs /home"
+        (if (builtins.hasAttr "mount_dev" sandbox_restrictions) && sandbox_restrictions.mount_dev then "--dev-bind /dev /dev" else "--dev /dev")
+        "--proc /proc"
+        "--tmpfs /tmp"
+        "(if set -q TMPDIR; and test -n \"$TMPDIR\"; and test \"$TMPDIR\" != \"/tmp\"; echo \"--tmpfs $TMPDIR\"; end)"
+
+        # Restrict to current folder
+        (if restrict_to_current_folder then ''--bind "''$${consts.RESTRICT_TO_ENV_VAR_NAME}" "''$${consts.RESTRICT_TO_ENV_VAR_NAME}"'' else "")
+
+        # Protected path arguments (complex logic preserved exactly)
+        (let
+          # Convert path to relative subpath for lib.path.subpath.components
+          # Handle ~ by treating it as a single component
+          toSubpath = p:
+            if pkgs.lib.hasPrefix "~" p then
+              "./home/user" + builtins.substring 1 (-1) p
+            else
+              "." + p;
+          pathDepth = p: builtins.length (pkgs.lib.path.subpath.components (toSubpath p));
+          
+          # Get explicit fs bindings from sandbox_restrictions
+          explicitFs = if (builtins.hasAttr "fs" sandbox_restrictions) then sandbox_restrictions.fs else {};
+          explicitPaths = builtins.attrNames explicitFs;
+          
+          # Protected paths that are NOT explicitly bound should be blocked
+          # A protected path is "covered" if it or a parent path is in explicitPaths
+          isPathCovered = protected:
+            builtins.any (explicit: 
+              explicit == protected || pkgs.lib.hasPrefix (protected + "/") explicit || pkgs.lib.hasPrefix (explicit + "/") protected
+            ) explicitPaths;
+          protectedToBlock = builtins.filter (p: !(isPathCovered p.path)) consts.protectedPaths;
+          
+          # Build combined entries: protected paths as "block", explicit paths as their permission
+          # Also preserve the type from protectedPaths
+          protectedEntries = map (p: { path = p.path; perm = "block"; type = p.type; }) protectedToBlock;
+          explicitEntries = map (p: {
+            path = p;
+            perm = builtins.getAttr p explicitFs;
+            # Look up type from protectedPaths, default to "dir"
+            type = let
+              matching = builtins.filter (pp: pp.path == p) consts.protectedPaths;
+            in if matching == [] then "dir" else (builtins.head matching).type;
+          }) explicitPaths;
+          
+          allEntries = protectedEntries ++ explicitEntries;
+          
+          # Deduplicate paths: group by path, prefer rw > ro > block
+          groupedByPath = builtins.groupBy (e: e.path) allEntries;
+          permPriority = perm: if perm == "rw" then 3 else if perm == "ro" then 2 else 1;
+          deduplicatedEntries = map (path:
+            let
+              entries = builtins.getAttr path groupedByPath;
+              # Pick highest priority permission
+              sortedByPerm = builtins.sort (a: b: permPriority a.perm > permPriority b.perm) entries;
+              winner = builtins.head sortedByPerm;
+            in { inherit path; perm = winner.perm; type = winner.type; }
+          ) (builtins.attrNames groupedByPath);
+          
+          # Sort by depth (shallow first)
+          sortedEntries = builtins.sort (a: b: pathDepth a.path < pathDepth b.path) deduplicatedEntries;
+        in
+        builtins.concatStringsSep "" (map (entry:
+          if entry.perm == "block" then
+            # Block: use --tmpfs for dirs, --ro-bind /dev/null for files
+            if entry.type == "dir" then
+              ''(if test -e "${entry.path}"; echo -- --tmpfs; echo -- "${entry.path}"; end) \
+''
+            else
+              ''(if test -e "${entry.path}"; echo -- --ro-bind; echo -- /dev/null; echo -- ${entry.path}; end) \
+''
+           else if entry.perm == "ro" then
+             ''--ro-bind-try ${entry.path} ${entry.path} \
+''
+           else
+             ''--bind-try ${entry.path} ${entry.path} \
+''
+        ) sortedEntries))
+
+        # File bindings
+        (if (builtins.hasAttr "files" sandbox_restrictions) then
+          builtins.concatStringsSep "" (map (dest:
+            let src = builtins.getAttr dest sandbox_restrictions.files; in
+              ''--ro-bind-try ${src} ${dest} \
+''
+          ) (builtins.attrNames sandbox_restrictions.files))
+        else "")
+
+        # Environment variables
+        (if (builtins.hasAttr "env" sandbox_restrictions) then
+          ''--clearenv \
+'' + builtins.concatStringsSep "" (map (n: ''--setenv "${n}" "''$${n}" \
+'' ) (pkgs.lib.unique sandbox_restrictions.env))
+        else "")
+
+        # Final arguments
+        (if (builtins.hasAttr "allow_nested_sandbox" sandbox_restrictions) && sandbox_restrictions.allow_nested_sandbox then "" else ''--setenv "${consts.SKIP_SANDBOX_ENV_VAR_NAME}" "''$${consts.SKIP_SANDBOX_ENV_VAR_NAME}" \
+'')
+        "--tmpfs /etc/ssh/ssh_config.d"
+        "--seccomp 3"
+      ];
+
+      # Filter out empty strings and join with proper formatting
+      filteredArgs = builtins.filter (arg: arg != "") args;
+      argsString = builtins.concatStringsSep " \\\n" filteredArgs;
+    in
+      argsString;
+
+   runInBwrap = ''
     ${sandbox_setup}
 
     ${if restrict_to_current_folder then ''
@@ -28,109 +150,7 @@ let
     '' else ''''}
 
     ${pkgs.bubblewrap}/bin/bwrap \
-${if (builtins.hasAttr "share_user" sandbox_restrictions) && sandbox_restrictions.share_user then "" else "--unshare-user --uid (${pkgs.coreutils}/bin/id -u) --gid (${pkgs.coreutils}/bin/id -g)"} \
-${if (builtins.hasAttr "share_uts" sandbox_restrictions) && sandbox_restrictions.share_uts then "" else "--unshare-uts"} \
-${if (builtins.hasAttr "share_cgroup" sandbox_restrictions) && sandbox_restrictions.share_cgroup then "" else "--unshare-cgroup-try"} \
-${if (builtins.hasAttr "share_pid" sandbox_restrictions) && sandbox_restrictions.share_pid then "" else "--unshare-pid"} \
-${if (builtins.hasAttr "share_ipc" sandbox_restrictions) && sandbox_restrictions.share_ipc then "" else "--unshare-ipc"} \
-${if (builtins.hasAttr "network" sandbox_restrictions) && sandbox_restrictions.network then "" else "--unshare-net"} \
---die-with-parent \
---ro-bind / / \
---tmpfs /home \
-${if (builtins.hasAttr "mount_dev" sandbox_restrictions) && sandbox_restrictions.mount_dev then "--dev-bind /dev /dev" else "--dev /dev"} \
---proc /proc \
---tmpfs /tmp \
-(if set -q TMPDIR; and test -n "$TMPDIR"; and test "$TMPDIR" != "/tmp"; echo "--tmpfs $TMPDIR"; end) \
-    ${if restrict_to_current_folder then ''--bind "''$${consts.RESTRICT_TO_ENV_VAR_NAME}" "''$${consts.RESTRICT_TO_ENV_VAR_NAME}" \
-'' else ""}\
-    ${let
-      # Convert path to relative subpath for lib.path.subpath.components
-      # Handle ~ by treating it as a single component
-      toSubpath = p:
-        if pkgs.lib.hasPrefix "~" p then
-          "./home/user" + builtins.substring 1 (-1) p
-        else
-          "." + p;
-      pathDepth = p: builtins.length (pkgs.lib.path.subpath.components (toSubpath p));
-      
-      # Get explicit fs bindings from sandbox_restrictions
-      explicitFs = if (builtins.hasAttr "fs" sandbox_restrictions) then sandbox_restrictions.fs else {};
-      explicitPaths = builtins.attrNames explicitFs;
-      
-      # Protected paths that are NOT explicitly bound should be blocked
-      # A protected path is "covered" if it or a parent path is in explicitPaths
-      isPathCovered = protected:
-        builtins.any (explicit: 
-          explicit == protected || pkgs.lib.hasPrefix (protected + "/") explicit || pkgs.lib.hasPrefix (explicit + "/") protected
-        ) explicitPaths;
-      protectedToBlock = builtins.filter (p: !(isPathCovered p.path)) consts.protectedPaths;
-      
-      # Build combined entries: protected paths as "block", explicit paths as their permission
-      # Also preserve the type from protectedPaths
-      protectedEntries = map (p: { path = p.path; perm = "block"; type = p.type; }) protectedToBlock;
-      explicitEntries = map (p: {
-        path = p;
-        perm = builtins.getAttr p explicitFs;
-        # Look up type from protectedPaths, default to "dir"
-        type = let
-          matching = builtins.filter (pp: pp.path == p) consts.protectedPaths;
-        in if matching == [] then "dir" else (builtins.head matching).type;
-      }) explicitPaths;
-      
-      allEntries = protectedEntries ++ explicitEntries;
-      
-      # Deduplicate paths: group by path, prefer rw > ro > block
-      groupedByPath = builtins.groupBy (e: e.path) allEntries;
-      permPriority = perm: if perm == "rw" then 3 else if perm == "ro" then 2 else 1;
-      deduplicatedEntries = map (path:
-        let
-          entries = builtins.getAttr path groupedByPath;
-          # Pick highest priority permission
-          sortedByPerm = builtins.sort (a: b: permPriority a.perm > permPriority b.perm) entries;
-          winner = builtins.head sortedByPerm;
-        in { inherit path; perm = winner.perm; type = winner.type; }
-      ) (builtins.attrNames groupedByPath);
-      
-      # Sort by depth (shallow first)
-      sortedEntries = builtins.sort (a: b: pathDepth a.path < pathDepth b.path) deduplicatedEntries;
-    in
-    builtins.concatStringsSep "" (map (entry:
-      if entry.perm == "block" then
-        # Block: use --tmpfs for dirs, --ro-bind /dev/null for files
-        if entry.type == "dir" then
-          ''(if test -e "${entry.path}"; echo -- --tmpfs; echo -- "${entry.path}"; end) \
-''
-        else
-          ''(if test -e "${entry.path}"; echo -- --ro-bind; echo -- /dev/null; echo -- ${entry.path}; end) \
-''
-       else if entry.perm == "ro" then
-         ''--ro-bind-try ${entry.path} ${entry.path} \
-''
-       else
-         ''--bind-try ${entry.path} ${entry.path} \
-''
-    ) sortedEntries)
-    }\
-    ${if
-      (builtins.hasAttr "files" sandbox_restrictions) then
-      builtins.concatStringsSep "" (map (dest:
-        let src = builtins.getAttr dest sandbox_restrictions.files; in
-          ''--ro-bind-try ${src} ${dest} \
-''
-      ) (builtins.attrNames sandbox_restrictions.files))
-      else ""
-    }\
-    ${if
-      (builtins.hasAttr "env" sandbox_restrictions) then
-      ''--clearenv \
-'' + builtins.concatStringsSep "" (map (n: ''--setenv "${n}" "''$${n}" \
-'' ) (pkgs.lib.unique sandbox_restrictions.env))
-      else ""
-    }\
-${if (builtins.hasAttr "allow_nested_sandbox" sandbox_restrictions) && sandbox_restrictions.allow_nested_sandbox then "" else ''--setenv "${consts.SKIP_SANDBOX_ENV_VAR_NAME}" "''$${consts.SKIP_SANDBOX_ENV_VAR_NAME}" \
-''}\
---tmpfs /etc/ssh/ssh_config.d \
---seccomp 3 \
+    ${bwrapArgs} \
     '';
 
   makeWrapper = {bwrapCmd, bin}: ''
