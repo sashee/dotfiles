@@ -15,7 +15,6 @@ let
 			"/etc/hostname" = "ro";
 			"/run/user/1000" = "ro";
 			"/run/user/1000/bus" = "ro";
-			"/run/dbus/system_bus_socket" = "ro";
 			"/run/user/1000/pipewire-0" = "ro";
 			"/run/user/1000/pipewire-0-manager" = "ro";
 			"/run/user/1000/pulse" = "ro";

@@ -13,7 +13,6 @@ let
 			"~/.cache/keepassxc" = "rw";
 			"$SSH_AUTH_SOCK" = "ro";
 			"/run/user/1000/bus" = "ro";
-			"/run/dbus/system_bus_socket" = "ro";
 			"/run/udev" = "ro";
 		};
 		seccomp = {
