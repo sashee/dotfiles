@@ -45,10 +45,10 @@ let
 	# Filter to only *-info scripts (by checking if name ends with -info)
 	infoScripts = builtins.filter (s: pkgs.lib.hasSuffix "-info" s.name) allScripts;
 
-	# Import all-info script from separate file
-	allInfoScript = import ./all-info.nix { inherit pkgs; inherit infoScripts; };
-in
-	pkgs.buildEnv {
-		name = "scripts-env";
-		paths = builtins.concatLists (map (p: p.scripts) programs) ++ [allInfoScript];
-	}
+ 	# Import all-info script from separate file
+ 	allInfoScript = import ./all-info.nix { inherit pkgs; inherit infoScripts; };
+ in
+ 	pkgs.buildEnv {
+ 		name = "scripts-env";
+ 		paths = builtins.concatLists (map (p: p.scripts) programs) ++ [allInfoScript.all-info allInfoScript.all-info-json];
+ 	}
