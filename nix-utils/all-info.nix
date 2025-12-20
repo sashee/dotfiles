@@ -26,7 +26,7 @@
       share,
       protected_paths_bitmap: (.protected_paths | to_entries | sort_by(.key) | map(if .value then "X" else " " end) | join("")),
       protected_paths: (.protected_paths | to_entries | sort_by(.key) | from_entries)
-    }]' | ${pkgs.bubblewrap}/bin/bwrap \
+    }]' | ${pkgs.jq}/bin/jq 'sort_by(.name)' | ${pkgs.bubblewrap}/bin/bwrap \
       --unshare-all \
       --ro-bind / / \
       --dev /dev \
