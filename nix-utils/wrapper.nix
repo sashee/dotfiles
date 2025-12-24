@@ -31,7 +31,7 @@ let
         (if (builtins.hasAttr "network" sandbox_restrictions) && sandbox_restrictions.network then "" else "--unshare-net")
 
         # Basic filesystem bindings
-        "--die-with-parent"
+        (if (builtins.hasAttr "dont_die_with_parent" sandbox_restrictions) && sandbox_restrictions.dont_die_with_parent then "" else "--die-with-parent")
         "--ro-bind / /"
         "--tmpfs /home"
         (if (builtins.hasAttr "mount_dev" sandbox_restrictions) && sandbox_restrictions.mount_dev then "--dev-bind /dev /dev" else "--dev /dev")

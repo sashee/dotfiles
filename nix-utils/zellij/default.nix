@@ -56,6 +56,8 @@ keybinds {
 
 	'';
 	merged_sandbox_restrictions = zsh.sandbox_restrictions // {
+		dont_die_with_parent = true;
+		share_pid = true;
 		fs = (zsh.sandbox_restrictions.fs or {}) // {
 			"/run/user/1000" = "rw";
 		};
