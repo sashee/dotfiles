@@ -49,17 +49,16 @@ keybinds {
 	bin = "${pkgs.zellij}/bin/zellij --config ${config}";
 
 	before = ''
-
+		${pkgs.coreutils}/bin/mkdir -p ~/.cache/zellij
 	'';
 
-	sandbox_setup = zsh.sandbox_setup or ''
-
-	'';
+	sandbox_setup = zsh.sandbox_setup;
 	merged_sandbox_restrictions = zsh.sandbox_restrictions // {
 		dont_die_with_parent = true;
 		share_pid = true;
 		fs = (zsh.sandbox_restrictions.fs or {}) // {
 			"/run/user/1000" = "rw";
+			"~/.cache/zellij" = "rw";
 		};
 	};
 in

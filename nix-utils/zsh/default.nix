@@ -88,7 +88,7 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 	bin = "${pkgs.zsh}/bin/zsh";
 
 	before = ''
-	mkdir -p ~/.local/share/zsh/zsh_history
+	${pkgs.coreutils}/bin/mkdir -p ~/.local/share/zsh/zsh_history
 	export ZDOTDIR=${config}
 	'';
 
