@@ -1,5 +1,6 @@
 {
 	pkgs,
+	nvim,
 }:
 let
 	bin = "${pkgs.isd}/bin/isd";
@@ -11,11 +12,11 @@ let
 			"/run/user/1000/bus" = "ro";
 			"/run/dbus/system_bus_socket" = "ro";
 		};
-		env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "DBUS_SESSION_BUS_ADDRESS"];
+		env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "DBUS_SESSION_BUS_ADDRESS" "VISUAL" "EDITOR"];
 		network = false;
 	};
 	before = ''
-
+	export VISUAL="${builtins.elemAt nvim.scripts 0}/bin/nvim"
 	'';
 
 	sandbox_setup = ''

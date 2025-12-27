@@ -12,7 +12,7 @@ let
 		(import ./sqlite3/default.nix { inherit pkgs; })
 		(import ./flameshot/default.nix { inherit pkgs; })
 		(import ./fx/default.nix { inherit pkgs; })
-		(import ./isd/default.nix { inherit pkgs; })
+		(import ./isd/default.nix { inherit pkgs nvim; })
 		#(import ./k2pdfopt/default.nix { inherit pkgs; })
 		(import ./lazygit/default.nix { inherit pkgs; })
 		(import ./lazysql/default.nix { inherit pkgs; })
