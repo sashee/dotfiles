@@ -9,6 +9,8 @@ let
 			"~/.Xauthority" = "ro";
 			"~/.local/share/vlc" = "rw";
 			"~/.config/vlc" = "rw";
+			"/run/user/1000/pipewire-0" = "ro";
+			"/run/user/1000/pulse" = "ro";
 		};
 		env = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
 		network = false;
