@@ -2,7 +2,7 @@
 	pkgs,
 }:
 let
-	bin = "${pkgs.vlc}/bin/vlc";
+	bin = "${pkgs.vlc}/bin/vlc --no-qt-privacy-ask";
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "ro";
