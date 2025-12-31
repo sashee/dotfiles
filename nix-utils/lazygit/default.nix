@@ -5,10 +5,10 @@ let
 	bin = "${pkgs.lazygit}/bin/lazygit";
 	sandbox_restrictions = {
 		fs = {
-			"~/.ssh/known_hosts" = "ro";
-			"~/.gitconfig" = "ro";
-			"~/.config/lazygit" = "rw";
-			"~/.local/state/lazygit" = "rw";
+			"$HOME/.ssh/known_hosts" = "ro";
+			"$HOME/.gitconfig" = "ro";
+			"$HOME/.config/lazygit" = "rw";
+			"$HOME/.local/state/lazygit" = "rw";
 			"$SSH_AUTH_SOCK" = "rw";
 		};
 		env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"];
@@ -25,7 +25,7 @@ export PATH="${
 	'';
 
 	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p ~/.config/lazygit
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/lazygit
 	'';
 in
 {

@@ -6,11 +6,11 @@ let
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "ro";
-			"~/.Xauthority" = "ro";
-			"~/.config/keepassxc" = "rw";
-			"~/laptop-backup" = "rw";
-			"~/safe" = "rw";
-			"~/.cache/keepassxc" = "rw";
+			"$HOME/.Xauthority" = "ro";
+			"$HOME/.config/keepassxc" = "rw";
+			"$HOME/laptop-backup" = "rw";
+			"$HOME/safe" = "rw";
+			"$HOME/.cache/keepassxc" = "rw";
 			"$SSH_AUTH_SOCK" = "ro";
 			"/run/user/1000/bus" = "ro";
 			"/run/udev" = "ro";
@@ -35,8 +35,8 @@ let
 	'';
 
 	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p ~/.config/keepassxc
-		${pkgs.coreutils}/bin/mkdir -p ~/.cache/keepassxc
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/keepassxc
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache/keepassxc
 	'';
 in
 {

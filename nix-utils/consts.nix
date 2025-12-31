@@ -3,8 +3,9 @@
 	RESTRICT_TO_ENV_VAR_NAME = "__NIX_UTILS_RESTRICT_TO";
 	protectedPaths = [
 		# User data directories
-		{ path = "~/.config/chromium"; type = "dir"; }
-		{ path = "~/.config/syncthing"; type = "dir"; }
+		{ path = "$HOME/.config/chromium"; type = "dir"; }
+		{ path = "$HOME/.config/syncthing"; type = "dir"; }
+		{ path = "$HOME/.local/share/opencode"; type = "dir"; }
 		# X11 display socket
 		{ path = "/tmp/.X11-unix"; type = "dir"; }
 		# High risk sockets

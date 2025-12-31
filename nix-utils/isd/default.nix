@@ -6,9 +6,9 @@ let
 	bin = "${pkgs.isd}/bin/isd";
 	sandbox_restrictions = {
 		fs = {
-			"~/.config/isd_tui" = "rw";
-			"~/.local/share/isd_tui" = "rw";
-			"~/.cache/isd_tui" = "rw";
+			"$HOME/.config/isd_tui" = "rw";
+			"$HOME/.local/share/isd_tui" = "rw";
+			"$HOME/.cache/isd_tui" = "rw";
 			"/run/user/1000/bus" = "ro";
 			"/run/dbus/system_bus_socket" = "ro";
 		};
@@ -20,9 +20,9 @@ let
 	'';
 
 	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p ~/.config/isd_tui
-		${pkgs.coreutils}/bin/mkdir -p ~/.local/share/isd_tui
-		${pkgs.coreutils}/bin/mkdir -p ~/.cache/isd_tui
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/isd_tui
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/isd_tui
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache/isd_tui
 	'';
 in
 {

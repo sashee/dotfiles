@@ -6,12 +6,12 @@ let
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "ro";
-			"~/.Xauthority" = "ro";
-			"~/.XCompose" = "ro";
-			"~/.config/chromium" = "rw";
-			"~/Downloads" = "rw";
-			"~/.cache/chromium" = "rw";
-			"~/.local/share/chromium" = "rw";
+			"$HOME/.Xauthority" = "ro";
+			"$HOME/.XCompose" = "ro";
+			"$HOME/.config/chromium" = "rw";
+			"$HOME/Downloads" = "rw";
+			"$HOME/.cache/chromium" = "rw";
+			"$HOME/.local/share/chromium" = "rw";
 			"/etc/hostname" = "ro";
 			"/run/user/1000" = "ro";
 			"/run/user/1000/bus" = "ro";
@@ -28,9 +28,9 @@ let
 	before = "";
 
 	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p ~/.config/chromium
-		${pkgs.coreutils}/bin/mkdir -p ~/.cache/chromium
-		${pkgs.coreutils}/bin/mkdir -p ~/.local/share/chromium
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/chromium
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache/chromium
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/chromium
 	'';
 in
 {

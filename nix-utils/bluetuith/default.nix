@@ -22,7 +22,7 @@ let
 		'';
 
 	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p ~/.config/bluetuith
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/bluetuith
 
 	'';
 in

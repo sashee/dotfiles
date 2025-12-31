@@ -6,8 +6,8 @@ let
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "rw";
-			"~/.Xauthority" = "ro";
-			"~/.config/flameshot" = "rw";
+			"$HOME/.Xauthority" = "ro";
+			"$HOME/.config/flameshot" = "rw";
 			"/run/user/1000/bus" = "rw";
 		};
 		env = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
@@ -18,7 +18,7 @@ let
 	'';
 
 	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p ~/.config/flameshot
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/flameshot
 	'';
 in
 {

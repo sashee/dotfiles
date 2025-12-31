@@ -7,8 +7,8 @@ let
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "ro";
-			"~/.Xauthority" = "ro";
-			"~/.config/libreoffice" = "rw";
+			"$HOME/.Xauthority" = "ro";
+			"$HOME/.config/libreoffice" = "rw";
 		};
 		env = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "LANG" "TERM" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
 		network = false;
@@ -19,7 +19,7 @@ let
 	'';
 
 	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p ~/.config/libreoffice
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/libreoffice
 	'';
 
 	scripts = builtins.concatLists (map (bin: (import ../wrapper.nix {

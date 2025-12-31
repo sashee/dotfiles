@@ -5,7 +5,7 @@ let
 	bin = "${pkgs.awslogs}/bin/awslogs";
 	sandbox_restrictions = {
 		fs = {
-			"~/.aws" = "ro";
+			"$HOME/.aws" = "ro";
 		};
 		env = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" "AWS_REGION" "LANG" "TERM"];
 		network = true;

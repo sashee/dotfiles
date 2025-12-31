@@ -9,13 +9,13 @@ let
 	# Note: bwrap does --ro-bind / / so system paths are already available read-only
 	# We only need to specify home directory paths that need write access
 	base_fs = {
-		"~/.local/share/zsh" = "rw";
-		"~/.cache" = "rw";
-		"~/.wine" = "rw";
-		"~/.vkquake" = "rw";
-		"~/.local/share/freeorion" = "rw";
-		"~/.config/freeorion" = "rw";
-		"~/.config/transmission" = "rw";
+		"$HOME/.local/share/zsh" = "rw";
+		"$HOME/.cache" = "rw";
+		"$HOME/.wine" = "rw";
+		"$HOME/.vkquake" = "rw";
+		"$HOME/.local/share/freeorion" = "rw";
+		"$HOME/.config/freeorion" = "rw";
+		"$HOME/.config/transmission" = "rw";
 	};
 
 
@@ -88,7 +88,7 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 	bin = "${pkgs.zsh}/bin/zsh";
 
 	before = ''
-	${pkgs.coreutils}/bin/mkdir -p ~/.local/share/zsh/zsh_history
+	${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/zsh/zsh_history
 	export ZDOTDIR=${config}
 	'';
 

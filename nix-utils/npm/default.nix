@@ -6,9 +6,9 @@ let
 
 	base_sandbox_restrictions = {
 		fs = {
-			"~/.npm" = "rw";
-			"~/.npmrc" = "rw";
-			"~/.cache" = "rw";
+			"$HOME/.npm" = "rw";
+			"$HOME/.npmrc" = "rw";
+			"$HOME/.cache" = "rw";
 		};
 		network = true;
 	};

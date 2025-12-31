@@ -6,9 +6,9 @@ let
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "ro";
-			"~/.Xauthority" = "ro";
-			"~/.local/share/vlc" = "rw";
-			"~/.config/vlc" = "rw";
+			"$HOME/.Xauthority" = "ro";
+			"$HOME/.local/share/vlc" = "rw";
+			"$HOME/.config/vlc" = "rw";
 			"/run/user/1000/pipewire-0" = "ro";
 			"/run/user/1000/pulse" = "ro";
 		};
@@ -20,8 +20,8 @@ let
 	'';
 
 	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p ~/.local/share/vlc
-		${pkgs.coreutils}/bin/mkdir -p ~/.config/vlc
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/vlc
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/vlc
 	'';
 in
 {

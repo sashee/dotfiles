@@ -87,10 +87,10 @@ export default [
 
 	base_sandbox_restrictions = {
 		fs = {
-			"~/.local/state/nvim" = "rw";
-			"~/.local/share/nvim" = "rw";
-			"~/.cache" = "rw";
-			"~/.gitconfig" = "ro";
+			"$HOME/.local/state/nvim" = "rw";
+			"$HOME/.local/share/nvim" = "rw";
+			"$HOME/.cache" = "rw";
+			"$HOME/.gitconfig" = "ro";
 		};
 		files = {
 			"/home/sashee/eslint.config.js" = "${eslintConfig}";
@@ -135,8 +135,8 @@ export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
 	'';
 
 	base_sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p ~/.local/state/nvim
-		${pkgs.coreutils}/bin/mkdir -p ~/.cache
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/state/nvim
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache
 	'';
 
 	nvim_scripts = (import ../wrapper.nix {
