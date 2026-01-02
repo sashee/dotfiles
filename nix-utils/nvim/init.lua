@@ -70,6 +70,19 @@ vim.keymap.set('n', '<Leader>rt', function() require("neotest").summary.toggle()
 require "lsp_signature".setup({})
 
 vim.lsp.enable('ts_ls')
+
+-- Custom root_dir to find eslint config in parent directories.
+-- Default config also looks for package.json, which stops at subdirectories
+-- that have their own package.json but no eslint config.
+vim.lsp.config('eslint', {
+  root_dir = function(bufnr, on_dir)
+    local root = vim.fs.root(bufnr, {
+      'eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs',
+      '.eslintrc', '.eslintrc.js', '.eslintrc.json',
+    })
+    if root then on_dir(root) end
+  end,
+})
 vim.lsp.enable('eslint')
 vim.lsp.enable('lua_ls')
 vim.lsp.enable('rust_analyzer')
