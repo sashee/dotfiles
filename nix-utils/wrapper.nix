@@ -3,6 +3,14 @@ let
   utils = import ./utils.nix {inherit pkgs;};
   consts = import ./consts.nix;
 
+  # Validate: error if a path appears in both fs and dbus
+  validateNoConflicts = let
+    fsPaths' = builtins.attrNames (sandbox_restrictions.fs or {});
+    dbusPaths' = builtins.attrNames (sandbox_restrictions.dbus or {});
+    conflicts = builtins.filter (p: builtins.elem p fsPaths') dbusPaths';
+  in if conflicts == [] then true 
+    else throw "Path(s) cannot be in both fs and dbus: ${builtins.concatStringsSep ", " conflicts}";
+
     # Always generate seccomp filter (no-op if no restrictions specified)
     seccompFilter = let
       baseSeccomp = sandbox_restrictions.seccomp or {};
@@ -17,6 +25,87 @@ let
       inherit pkgs;
       options = seccompOptions;
     };
+
+    # D-Bus proxy configuration
+    dbusConfig = sandbox_restrictions.dbus or {};
+    dbusPaths = builtins.attrNames dbusConfig;
+    hasDbusProxy = dbusPaths != [];
+
+    # Generate a variable name for each dbus path's proxy socket
+    dbusProxyVarName = busPath: "__DBUS_PROXY_${builtins.hashString "md5" busPath}";
+    dbusProxyPidVarName = busPath: "__DBUS_PROXY_PID_${builtins.hashString "md5" busPath}";
+
+    # Generate the proxy startup script (fish shell)
+    dbusProxyStartup = if !hasDbusProxy then "" else
+      builtins.concatStringsSep "\n" (map (busPath:
+        let
+          cfg = dbusConfig.${busPath};
+          talks = cfg.talk or [];
+          owns = cfg.own or [];
+          sees = cfg.see or [];
+          calls = cfg.call or {};
+          broadcasts = cfg.broadcast or {};
+          log = cfg.log or false;
+          
+          socketVar = dbusProxyVarName busPath;
+          pidVar = dbusProxyPidVarName busPath;
+          
+          talkArgs = builtins.concatStringsSep " " (map (n: "--talk=${n}") talks);
+          ownArgs = builtins.concatStringsSep " " (map (n: "--own=${n}") owns);
+          seeArgs = builtins.concatStringsSep " " (map (n: "--see=${n}") sees);
+          callArgs = builtins.concatStringsSep " " (map (n: "--call=${n}=${calls.${n}}") (builtins.attrNames calls));
+          broadcastArgs = builtins.concatStringsSep " " (map (n: "--broadcast=${n}=${broadcasts.${n}}") (builtins.attrNames broadcasts));
+          logArg = if log then "--log" else "";
+        in ''
+    # Start D-Bus proxy for ${busPath}
+    set -x ${socketVar} (${pkgs.coreutils}/bin/mktemp -u /tmp/dbus-proxy-XXXXXX)
+
+    ${pkgs.xdg-dbus-proxy}/bin/xdg-dbus-proxy \
+      unix:path=${busPath} \
+      ''$${socketVar} \
+      --filter \
+      ${logArg} \
+      ${talkArgs} \
+      ${ownArgs} \
+      ${seeArgs} \
+      ${callArgs} \
+      ${broadcastArgs} \
+      &
+    set -x ${pidVar} $last_pid
+
+    # Wait for proxy socket to be created
+    while not test -e ''$${socketVar}
+      ${pkgs.coreutils}/bin/sleep 0.01
+    end
+    echo "[${name}] D-Bus proxy for ${busPath} started at ''$${socketVar}" >&2
+    ''
+      ) dbusPaths);
+
+    # Generate cleanup trap for proxy processes
+    dbusProxyCleanup = if !hasDbusProxy then "" else
+      let
+        killCmds = builtins.concatStringsSep "\n    " (map (busPath:
+          let
+            pidVar = dbusProxyPidVarName busPath;
+            socketVar = dbusProxyVarName busPath;
+          in "kill $" + pidVar + " 2>/dev/null; ${pkgs.coreutils}/bin/rm -f $" + socketVar
+        ) dbusPaths);
+      in ''
+    function __cleanup_dbus_proxies --on-event fish_exit
+      ${killCmds}
+    end
+    '';
+
+    # Generate bwrap arguments to bind proxy sockets and override env vars
+    dbusProxyBwrapArgs = if !hasDbusProxy then "" else
+      let
+        # Bind proxy sockets to the original bus paths
+        bindArgs = map (busPath:
+          let socketVar = dbusProxyVarName busPath;
+          in ''--bind ''$${socketVar} ${busPath}''
+        ) dbusPaths;
+      in
+        builtins.concatStringsSep " \\\n" bindArgs;
 
     # Build bwrap arguments array outside of the string
     bwrapArgs = let
@@ -57,12 +146,15 @@ let
           explicitFs = if (builtins.hasAttr "fs" sandbox_restrictions) then sandbox_restrictions.fs else {};
           explicitPaths = builtins.attrNames explicitFs;
           
+          # Paths covered by dbus proxy (these are handled separately via proxy)
+          dbusProxyPaths = builtins.attrNames (sandbox_restrictions.dbus or {});
+          
           # Protected paths that are NOT explicitly bound should be blocked
-          # A protected path is "covered" if it or a parent path is in explicitPaths
+          # A protected path is "covered" if it or a parent path is in explicitPaths or dbusPaths
           isPathCovered = protected:
             builtins.any (explicit: 
               explicit == protected || pkgs.lib.hasPrefix (protected + "/") explicit || pkgs.lib.hasPrefix (explicit + "/") protected
-            ) explicitPaths;
+            ) (explicitPaths ++ dbusProxyPaths);
           protectedToBlock = builtins.filter (p: !(isPathCovered p.path)) consts.protectedPaths;
           
           # Build combined entries: protected paths as "block", explicit paths as their permission
@@ -132,6 +224,9 @@ let
 '')
         "--tmpfs /etc/ssh/ssh_config.d"
         "--seccomp 3"
+
+        # D-Bus proxy socket bindings
+        dbusProxyBwrapArgs
       ];
 
       # Filter out empty strings and join with proper formatting
@@ -149,6 +244,9 @@ let
 
    runInBwrap = ''
     ${sandbox_setup}
+
+    ${dbusProxyCleanup}
+    ${dbusProxyStartup}
 
     ${if restrict_to_current_folder then ''
     set -x ${consts.RESTRICT_TO_ENV_VAR_NAME} $(${utils.findGitRoot}/bin/findGitRoot)
@@ -190,6 +288,7 @@ let
      if generate_unsafe then [(pkgs.writeScriptBin "${name}-unsafe" (makeWrapper {inherit bin; bwrapCmd = "";}))] else []
    );
 in
+  assert validateNoConflicts;
   {
     inherit scripts;
   }
