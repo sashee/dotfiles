@@ -126,7 +126,7 @@ let
         (if (builtins.hasAttr "mount_dev" sandbox_restrictions) && sandbox_restrictions.mount_dev then "--dev-bind /dev /dev" else "--dev /dev")
         "--proc /proc"
         "--tmpfs /tmp"
-        "(if set -q TMPDIR; and test -n \"$TMPDIR\"; and test \"$TMPDIR\" != \"/tmp\"; echo \"--tmpfs $TMPDIR\"; end)"
+        "(if set -q TMPDIR; and test -n \"$TMPDIR\"; and test \"$TMPDIR\" != \"/tmp\"; echo -- --tmpfs; echo -- \"$TMPDIR\"; end)"
 
         # Restrict to current folder
         (if restrict_to_current_folder then ''--bind "''$${consts.RESTRICT_TO_ENV_VAR_NAME}" "''$${consts.RESTRICT_TO_ENV_VAR_NAME}"'' else "")
