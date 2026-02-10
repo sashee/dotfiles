@@ -96,14 +96,14 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 		${builtins.concatStringsSep "\n" (map (prg: prg.sandbox_setup or "") prgs)}
 	'';
 
-	zsh_scripts = (import ../wrapper.nix {
+	zsh_scripts = (import ../_wrapper/default.nix {
 		name = "zsh";
 		inherit pkgs bin;
 		sandbox_restrictions = merged_restrictions // { network = true; allow_nested_sandbox = true; share_pid = true; };  # with network
 		inherit before sandbox_setup;
 	}).scripts;
 
- 	zsh_nonet_scripts = (import ../wrapper.nix {
+ 	zsh_nonet_scripts = (import ../_wrapper/default.nix {
   		name = "zsh-nonet";
   		inherit pkgs bin;
   		sandbox_restrictions = merged_restrictions // { allow_nested_sandbox = true; share_pid = true; };  # same fs/env as zsh, no network (no network key)

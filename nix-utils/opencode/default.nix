@@ -39,7 +39,7 @@ export OPENCODE_CONFIG=${config}
 	'';
 in
 {
-	scripts = (import ../wrapper.nix {
+	scripts = (import ../_wrapper/default.nix {
 		name = "opencode";
 		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 	}).scripts;

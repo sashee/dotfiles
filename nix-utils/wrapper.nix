@@ -261,7 +261,7 @@ let
   makeWrapper = {bwrapCmd, bin}: ''
     #!${pkgs.fish}/bin/fish
 
-    if set -q ${consts.SKIP_SANDBOX_ENV_VAR_NAME}
+    if set -q ${consts.SKIP_SANDBOX_ENV_VAR_NAME}; and test -n "''$${consts.SKIP_SANDBOX_ENV_VAR_NAME}"
 
       echo "[${bin}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME} is defined" >&2
 

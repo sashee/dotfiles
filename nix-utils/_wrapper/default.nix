@@ -1,0 +1,256 @@
+{ pkgs, name, sandbox_restrictions, sandbox_setup, before, bin, generate_unsafe ? true, restrict_to_current_folder ? true }:
+let
+  debugLogDir = "/tmp/nix-utils-debug";
+  utils = import ../utils.nix { inherit pkgs; };
+  consts = import ../consts.nix;
+  runner = import ./runner/default.nix { inherit pkgs; };
+
+  validateNoConflicts = let
+    fsPaths' = builtins.attrNames (sandbox_restrictions.fs or {});
+    dbusPaths' = builtins.attrNames (sandbox_restrictions.dbus or {});
+    conflicts = builtins.filter (p: builtins.elem p fsPaths') dbusPaths';
+  in if conflicts == [] then true
+    else throw "Path(s) cannot be in both fs and dbus: ${builtins.concatStringsSep ", " conflicts}";
+
+  seccompFilter = let
+    baseSeccomp = sandbox_restrictions.seccomp or {};
+    autoBlock = if !(sandbox_restrictions.network or false) then {
+      AF_INET = true;
+      AF_INET6 = true;
+      AF_PACKET = true;
+    } else {};
+    mergedBlock = (baseSeccomp.block or {}) // autoBlock;
+    seccompOptions = baseSeccomp // { block = mergedBlock; };
+  in import ../seccomp.nix {
+    inherit pkgs;
+    options = seccompOptions;
+  };
+
+  dbusConfig = sandbox_restrictions.dbus or {};
+  dbusPaths = builtins.attrNames dbusConfig;
+
+  explicitFs = sandbox_restrictions.fs or {};
+  explicitPaths = builtins.attrNames explicitFs;
+
+  isPathCovered = protected:
+    builtins.any (explicit:
+      explicit == protected
+      || pkgs.lib.hasPrefix (protected + "/") explicit
+      || pkgs.lib.hasPrefix (explicit + "/") protected
+    ) (explicitPaths ++ dbusPaths);
+
+  protectedToBlock = builtins.filter (p: !(isPathCovered p.path)) consts.protectedPaths;
+
+  protectedEntries = map (p: {
+    path = p.path;
+    perm = "block";
+    type = p.type;
+    source = null;
+  }) protectedToBlock;
+
+  explicitEntries = map (p: {
+    path = p;
+    perm = builtins.getAttr p explicitFs;
+    type = let
+      matching = builtins.filter (pp: pp.path == p) consts.protectedPaths;
+    in if matching == [] then "dir" else (builtins.head matching).type;
+    source = null;
+  }) explicitPaths;
+
+  fileEntries = map (dest: {
+    path = dest;
+    perm = "ro";
+    type = "file";
+    source = builtins.getAttr dest (sandbox_restrictions.files or {});
+  }) (builtins.attrNames (sandbox_restrictions.files or {}));
+
+  allEntries = protectedEntries ++ explicitEntries ++ fileEntries;
+  groupedByPath = builtins.groupBy (e: e.path) allEntries;
+  permPriority = perm: if perm == "rw" then 3 else if perm == "ro" then 2 else 1;
+
+  deduplicatedEntries = map (path:
+    let
+      entries = builtins.getAttr path groupedByPath;
+      sortedByPerm = builtins.sort (a: b: permPriority a.perm > permPriority b.perm) entries;
+      winner = builtins.head sortedByPerm;
+    in {
+      inherit path;
+      perm = winner.perm;
+      type = winner.type;
+      source = winner.source;
+    }
+  ) (builtins.attrNames groupedByPath);
+
+  pathDepth = p: builtins.length (builtins.filter (x: x != "") (pkgs.lib.splitString "/" p));
+  mountRules = builtins.sort (a: b: pathDepth a.path < pathDepth b.path) deduplicatedEntries;
+
+  bwrapBaseArgs =
+    (pkgs.lib.optionals (!((sandbox_restrictions.share_user or false))) [ "--unshare-user" "--uid" "__CURRENT_UID__" "--gid" "__CURRENT_GID__" ])
+    ++ (pkgs.lib.optionals (!((sandbox_restrictions.share_uts or false))) [ "--unshare-uts" ])
+    ++ (pkgs.lib.optionals (!((sandbox_restrictions.share_cgroup or false))) [ "--unshare-cgroup-try" ])
+    ++ (pkgs.lib.optionals (!((sandbox_restrictions.share_pid or false))) [ "--unshare-pid" ])
+    ++ (pkgs.lib.optionals (!((sandbox_restrictions.share_ipc or false))) [ "--unshare-ipc" ])
+    ++ (pkgs.lib.optionals (!((sandbox_restrictions.network or false))) [ "--unshare-net" ])
+    ++ (pkgs.lib.optionals (!((sandbox_restrictions.dont_die_with_parent or false))) [ "--die-with-parent" ])
+    ++ [
+      "--ro-bind" "/" "/"
+      "--tmpfs" "/home"
+    ]
+    ++ (if (sandbox_restrictions.mount_dev or false)
+      then [ "--dev-bind" "/dev" "/dev" ]
+      else [ "--dev" "/dev" ])
+    ++ [
+      "--proc" "/proc"
+      "--tmpfs" "/tmp"
+      "--tmpfs" "/etc/ssh/ssh_config.d"
+    ];
+
+  envPassthrough =
+    let
+      base = pkgs.lib.unique (sandbox_restrictions.env or []);
+    in if (sandbox_restrictions.allow_nested_sandbox or false)
+      then base
+      else base ++ [ consts.SKIP_SANDBOX_ENV_VAR_NAME ];
+
+  mkRunnerConfig = { commandString, extraBwrapArgs ? [], extraMountRules ? [] }:
+    builtins.toJSON {
+      program_name = name;
+      env = {
+        clear = builtins.hasAttr "env" sandbox_restrictions;
+        passthrough = envPassthrough;
+        static_values = {};
+      };
+      bwrap = {
+        bin = "${pkgs.bubblewrap}/bin/bwrap";
+        args = bwrapBaseArgs ++ extraBwrapArgs;
+        add_tmpdir_tmpfs = true;
+      };
+      command = {
+        bin = "${pkgs.bash}/bin/bash";
+        args = [ "--noprofile" "--norc" "-c" "${commandString} \"$@\"" "--" ];
+      };
+      mounts = mountRules ++ extraMountRules;
+      seccomp = {
+        filter_path = "${seccompFilter}/filter.bpf";
+      };
+      dbus = {
+        proxy_bin = "${pkgs.xdg-dbus-proxy}/bin/xdg-dbus-proxy";
+        proxies = map (busPath:
+          let cfg = dbusConfig.${busPath};
+          in {
+            source_bus_path = busPath;
+            proxy_socket_path = null;
+            talk = cfg.talk or [];
+            own = cfg.own or [];
+            see = cfg.see or [];
+            call = cfg.call or {};
+            broadcast = cfg.broadcast or {};
+            log = cfg.log or false;
+          }
+        ) dbusPaths;
+      };
+      restrict_to_env_var = if restrict_to_current_folder then consts.RESTRICT_TO_ENV_VAR_NAME else null;
+    };
+
+  mkRunScript = { commandString, configFile ? null, extraBefore ? "", runSandboxSetup ? true }:
+    ''
+#!${pkgs.bash}/bin/bash
+set -eo pipefail
+
+if [ -n "$(${pkgs.coreutils}/bin/printenv ${consts.SKIP_SANDBOX_ENV_VAR_NAME} 2>/dev/null || true)" ]; then
+  echo "[${name}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME} is defined" >&2
+  ${before}
+  ${extraBefore}
+  __nix_utils_cmd=$(cat <<'__NIX_UTILS_CMD__'
+${commandString}
+__NIX_UTILS_CMD__
+)
+  exec ${pkgs.bash}/bin/bash --noprofile --norc -c "$__nix_utils_cmd \"\$@\"" -- "$@"
+else
+  ${before}
+  ${if runSandboxSetup then sandbox_setup else ""}
+  ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
+  ${if restrict_to_current_folder then ''
+  export ${consts.RESTRICT_TO_ENV_VAR_NAME}="$(${utils.findGitRoot}/bin/findGitRoot)"
+  __restrict_var_name="${consts.RESTRICT_TO_ENV_VAR_NAME}"
+  echo "[${name}] Restricting to folder: ''${!__restrict_var_name}" >&2
+  '' else ""}
+  ${extraBefore}
+  ${if configFile == null then
+    ''__nix_utils_cmd=$(cat <<'__NIX_UTILS_CMD__'
+${commandString}
+__NIX_UTILS_CMD__
+)
+exec ${pkgs.bash}/bin/bash --noprofile --norc -c "$__nix_utils_cmd \"\$@\"" -- "$@"''
+   else
+    ''exec ${runner}/bin/nix-sandbox-runner --config ${configFile} -- "$@"''}
+fi
+'';
+
+  mkWrappedScript = { scriptName, commandString, extraBwrapArgs ? [], extraMountRules ? [], extraBefore ? "" }:
+    let
+      configFile = pkgs.writeText "${scriptName}-runner-config.json" (mkRunnerConfig {
+        inherit commandString extraBwrapArgs extraMountRules;
+      });
+    in pkgs.writeScriptBin scriptName (mkRunScript {
+      inherit commandString configFile extraBefore;
+    });
+
+  makeWrapper = { bwrapCmd, bin }:
+    let
+      _ = bwrapCmd;
+      configFile = pkgs.writeText "${name}-info-runner-config.json" (mkRunnerConfig {
+        commandString = bin;
+      });
+    in mkRunScript {
+      commandString = bin;
+      inherit configFile;
+    };
+
+  runInBwrap = "";
+
+  infoScript = import ../info.nix {
+    inherit pkgs name sandbox_restrictions consts makeWrapper runInBwrap;
+  };
+
+  scripts = [
+    (mkWrappedScript {
+      scriptName = name;
+      commandString = bin;
+    })
+    (mkWrappedScript {
+      scriptName = "${name}-strace";
+      commandString = "${pkgs.strace}/bin/strace -f -e trace=%network,%file,%desc,%process -s 2000 -yy -o ${debugLogDir}/${name}-strace.log ${bin}";
+      extraBwrapArgs = [ "--bind" debugLogDir debugLogDir ];
+      extraBefore = ''
+${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
+: > ${debugLogDir}/${name}-strace.log
+'';
+    })
+    (mkWrappedScript {
+      scriptName = "${name}-debug";
+      commandString = "${pkgs.strace}/bin/strace -o ${debugLogDir}/${name}-strace.log ${pkgs.bash}/bin/bash";
+      extraBwrapArgs = [ "--bind" debugLogDir debugLogDir ];
+      extraBefore = ''
+${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
+: > ${debugLogDir}/${name}-strace.log
+'';
+    })
+    (mkWrappedScript {
+      scriptName = "${name}-ranger";
+      commandString = "${pkgs.ranger}/bin/ranger";
+    })
+    infoScript
+  ] ++ (
+    if generate_unsafe then [
+      (pkgs.writeScriptBin "${name}-unsafe" (mkRunScript {
+        commandString = bin;
+        runSandboxSetup = false;
+      }))
+    ] else []
+  );
+in
+  assert validateNoConflicts;
+  {
+    inherit scripts;
+  }

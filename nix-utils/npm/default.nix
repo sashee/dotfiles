@@ -27,7 +27,7 @@ export NODE_EXTRA_CA_CERTS=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 	'';
 
-	npm_scripts = (import ../wrapper.nix {
+	npm_scripts = (import ../_wrapper/default.nix {
 		name = "npm";
 		inherit pkgs;
 		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npm";
@@ -36,7 +36,7 @@ export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
-	node_scripts = (import ../wrapper.nix {
+	node_scripts = (import ../_wrapper/default.nix {
 		name = "node";
 		inherit pkgs;
 		bin = "${pkgs.nodePackages_latest.nodejs}/bin/node";
@@ -45,7 +45,7 @@ export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
- 	node_nonet_scripts = (import ../wrapper.nix {
+ 	node_nonet_scripts = (import ../_wrapper/default.nix {
  		name = "node-nonet";
  		inherit pkgs;
  		bin = "${pkgs.nodePackages_latest.nodejs}/bin/node";
@@ -55,7 +55,7 @@ export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
  		generate_unsafe = false;
  	}).scripts;
 
-	npx_scripts = (import ../wrapper.nix {
+	npx_scripts = (import ../_wrapper/default.nix {
 		name = "npx";
 		inherit pkgs;
 		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
@@ -64,7 +64,7 @@ export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
-	npx_fullnet_scripts = (import ../wrapper.nix {
+	npx_fullnet_scripts = (import ../_wrapper/default.nix {
 		name = "npx-fullnet";
 		inherit pkgs;
 		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npx";

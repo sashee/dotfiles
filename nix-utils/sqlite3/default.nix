@@ -15,10 +15,9 @@ let
 	'';
 in
 {
-	scripts = (import ../wrapper.nix {
+	scripts = (import ../_wrapper/default.nix {
 		name = "sqlite3";
 		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 	}).scripts;
 	inherit sandbox_restrictions;
 }
-

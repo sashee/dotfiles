@@ -49,7 +49,7 @@ set-option -ga update-environment ' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_
 	'';
 in
 {
-	scripts = (import ../wrapper.nix {
+	scripts = (import ../_wrapper/default.nix {
 		name = "tmux";
 		inherit pkgs bin;
 		sandbox_restrictions = zsh.sandbox_restrictions // { network = true; };

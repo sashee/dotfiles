@@ -19,10 +19,9 @@ export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 	'';
 in
 {
-	scripts = (import ../wrapper.nix {
+	scripts = (import ../_wrapper/default.nix {
 		name = "awslogs";
 		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 	}).scripts;
 	inherit sandbox_restrictions;
 }
-

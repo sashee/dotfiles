@@ -2,51 +2,52 @@
 	pkgs,
 }:
 let
-	findWorkspaceDirAndDefaultsToCurrent = pkgs.writeScriptBin "findWorkspaceDirAndDefaultsToCurrent" ''
-#!${pkgs.nodePackages_latest.nodejs}/bin/node
-import path from "node:path";
+	findGitRootSource = pkgs.writeText "findGitRoot.rs" ''
+use std::env;
+use std::process;
 
-const workspaceDir = path.join(process.env.HOME, "workspace");
+fn main() {
+    let cwd = match env::current_dir() {
+        Ok(dir) => dir,
+        Err(err) => {
+            eprintln!("failed to get current directory: {err}");
+            process::exit(1);
+        }
+    };
 
-const relativeToWorkspace = path.relative(workspaceDir, process.cwd()).split(path.sep)[0];
+    let mut current = cwd.as_path();
+    loop {
+        if current.join(".git").exists() {
+            println!("{}", current.display());
+            return;
+        }
 
-if (relativeToWorkspace.startsWith(".")) {
-	// not in workspace
-	console.log(process.cwd());
-}else {
-	console.log(path.join(process.env.HOME, "workspace", relativeToWorkspace));
+        match current.parent() {
+            Some(parent) => current = parent,
+            None => {
+                println!("{}", cwd.display());
+                return;
+            }
+        }
+    }
 }
 	'';
 
-	findGitRoot = pkgs.writeScriptBin "findGitRoot" ''
-#!${pkgs.nodePackages_latest.nodejs}/bin/node
-import fs from "node:fs/promises";
-import path from "node:path";
+	findGitRoot = pkgs.stdenv.mkDerivation {
+		name = "findGitRoot";
+		dontUnpack = true;
+		nativeBuildInputs = [pkgs.rustc];
 
-const parts = process.cwd().split(path.sep);
-const res = await Promise.allSettled(parts.map(async (p, i, l) => {
-	const constructedPath = l.slice(0, i + 1).join(path.sep);
-	if (!path.isAbsolute(constructedPath)) {
-		throw new Error("Not absolute, should be skipped");
-	}
-	await fs.access(path.join(constructedPath, ".git"), fs.constants.F_OK);
-	return constructedPath;
-}));
-const mostSpecificRepo = res
-	.filter(({status}) => status === "fulfilled")
-	.toReversed()
-	.map(({value}) => value)[0];
+		buildPhase = ''
+			${pkgs.rustc}/bin/rustc ${findGitRootSource} -O -o findGitRoot
+		'';
 
-if (mostSpecificRepo) {
-	// there is a repo somewhere, return that
-	console.log(mostSpecificRepo);
-}else {
-	// no repo, restrict to current dir
-	console.log(process.cwd());
-}
-	'';
+		installPhase = ''
+			mkdir -p $out/bin
+			cp findGitRoot $out/bin/findGitRoot
+		'';
+	};
 in
 	{
-		inherit findWorkspaceDirAndDefaultsToCurrent findGitRoot;
+		inherit findGitRoot;
 	}
-

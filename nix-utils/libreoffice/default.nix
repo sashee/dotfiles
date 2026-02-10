@@ -22,7 +22,7 @@ let
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/libreoffice
 	'';
 
-	scripts = builtins.concatLists (map (bin: (import ../wrapper.nix {
+	scripts = builtins.concatLists (map (bin: (import ../_wrapper/default.nix {
 		name = builtins.baseNameOf bin;
 		inherit pkgs sandbox_restrictions before sandbox_setup;
 		bin = bin;

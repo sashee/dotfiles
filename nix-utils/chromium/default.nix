@@ -34,7 +34,7 @@ let
 	'';
 in
 {
-	scripts = (import ../wrapper.nix {
+	scripts = (import ../_wrapper/default.nix {
 		name = "chromium";
 		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 		restrict_to_current_folder = false;

@@ -63,7 +63,7 @@ keybinds {
 	};
 in
 {
-	scripts = (import ../wrapper.nix {
+	scripts = (import ../_wrapper/default.nix {
 		name = "zellij";
 		inherit pkgs bin;
 		sandbox_restrictions = merged_sandbox_restrictions // { network = true; allow_nested_sandbox = true; };

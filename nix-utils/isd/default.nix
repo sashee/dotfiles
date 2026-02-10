@@ -26,7 +26,7 @@ let
 	'';
 in
 {
-	scripts = (import ../wrapper.nix {
+	scripts = (import ../_wrapper/default.nix {
 		name = "isd";
 		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 	}).scripts;

@@ -27,7 +27,7 @@ let
 	'';
 in
 {
-	scripts = (import ../wrapper.nix {
+	scripts = (import ../_wrapper/default.nix {
 		name = "bluetuith";
 		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 	}).scripts;

@@ -24,7 +24,7 @@ export DUCKDB_HISTORY=/tmp/.duckdb_history
 	'';
 in
 {
-	scripts = (import ../wrapper.nix {
+	scripts = (import ../_wrapper/default.nix {
 		name = "duckdb";
 		inherit pkgs bin sandbox_restrictions before sandbox_setup;
 	}).scripts;

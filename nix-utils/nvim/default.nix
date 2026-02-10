@@ -96,7 +96,7 @@ export default [
 			"/home/sashee/eslint.config.js" = "${eslintConfig}";
 		};
 		env = ["HOME" "PATH" "NVIM_RPLUGIN_MANIFEST" "TMPDIR" "SSL_CERT_FILE" "TERM" "LANG"];
-		network = true;
+		network = false;
 	};
 
 	base_before = ''
@@ -139,7 +139,7 @@ export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache
 	'';
 
-	nvim_scripts = (import ../wrapper.nix {
+	nvim_scripts = (import ../_wrapper/default.nix {
 		name = "nvim";
 		inherit pkgs bin;
 		sandbox_restrictions = base_sandbox_restrictions;
@@ -147,7 +147,7 @@ export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
 		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
-	nvim_net_scripts = (import ../wrapper.nix {
+	nvim_net_scripts = (import ../_wrapper/default.nix {
 		name = "nvim-net";
 		inherit pkgs bin;
 		sandbox_restrictions = base_sandbox_restrictions // {
