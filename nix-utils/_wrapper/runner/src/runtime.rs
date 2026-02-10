@@ -1,8 +1,10 @@
 use std::collections::HashMap;
+use std::ffi::CString;
 use std::ffi::OsString;
 use std::fs;
 use std::fs::OpenOptions;
-use std::os::fd::AsRawFd;
+use std::io::{Seek, SeekFrom};
+use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
 use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
@@ -167,13 +169,7 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
     cmd.args(passthrough_args);
 
     let seccomp_file = if let Some(seccomp) = &config.seccomp {
-        let seccomp_path = expand_value(&seccomp.filter_path, &host_env);
-        let seccomp_file =
-            fs::File::open(&seccomp_path).map_err(|source| RunnerError::OpenFile {
-                path: seccomp_path.clone().into(),
-                source,
-            })?;
-
+        let seccomp_file = build_seccomp_filter_fd(&seccomp.blocked_socket_families)?;
         let target_fd = SECCOMP_FD;
         let source_fd = seccomp_file.as_raw_fd();
         unsafe {
@@ -236,6 +232,79 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
     } else {
         Ok(1)
     }
+}
+
+fn build_seccomp_filter_fd(blocked_socket_families: &[i32]) -> Result<fs::File, RunnerError> {
+    let action_errno_eacces = libseccomp_sys::SCMP_ACT_ERRNO(nix::libc::EACCES as u16);
+    let mut filter_file = create_seccomp_memfd()?;
+
+    let ctx = unsafe { libseccomp_sys::seccomp_init(libseccomp_sys::SCMP_ACT_ALLOW) };
+    if ctx.is_null() {
+        return Err(RunnerError::Seccomp("seccomp_init failed".to_string()));
+    }
+
+    let result = (|| {
+        for family in blocked_socket_families {
+            let cmp = libseccomp_sys::scmp_arg_cmp {
+                arg: 0,
+                op: libseccomp_sys::scmp_compare::SCMP_CMP_EQ,
+                datum_a: *family as u64,
+                datum_b: 0,
+            };
+
+            let rc = unsafe {
+                libseccomp_sys::seccomp_rule_add_array(
+                    ctx,
+                    action_errno_eacces,
+                    nix::libc::SYS_socket as i32,
+                    1,
+                    &cmp,
+                )
+            };
+
+            if rc < 0 {
+                return Err(RunnerError::Seccomp(format!(
+                    "failed to add seccomp rule for socket family {family}: errno {}",
+                    -rc
+                )));
+            }
+        }
+
+        let export_rc = unsafe { libseccomp_sys::seccomp_export_bpf(ctx, filter_file.as_raw_fd()) };
+        if export_rc < 0 {
+            return Err(RunnerError::Seccomp(format!(
+                "seccomp_export_bpf failed: errno {}",
+                -export_rc
+            )));
+        }
+
+        filter_file.seek(SeekFrom::Start(0)).map_err(|source| {
+            RunnerError::Seccomp(format!("failed to rewind seccomp filter file: {source}"))
+        })?;
+
+        Ok(())
+    })();
+
+    unsafe {
+        libseccomp_sys::seccomp_release(ctx);
+    }
+
+    result.map(|_| filter_file)
+}
+
+fn create_seccomp_memfd() -> Result<fs::File, RunnerError> {
+    let name = CString::new("nix-sandbox-seccomp")
+        .map_err(|source| RunnerError::Seccomp(format!("invalid memfd name: {source}")))?;
+    let fd = unsafe { nix::libc::memfd_create(name.as_ptr(), nix::libc::MFD_CLOEXEC) };
+    if fd < 0 {
+        return Err(RunnerError::Seccomp(format!(
+            "memfd_create failed: {}",
+            std::io::Error::last_os_error()
+        )));
+    }
+
+    let file = unsafe { fs::File::from_raw_fd(fd) };
+    Ok(file)
 }
 
 fn start_dbus_proxy(

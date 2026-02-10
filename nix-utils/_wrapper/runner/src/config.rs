@@ -59,7 +59,8 @@ pub struct MountRule {
 
 #[derive(Debug, Deserialize)]
 pub struct SeccompConfig {
-    pub filter_path: String,
+    #[serde(default)]
+    pub blocked_socket_families: Vec<i32>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -171,6 +172,17 @@ impl RunnerConfig {
                     return Err(RunnerError::InvalidConfig(format!(
                         "duplicate dbus proxy socket path: {}",
                         proxy_socket_path
+                    )));
+                }
+            }
+        }
+
+        if let Some(seccomp) = &self.seccomp {
+            for family in &seccomp.blocked_socket_families {
+                if *family < 0 {
+                    return Err(RunnerError::InvalidConfig(format!(
+                        "seccomp.blocked_socket_families[] must be >= 0, got {}",
+                        family
                     )));
                 }
             }

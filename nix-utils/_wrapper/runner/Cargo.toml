@@ -9,3 +9,4 @@ serde_json = "1"
 thiserror = "2"
 nix = { version = "0.31.1", features = ["signal", "process", "user"] }
 signal-hook = "0.3"
+libseccomp-sys = "0.2"

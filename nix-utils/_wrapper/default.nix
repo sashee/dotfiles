@@ -12,19 +12,25 @@ let
   in if conflicts == [] then true
     else throw "Path(s) cannot be in both fs and dbus: ${builtins.concatStringsSep ", " conflicts}";
 
-  seccompFilter = let
-    baseSeccomp = sandbox_restrictions.seccomp or {};
-    autoBlock = if !(sandbox_restrictions.network or false) then {
-      AF_INET = true;
-      AF_INET6 = true;
-      AF_PACKET = true;
-    } else {};
-    mergedBlock = (baseSeccomp.block or {}) // autoBlock;
-    seccompOptions = baseSeccomp // { block = mergedBlock; };
-  in import ../seccomp.nix {
-    inherit pkgs;
-    options = seccompOptions;
+  afMap = {
+    AF_INET = 2;
+    AF_INET6 = 10;
+    AF_UNIX = 1;
+    AF_NETLINK = 16;
+    AF_PACKET = 17;
+    AF_BLUETOOTH = 31;
   };
+
+  baseSeccomp = sandbox_restrictions.seccomp or {};
+  autoBlock = if !(sandbox_restrictions.network or false) then {
+    AF_INET = true;
+    AF_INET6 = true;
+    AF_PACKET = true;
+  } else {};
+  mergedSeccompBlock = (baseSeccomp.block or {}) // autoBlock;
+  blockedSocketFamilies = builtins.map (name: afMap.${name}) (
+    builtins.filter (name: mergedSeccompBlock.${name} or false) (builtins.attrNames afMap)
+  );
 
   dbusConfig = sandbox_restrictions.dbus or {};
   dbusPaths = builtins.attrNames dbusConfig;
@@ -131,7 +137,7 @@ let
       };
       mounts = mountRules ++ extraMountRules;
       seccomp = {
-        filter_path = "${seccompFilter}/filter.bpf";
+        blocked_socket_families = blockedSocketFamilies;
       };
       dbus = {
         proxy_bin = "${pkgs.xdg-dbus-proxy}/bin/xdg-dbus-proxy";

@@ -67,4 +67,7 @@ pub enum RunnerError {
         #[source]
         source: std::io::Error,
     },
+
+    #[error("seccomp setup failed: {0}")]
+    Seccomp(String),
 }
