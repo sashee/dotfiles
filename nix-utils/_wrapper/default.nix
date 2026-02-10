@@ -1,7 +1,6 @@
 { pkgs, name, sandbox_restrictions, sandbox_setup, before, bin, generate_unsafe ? true, restrict_to_current_folder ? true }:
 let
   debugLogDir = "/tmp/nix-utils-debug";
-  utils = import ../utils.nix { inherit pkgs; };
   consts = import ../consts.nix;
   runner = import ./runner/default.nix { inherit pkgs; };
 
@@ -155,7 +154,7 @@ let
           }
         ) dbusPaths;
       };
-      restrict_to_env_var = if restrict_to_current_folder then consts.RESTRICT_TO_ENV_VAR_NAME else null;
+      restrict_to_git_root = restrict_to_current_folder;
     };
 
   mkRunScript = { commandString, configFile ? null, extraBefore ? "", runSandboxSetup ? true }:
@@ -176,11 +175,6 @@ else
   ${before}
   ${if runSandboxSetup then sandbox_setup else ""}
   ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
-  ${if restrict_to_current_folder then ''
-  export ${consts.RESTRICT_TO_ENV_VAR_NAME}="$(${utils.findGitRoot}/bin/findGitRoot)"
-  __restrict_var_name="${consts.RESTRICT_TO_ENV_VAR_NAME}"
-  echo "[${name}] Restricting to folder: ''${!__restrict_var_name}" >&2
-  '' else ""}
   ${extraBefore}
   ${if configFile == null then
     ''__nix_utils_cmd=$(cat <<'__NIX_UTILS_CMD__'

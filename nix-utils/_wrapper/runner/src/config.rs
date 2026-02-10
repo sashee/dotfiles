@@ -18,7 +18,7 @@ pub struct RunnerConfig {
     #[serde(default)]
     pub dbus: DbusConfig,
     #[serde(default)]
-    pub restrict_to_env_var: Option<String>,
+    pub restrict_to_git_root: bool,
 }
 
 #[derive(Debug, Deserialize)]

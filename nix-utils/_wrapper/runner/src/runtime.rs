@@ -127,11 +127,12 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
         }
     }
 
-    if let Some(restrict_var) = &config.restrict_to_env_var {
-        let restrict_path = host_env
-            .get(restrict_var)
-            .cloned()
-            .unwrap_or_else(|| current_dir_fallback());
+    if config.restrict_to_git_root {
+        let restrict_path = find_git_root_or_cwd();
+        eprintln!(
+            "[{}] Restricting to folder: {}",
+            config.program_name, restrict_path
+        );
         bwrap_args.push("--bind".to_string());
         bwrap_args.push(restrict_path.clone());
         bwrap_args.push(restrict_path);
@@ -566,6 +567,33 @@ fn current_dir_fallback() -> String {
         .ok()
         .and_then(|p| p.to_str().map(|s| s.to_string()))
         .unwrap_or_else(|| "/".to_string())
+}
+
+fn find_git_root_or_cwd() -> String {
+    let cwd = match std::env::current_dir() {
+        Ok(path) => path,
+        Err(_) => return "/".to_string(),
+    };
+
+    let mut current = cwd.as_path();
+    loop {
+        if current.join(".git").exists() {
+            return current
+                .to_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| current_dir_fallback());
+        }
+
+        match current.parent() {
+            Some(parent) => current = parent,
+            None => {
+                return cwd
+                    .to_str()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| current_dir_fallback());
+            }
+        }
+    }
 }
 
 fn install_signal_forwarders(
