@@ -271,8 +271,16 @@ fn is_devnull_writable() -> bool {
 }
 
 fn expand_home_path(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("~") {
-        if let Ok(home) = env::var("HOME") {
+    if let Ok(home) = env::var("HOME") {
+        if let Some(rest) = path.strip_prefix("$HOME") {
+            return format!("{home}{rest}");
+        }
+
+        if let Some(rest) = path.strip_prefix("${HOME}") {
+            return format!("{home}{rest}");
+        }
+
+        if let Some(rest) = path.strip_prefix("~") {
             return format!("{home}{rest}");
         }
     }
