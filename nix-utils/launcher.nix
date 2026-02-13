@@ -1,7 +1,7 @@
 { pkgs }:
 let
   skipSandboxEnvVar = "__NIX_UTILS_SKIP_SANDBOX";
-  mkLauncher = args@{
+  mkLauncher = launcherArgs@{
     name,
     target,
     keepEnv ? null,
@@ -41,7 +41,8 @@ exec ${pkgs.coreutils}/bin/env "''${env_args[@]}" ${pkgs.lib.escapeShellArg targ
     in
       rec {
         path = "${launcher}/bin/${name}-launcher";
-        override = f: mkLauncher (args // (f args));
+        args = launcherArgs;
+        override = f: mkLauncher (launcherArgs // (f launcherArgs));
       };
 in {
   inherit mkLauncher;

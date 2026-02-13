@@ -4,12 +4,15 @@ let
   consts = import ../consts.nix;
   runner = import ./runner/default.nix { inherit pkgs; };
   binPath = bin.path;
-  debugBinPath =
-    (bin.override (_: {
+  debugLauncher =
+    bin.override (_: {
       name = "${name}-debug-shell";
       target = "${pkgs.bash}/bin/bash";
       extraArgs = [];
-    })).path;
+    });
+  debugBinPath = debugLauncher.path;
+  launcherArgsFile = pkgs.writeText "${name}-launcher-args.json" (builtins.toJSON bin.args);
+  sandboxRestrictionsFile = pkgs.writeText "${name}-sandbox-restrictions.json" (builtins.toJSON sandbox_restrictions);
 
   validateNoConflicts = let
     fsPaths' = builtins.attrNames (sandbox_restrictions.fs or {});
@@ -229,6 +232,10 @@ ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
       extraBefore = ''
 ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
 : > ${debugLogDir}/${name}-strace.log
+echo "[${name}-debug] launcher args:" >&2
+${pkgs.jq}/bin/jq . ${launcherArgsFile} >&2
+echo "[${name}-debug] sandbox restrictions:" >&2
+${pkgs.jq}/bin/jq . ${sandboxRestrictionsFile} >&2
 '';
     })
     (mkWrappedScript {
