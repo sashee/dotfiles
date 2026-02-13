@@ -4,7 +4,6 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "DBUS_SESSION_BUS_ADDRESS" "VISUAL" "EDITOR"];
 	sandbox_restrictions = {
 		fs = {
 			"$HOME/.config/isd_tui" = "rw";
@@ -18,7 +17,7 @@ let
 	bin = launcher.mkLauncher {
 		name = "isd";
 		target = "${pkgs.isd}/bin/isd";
-		inherit keepEnv;
+		keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "DBUS_SESSION_BUS_ADDRESS" "VISUAL" "EDITOR"];
 		setEnv = {
 			VISUAL = "${builtins.elemAt nvim.scripts 0}/bin/nvim";
 		};

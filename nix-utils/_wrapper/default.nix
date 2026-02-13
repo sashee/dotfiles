@@ -5,11 +5,11 @@ let
   runner = import ./runner/default.nix { inherit pkgs; };
   binPath = bin.path;
   debugBinPath =
-    (bin.override {
+    (bin.override (_: {
       name = "${name}-debug-shell";
       target = "${pkgs.bash}/bin/bash";
       extraArgs = [];
-    }).path;
+    })).path;
 
   validateNoConflicts = let
     fsPaths' = builtins.attrNames (sandbox_restrictions.fs or {});

@@ -108,34 +108,27 @@ export default [
 		pkgs.nixd
 	];
 
-	nvimExtraArgs = [
-		"-u"
-		"${./init.lua}"
-		"--cmd"
-		"set packpath^=${packpath} | set runtimepath^=${packpath}"
-	];
-
-	nvimSetEnv = {
-		PATH = nvimPath;
-		SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-		NVIM_RPLUGIN_MANIFEST = "${./rplugin.vim}";
-	};
-
 	nvim_bin = launcher.mkLauncher {
 		name = "nvim";
 		target = "${pkgs.neovim-unwrapped}/bin/nvim";
 		keepEnv = [ "HOME" "PATH" "NVIM_RPLUGIN_MANIFEST" "TMPDIR" "SSL_CERT_FILE" "TERM" "LANG" ];
-		setEnv = nvimSetEnv;
-		extraArgs = nvimExtraArgs;
+		setEnv = {
+			PATH = nvimPath;
+			SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+			NVIM_RPLUGIN_MANIFEST = "${./rplugin.vim}";
+		};
+		extraArgs = [
+			"-u"
+			"${./init.lua}"
+			"--cmd"
+			"set packpath^=${packpath} | set runtimepath^=${packpath}"
+		];
 	};
 
-	nvim_net_bin = launcher.mkLauncher {
+	nvim_net_bin = nvim_bin.override (old: {
 		name = "nvim-net";
-		target = "${pkgs.neovim-unwrapped}/bin/nvim";
-		keepEnv = [ "HOME" "PATH" "NVIM_RPLUGIN_MANIFEST" "TMPDIR" "SSL_CERT_FILE" "TERM" "LANG" "AWS_REGION" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" ];
-		setEnv = nvimSetEnv;
-		extraArgs = nvimExtraArgs;
-	};
+		keepEnv = old.keepEnv ++ [ "AWS_REGION" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" ];
+	});
 
 	base_sandbox_restrictions = {
 		fs = {

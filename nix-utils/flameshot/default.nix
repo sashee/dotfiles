@@ -3,7 +3,6 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	keepEnv = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "rw";
@@ -21,7 +20,7 @@ let
 	bin = launcher.mkLauncher {
 		name = "flameshot";
 		target = "${pkgs.flameshot}/bin/flameshot";
-		inherit keepEnv;
+		keepEnv = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
 	};
 	before = ''
 

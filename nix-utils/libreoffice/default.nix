@@ -3,7 +3,6 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	keepEnv = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "LANG" "TERM" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
 	bins = (map (bin: pkgs.libreoffice + "/bin/" + bin) (builtins.attrNames (builtins.readDir (pkgs.libreoffice + "/bin"))));
 
 	sandbox_restrictions = {
@@ -29,7 +28,7 @@ let
 		bin = launcher.mkLauncher {
 			name = builtins.baseNameOf bin;
 			target = bin;
-			inherit keepEnv;
+			keepEnv = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "LANG" "TERM" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
 		};
 		restrict_to_current_folder = false;
 	}).scripts) bins);

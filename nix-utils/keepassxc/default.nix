@@ -3,7 +3,6 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	keepEnv = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "ro";
@@ -33,7 +32,7 @@ let
 	bin = launcher.mkLauncher {
 		name = "keepassxc";
 		target = "${pkgs.keepassxc}/bin/keepassxc";
-		inherit keepEnv;
+		keepEnv = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
 	};
 	before = ''
 

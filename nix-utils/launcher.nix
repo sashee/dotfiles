@@ -41,7 +41,7 @@ exec ${pkgs.coreutils}/bin/env "''${env_args[@]}" ${pkgs.lib.escapeShellArg targ
     in
       rec {
         path = "${launcher}/bin/${name}-launcher";
-        override = overrides: mkLauncher (args // overrides);
+        override = f: mkLauncher (args // (f args));
       };
 in {
   inherit mkLauncher;

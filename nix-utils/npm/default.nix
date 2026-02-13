@@ -23,17 +23,17 @@ let
 		setEnv = certEnv;
 	};
 
-	npm_bin = node_tool_bin.override {
+	npm_bin = node_tool_bin.override (_: {
 		name = "npm";
 		target = "${pkgs.nodePackages_latest.nodejs}/bin/npm";
-	};
+	});
 
 	node_bin = node_tool_bin;
 
-	npx_bin = node_tool_bin.override {
+	npx_bin = node_tool_bin.override (_: {
 		name = "npx";
 		target = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
-	};
+	});
 
 	base_before = ''
 	'';

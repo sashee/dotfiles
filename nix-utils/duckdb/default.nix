@@ -3,7 +3,6 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	keepEnv = ["TERM" "DUCKDB_HISTORY"];
 	config = pkgs.writeTextFile {
 		name = "duckdbrc";
 		text = ''
@@ -15,7 +14,7 @@ let
 	bin = launcher.mkLauncher {
 		name = "duckdb";
 		target = "${pkgs.duckdb}/bin/duckdb";
-		inherit keepEnv;
+		keepEnv = ["TERM" "DUCKDB_HISTORY"];
 		setEnv = {
 			DUCKDB_HISTORY = "/tmp/.duckdb_history";
 		};

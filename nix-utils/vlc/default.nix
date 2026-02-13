@@ -3,7 +3,6 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	keepEnv = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "ro";
@@ -18,7 +17,7 @@ let
 	bin = launcher.mkLauncher {
 		name = "vlc";
 		target = "${pkgs.vlc}/bin/vlc";
-		inherit keepEnv;
+		keepEnv = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
 		extraArgs = [ "--no-qt-privacy-ask" ];
 	};
 	before = ''

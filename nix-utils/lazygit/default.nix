@@ -3,7 +3,6 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"];
 	sandbox_restrictions = {
 		fs = {
 			"$HOME/.ssh/known_hosts" = "ro";
@@ -17,7 +16,7 @@ let
 	bin = launcher.mkLauncher {
 		name = "lazygit";
 		target = "${pkgs.lazygit}/bin/lazygit";
-		inherit keepEnv;
+		keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"];
 		setEnv = {
 			PATH = pkgs.lib.makeBinPath [
 				pkgs.git

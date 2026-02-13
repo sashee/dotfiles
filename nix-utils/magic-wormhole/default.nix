@@ -3,14 +3,13 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	keepEnv = ["TERM"];
 	sandbox_restrictions = {
 		network = true;
 	};
 	bin = launcher.mkLauncher {
 		name = "wormhole";
 		target = "${pkgs.magic-wormhole}/bin/wormhole";
-		inherit keepEnv;
+		keepEnv = ["TERM"];
 	};
 	before = ''
 
