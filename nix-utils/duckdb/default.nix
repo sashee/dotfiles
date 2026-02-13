@@ -2,21 +2,26 @@
 	pkgs,
 }:
 let
-	bin =
-		let
-			config = pkgs.writeTextFile {
-				name = "duckdbrc";
-				text = ''
-				'';
-			};
-		in
-		"${pkgs.duckdb}/bin/duckdb -init ${config}";
+	launcher = import ../launcher.nix { inherit pkgs; };
+	keepEnv = ["TERM" "DUCKDB_HISTORY"];
+	config = pkgs.writeTextFile {
+		name = "duckdbrc";
+		text = ''
+		'';
+	};
 	sandbox_restrictions = {
-		env = ["TERM" "DUCKDB_HISTORY"];
 		network = false;
 	};
+	bin = launcher.mkLauncher {
+		name = "duckdb";
+		target = "${pkgs.duckdb}/bin/duckdb";
+		inherit keepEnv;
+		setEnv = {
+			DUCKDB_HISTORY = "/tmp/.duckdb_history";
+		};
+		extraArgs = [ "-init" "${config}" ];
+	};
 	before = ''
-export DUCKDB_HISTORY=/tmp/.duckdb_history
 	'';
 
 	sandbox_setup = ''

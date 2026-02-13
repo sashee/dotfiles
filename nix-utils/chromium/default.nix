@@ -2,7 +2,7 @@
 	pkgs,
 }:
 let
-	bin = "${pkgs.ungoogled-chromium}/bin/chromium";
+	launcher = import ../launcher.nix { inherit pkgs; };
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "ro";
@@ -24,6 +24,10 @@ let
 		};
 		network = true;
 		mount_dev = true;
+	};
+	bin = launcher.mkLauncher {
+		name = "chromium";
+		target = "${pkgs.ungoogled-chromium}/bin/chromium";
 	};
 	before = "";
 

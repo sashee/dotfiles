@@ -2,10 +2,15 @@
 	pkgs,
 }:
 let
-	bin = "${pkgs.fx}/bin/fx";
+	launcher = import ../launcher.nix { inherit pkgs; };
+	keepEnv = ["TERM" "HOME"];
 	sandbox_restrictions = {
-		env = ["TERM" "HOME"];
 		network = false;
+	};
+	bin = launcher.mkLauncher {
+		name = "fx";
+		target = "${pkgs.fx}/bin/fx";
+		inherit keepEnv;
 	};
 	before = ''
 

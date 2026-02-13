@@ -3,6 +3,7 @@
 }:
 let
 	packageName = "nvim-custom";
+	launcher = import ../launcher.nix { inherit pkgs; };
 
 	eslintConfig = pkgs.writeText "eslint.config.js" ''
 export default [
@@ -79,29 +80,7 @@ export default [
 		}
 	'';
 
-	bin = ''
-		${pkgs.neovim-unwrapped}/bin/nvim \
-		-u ${./init.lua} \
-		--cmd 'set packpath^=${packpath} | set runtimepath^=${packpath}' \
-	'';
-
-	base_sandbox_restrictions = {
-		fs = {
-			"$HOME/.local/state/nvim" = "rw";
-			"$HOME/.local/share/nvim" = "rw";
-			"$HOME/.cache" = "rw";
-			"$HOME/.gitconfig" = "ro";
-		};
-		files = {
-			"/home/sashee/eslint.config.js" = "${eslintConfig}";
-		};
-		env = ["HOME" "PATH" "NVIM_RPLUGIN_MANIFEST" "TMPDIR" "SSL_CERT_FILE" "TERM" "LANG"];
-		network = false;
-	};
-
-	base_before = ''
-export PATH="${
-	pkgs.lib.makeBinPath [
+	nvimPath = pkgs.lib.makeBinPath [
 		pkgs.lua-language-server
 		pkgs.typescript-language-server
 		pkgs.bash
@@ -127,11 +106,51 @@ export PATH="${
 		pkgs.marksman
 		pkgs.terraform-ls
 		pkgs.nixd
-	]
-}"
-export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+	];
 
-export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
+	nvimExtraArgs = [
+		"-u"
+		"${./init.lua}"
+		"--cmd"
+		"set packpath^=${packpath} | set runtimepath^=${packpath}"
+	];
+
+	nvimSetEnv = {
+		PATH = nvimPath;
+		SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+		NVIM_RPLUGIN_MANIFEST = "${./rplugin.vim}";
+	};
+
+	nvim_bin = launcher.mkLauncher {
+		name = "nvim";
+		target = "${pkgs.neovim-unwrapped}/bin/nvim";
+		keepEnv = [ "HOME" "PATH" "NVIM_RPLUGIN_MANIFEST" "TMPDIR" "SSL_CERT_FILE" "TERM" "LANG" ];
+		setEnv = nvimSetEnv;
+		extraArgs = nvimExtraArgs;
+	};
+
+	nvim_net_bin = launcher.mkLauncher {
+		name = "nvim-net";
+		target = "${pkgs.neovim-unwrapped}/bin/nvim";
+		keepEnv = [ "HOME" "PATH" "NVIM_RPLUGIN_MANIFEST" "TMPDIR" "SSL_CERT_FILE" "TERM" "LANG" "AWS_REGION" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" ];
+		setEnv = nvimSetEnv;
+		extraArgs = nvimExtraArgs;
+	};
+
+	base_sandbox_restrictions = {
+		fs = {
+			"$HOME/.local/state/nvim" = "rw";
+			"$HOME/.local/share/nvim" = "rw";
+			"$HOME/.cache" = "rw";
+			"$HOME/.gitconfig" = "ro";
+		};
+		files = {
+			"/home/sashee/eslint.config.js" = "${eslintConfig}";
+		};
+		network = false;
+	};
+
+	base_before = ''
 	'';
 
 	base_sandbox_setup = ''
@@ -141,7 +160,8 @@ export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
 
 	nvim_scripts = (import ../_wrapper/default.nix {
 		name = "nvim";
-		inherit pkgs bin;
+		inherit pkgs;
+		bin = nvim_bin;
 		sandbox_restrictions = base_sandbox_restrictions;
 		before = base_before;
 		sandbox_setup = base_sandbox_setup;
@@ -149,9 +169,9 @@ export NVIM_RPLUGIN_MANIFEST=${./rplugin.vim}
 
 	nvim_net_scripts = (import ../_wrapper/default.nix {
 		name = "nvim-net";
-		inherit pkgs bin;
+		inherit pkgs;
+		bin = nvim_net_bin;
 		sandbox_restrictions = base_sandbox_restrictions // {
-			env = base_sandbox_restrictions.env ++ ["AWS_REGION" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN"];
 			network = true;
 		};
 		before = base_before;

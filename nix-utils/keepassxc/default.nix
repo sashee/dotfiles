@@ -2,7 +2,8 @@
 	pkgs,
 }:
 let
-	bin = "${pkgs.keepassxc}/bin/keepassxc";
+	launcher = import ../launcher.nix { inherit pkgs; };
+	keepEnv = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = "ro";
@@ -21,7 +22,6 @@ let
 				AF_INET6 = true;
 			};
 		};
-		env = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
 		network = true;  # Allow network namespace (for udev/netlink), but block inet via seccomp
 		mount_dev = true;
 		share_user = false;
@@ -29,6 +29,11 @@ let
 		share_pid = false;
 		share_cgroup = false;
 		share_uts = false;
+	};
+	bin = launcher.mkLauncher {
+		name = "keepassxc";
+		target = "${pkgs.keepassxc}/bin/keepassxc";
+		inherit keepEnv;
 	};
 	before = ''
 

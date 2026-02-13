@@ -89,7 +89,6 @@ impl ProxyHandle {
 
 pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32, RunnerError> {
     let host_env = host_env_map();
-    let resolved_env = resolve_env(&config, &host_env)?;
 
     let mut proxies = Vec::new();
     for proxy in &config.dbus.proxies {
@@ -152,12 +151,6 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
     }
 
     let mut cmd = Command::new(&config.bwrap.bin);
-
-    if config.env.clear {
-        cmd.env_clear();
-    }
-
-    cmd.envs(&resolved_env);
     cmd.args(&bwrap_args);
     cmd.arg(expand_value(&config.command.bin, &host_env));
     cmd.args(
@@ -418,24 +411,6 @@ fn wait_for_socket(socket_path: &str) -> Result<(), RunnerError> {
 
 fn host_env_map() -> HashMap<String, String> {
     std::env::vars().collect()
-}
-
-fn resolve_env(
-    config: &RunnerConfig,
-    host_env: &HashMap<String, String>,
-) -> Result<HashMap<String, String>, RunnerError> {
-    let mut env_map = HashMap::new();
-
-    for key in &config.env.passthrough {
-        let value = host_env.get(key).cloned().unwrap_or_default();
-        env_map.insert(key.clone(), value);
-    }
-
-    for (key, value) in &config.env.static_values {
-        env_map.insert(key.clone(), expand_value(value, host_env));
-    }
-
-    Ok(env_map)
 }
 
 fn append_mount_args(

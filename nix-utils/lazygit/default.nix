@@ -2,7 +2,8 @@
 	pkgs,
 }:
 let
-	bin = "${pkgs.lazygit}/bin/lazygit";
+	launcher = import ../launcher.nix { inherit pkgs; };
+	keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"];
 	sandbox_restrictions = {
 		fs = {
 			"$HOME/.ssh/known_hosts" = "ro";
@@ -11,17 +12,21 @@ let
 			"$HOME/.local/state/lazygit" = "rw";
 			"$SSH_AUTH_SOCK" = "rw";
 		};
-		env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"];
 		network = true;
 	};
- 	before = ''
-export PATH="${
-	pkgs.lib.makeBinPath [
-		pkgs.git
-		pkgs.openssh
-		pkgs.tree
-	]
-}"
+	bin = launcher.mkLauncher {
+		name = "lazygit";
+		target = "${pkgs.lazygit}/bin/lazygit";
+		inherit keepEnv;
+		setEnv = {
+			PATH = pkgs.lib.makeBinPath [
+				pkgs.git
+				pkgs.openssh
+				pkgs.tree
+			];
+		};
+	};
+	before = ''
 	'';
 
 	sandbox_setup = ''

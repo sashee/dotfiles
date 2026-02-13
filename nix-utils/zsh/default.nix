@@ -4,6 +4,7 @@
 }:
 let
 	consts = import ../consts.nix;
+	launcher = import ../launcher.nix { inherit pkgs; };
 
 	# Base filesystem restrictions for zsh
 	# Note: bwrap does --ro-bind / / so system paths are already available read-only
@@ -85,11 +86,17 @@ autoload -U +X bashcompinit && bashcompinit
 export PROMPT="$PROMPT_PREF$PROMPT"
 	'';
 
-	bin = "${pkgs.zsh}/bin/zsh";
+	bin = launcher.mkLauncher {
+		name = "zsh";
+		target = "${pkgs.zsh}/bin/zsh";
+		setEnv = {
+			ZDOTDIR = "${config}";
+			"${consts.SKIP_SANDBOX_ENV_VAR_NAME}" = "false";
+		};
+	};
 
 	before = ''
 	${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/zsh/zsh_history
-	export ZDOTDIR=${config}
 	'';
 
 	sandbox_setup = ''
@@ -99,14 +106,14 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 	zsh_scripts = (import ../_wrapper/default.nix {
 		name = "zsh";
 		inherit pkgs bin;
-		sandbox_restrictions = merged_restrictions // { network = true; allow_nested_sandbox = true; share_pid = true; };  # with network
+		sandbox_restrictions = merged_restrictions // { network = true; share_pid = true; };  # with network
 		inherit before sandbox_setup;
 	}).scripts;
 
- 	zsh_nonet_scripts = (import ../_wrapper/default.nix {
+  	zsh_nonet_scripts = (import ../_wrapper/default.nix {
   		name = "zsh-nonet";
   		inherit pkgs bin;
-  		sandbox_restrictions = merged_restrictions // { allow_nested_sandbox = true; share_pid = true; };  # same fs/env as zsh, no network (no network key)
+	  		sandbox_restrictions = merged_restrictions // { share_pid = true; };  # same fs/env as zsh, no network (no network key)
   		inherit before sandbox_setup;
   		generate_unsafe = false;
   	}).scripts;

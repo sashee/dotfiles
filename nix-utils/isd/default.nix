@@ -3,7 +3,8 @@
 	nvim,
 }:
 let
-	bin = "${pkgs.isd}/bin/isd";
+	launcher = import ../launcher.nix { inherit pkgs; };
+	keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "DBUS_SESSION_BUS_ADDRESS" "VISUAL" "EDITOR"];
 	sandbox_restrictions = {
 		fs = {
 			"$HOME/.config/isd_tui" = "rw";
@@ -12,11 +13,17 @@ let
 			"/run/user/1000/bus" = "ro";
 			"/run/dbus/system_bus_socket" = "ro";
 		};
-		env = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "DBUS_SESSION_BUS_ADDRESS" "VISUAL" "EDITOR"];
 		network = false;
 	};
+	bin = launcher.mkLauncher {
+		name = "isd";
+		target = "${pkgs.isd}/bin/isd";
+		inherit keepEnv;
+		setEnv = {
+			VISUAL = "${builtins.elemAt nvim.scripts 0}/bin/nvim";
+		};
+	};
 	before = ''
-	export VISUAL="${builtins.elemAt nvim.scripts 0}/bin/nvim"
 	'';
 
 	sandbox_setup = ''

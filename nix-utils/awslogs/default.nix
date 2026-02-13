@@ -2,16 +2,23 @@
 	pkgs,
 }:
 let
-	bin = "${pkgs.awslogs}/bin/awslogs";
+	launcher = import ../launcher.nix { inherit pkgs; };
+	keepEnv = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" "AWS_REGION" "LANG" "TERM"];
 	sandbox_restrictions = {
 		fs = {
 			"$HOME/.aws" = "ro";
 		};
-		env = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "AWS_ACCESS_KEY_ID" "AWS_SECRET_ACCESS_KEY" "AWS_SESSION_TOKEN" "AWS_REGION" "LANG" "TERM"];
 		network = true;
 	};
+	bin = launcher.mkLauncher {
+		name = "awslogs";
+		target = "${pkgs.awslogs}/bin/awslogs";
+		inherit keepEnv;
+		setEnv = {
+			SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+		};
+	};
 	before = ''
-export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 	'';
 
 	sandbox_setup = ''

@@ -4,6 +4,8 @@
 	nvim,
 }:
 let
+	consts = import ../consts.nix;
+	launcher = import ../launcher.nix { inherit pkgs; };
 	config = pkgs.writeTextFile {
 		name = "config.kdl";
 		text = ''
@@ -46,7 +48,14 @@ keybinds {
 		'';
 	};
 
-	bin = "${pkgs.zellij}/bin/zellij --config ${config}";
+	bin = launcher.mkLauncher {
+		name = "zellij";
+		target = "${pkgs.zellij}/bin/zellij";
+		extraArgs = [ "--config" "${config}" ];
+		setEnv = {
+			"${consts.SKIP_SANDBOX_ENV_VAR_NAME}" = "false";
+		};
+	};
 
 	before = ''
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache/zellij
@@ -66,7 +75,7 @@ in
 	scripts = (import ../_wrapper/default.nix {
 		name = "zellij";
 		inherit pkgs bin;
-		sandbox_restrictions = merged_sandbox_restrictions // { network = true; allow_nested_sandbox = true; };
+		sandbox_restrictions = merged_sandbox_restrictions // { network = true; };
 		inherit before sandbox_setup;
 	}).scripts;
 	sandbox_restrictions = merged_sandbox_restrictions;

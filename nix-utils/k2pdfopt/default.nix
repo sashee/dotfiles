@@ -2,10 +2,15 @@
 	pkgs,
 }:
 let
-	bin = "${pkgs.k2pdfopt}/bin/k2pdfopt";
+	launcher = import ../launcher.nix { inherit pkgs; };
+	keepEnv = ["TERM"];
 	sandbox_restrictions = {
-		env = ["TERM"];
 		network = false;
+	};
+	bin = launcher.mkLauncher {
+		name = "k2pdfopt";
+		target = "${pkgs.k2pdfopt}/bin/k2pdfopt";
+		inherit keepEnv;
 	};
 	before = ''
 

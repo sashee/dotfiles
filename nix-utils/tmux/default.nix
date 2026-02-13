@@ -3,6 +3,7 @@
 	pkgs,
 }:
 let
+	launcher = import ../launcher.nix { inherit pkgs; };
 	config = pkgs.writeTextFile {
 		name = "tmux.conf";
 		text = ''
@@ -38,7 +39,11 @@ set-option -ga update-environment ' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_
 		'';
 	};
 
-	bin = "${pkgs.tmux}/bin/tmux -f ${config}";
+	bin = launcher.mkLauncher {
+		name = "tmux";
+		target = "${pkgs.tmux}/bin/tmux";
+		extraArgs = [ "-f" "${config}" ];
+	};
 
 	before = ''
 

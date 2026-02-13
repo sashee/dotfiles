@@ -2,10 +2,15 @@
 	pkgs,
 }:
 let
-	bin = "${pkgs.sqlite}/bin/sqlite3";
+	launcher = import ../launcher.nix { inherit pkgs; };
+	keepEnv = ["TERM"];
 	sandbox_restrictions = {
-		env = ["TERM"];
 		network = false;
+	};
+	bin = launcher.mkLauncher {
+		name = "sqlite3";
+		target = "${pkgs.sqlite}/bin/sqlite3";
+		inherit keepEnv;
 	};
 	before = ''
 	'';

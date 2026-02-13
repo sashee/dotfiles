@@ -2,8 +2,7 @@
 	pkgs,
 }:
 let
-	consts = import ../consts.nix;
-
+	launcher = import ../launcher.nix { inherit pkgs; };
 	base_sandbox_restrictions = {
 		fs = {
 			"$HOME/.npm" = "rw";
@@ -13,24 +12,39 @@ let
 		network = true;
 	};
 
+	certEnv = {
+		SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+		NODE_EXTRA_CA_CERTS = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+	};
+
+	node_tool_bin = launcher.mkLauncher {
+		name = "node";
+		target = "${pkgs.nodePackages_latest.nodejs}/bin/node";
+		setEnv = certEnv;
+	};
+
+	npm_bin = node_tool_bin.override {
+		name = "npm";
+		target = "${pkgs.nodePackages_latest.nodejs}/bin/npm";
+	};
+
+	node_bin = node_tool_bin;
+
+	npx_bin = node_tool_bin.override {
+		name = "npx";
+		target = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
+	};
+
 	base_before = ''
-export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
-export NODE_EXTRA_CA_CERTS=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 	'';
 
 	base_sandbox_setup = ''
-export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
-export NODE_EXTRA_CA_CERTS=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
-	'';
-
-	npx_before = base_before + ''
-export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 	'';
 
 	npm_scripts = (import ../_wrapper/default.nix {
 		name = "npm";
 		inherit pkgs;
-		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npm";
+		bin = npm_bin;
 		sandbox_restrictions = base_sandbox_restrictions;
 		before = base_before;
 		sandbox_setup = base_sandbox_setup;
@@ -39,37 +53,37 @@ export ${consts.SKIP_SANDBOX_ENV_VAR_NAME}="true"
 	node_scripts = (import ../_wrapper/default.nix {
 		name = "node";
 		inherit pkgs;
-		bin = "${pkgs.nodePackages_latest.nodejs}/bin/node";
+		bin = node_bin;
 		sandbox_restrictions = base_sandbox_restrictions;
 		before = base_before;
 		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
- 	node_nonet_scripts = (import ../_wrapper/default.nix {
- 		name = "node-nonet";
- 		inherit pkgs;
- 		bin = "${pkgs.nodePackages_latest.nodejs}/bin/node";
- 		sandbox_restrictions = {};  # unrestricted filesystem, no network
- 		before = base_before;
- 		sandbox_setup = base_sandbox_setup;
+  	node_nonet_scripts = (import ../_wrapper/default.nix {
+  		name = "node-nonet";
+  		inherit pkgs;
+	  		bin = node_bin;
+  		sandbox_restrictions = {};  # unrestricted filesystem, no network
+  		before = base_before;
+  		sandbox_setup = base_sandbox_setup;
  		generate_unsafe = false;
  	}).scripts;
 
 	npx_scripts = (import ../_wrapper/default.nix {
 		name = "npx";
 		inherit pkgs;
-		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
+		bin = npx_bin;
 		sandbox_restrictions = base_sandbox_restrictions;
-		before = npx_before;
+		before = base_before;
 		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
 	npx_fullnet_scripts = (import ../_wrapper/default.nix {
 		name = "npx-fullnet";
 		inherit pkgs;
-		bin = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
+		bin = npx_bin;
 		sandbox_restrictions = base_sandbox_restrictions // { network = true; };  # with network
-		before = npx_before;
+		before = base_before;
 		sandbox_setup = base_sandbox_setup;
 		generate_unsafe = false;
 	}).scripts;

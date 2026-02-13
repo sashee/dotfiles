@@ -2,6 +2,8 @@
 	pkgs,
 }:
 let
+	launcher = import ../launcher.nix { inherit pkgs; };
+	keepEnv = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "LANG" "TERM" "OPENCODE_CONFIG"];
 	nixpkgs2 = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-unstable";
 	pkgs2 = import nixpkgs2 { config = {allowUnfree = true;}; overlays = [];};
 
@@ -16,7 +18,6 @@ let
 		'';
 	};
 
-	bin = "${pkgs2.opencode}/bin/opencode";
 	sandbox_restrictions = {
 		fs = {
 			"$HOME/.local/share/opencode" = "rw";
@@ -24,11 +25,17 @@ let
 			"$HOME/.local/state/opencode" = "rw";
 			"$HOME/.cache/opencode" = "rw";
 		};
-		env = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "LANG" "TERM" "OPENCODE_CONFIG"];
 		network = true;
 	};
+	bin = launcher.mkLauncher {
+		name = "opencode";
+		target = "${pkgs2.opencode}/bin/opencode";
+		inherit keepEnv;
+		setEnv = {
+			OPENCODE_CONFIG = "${config}";
+		};
+	};
 	before = ''
-export OPENCODE_CONFIG=${config}
 	'';
 
 	sandbox_setup = ''

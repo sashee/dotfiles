@@ -8,7 +8,6 @@ use crate::error::RunnerError;
 #[derive(Debug, Deserialize)]
 pub struct RunnerConfig {
     pub program_name: String,
-    pub env: EnvConfig,
     pub bwrap: BwrapConfig,
     pub command: CommandConfig,
     #[serde(default)]
@@ -19,16 +18,6 @@ pub struct RunnerConfig {
     pub dbus: DbusConfig,
     #[serde(default)]
     pub restrict_to_git_root: bool,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct EnvConfig {
-    #[serde(default)]
-    pub clear: bool,
-    #[serde(default)]
-    pub passthrough: Vec<String>,
-    #[serde(default)]
-    pub static_values: HashMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]

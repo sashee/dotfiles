@@ -2,18 +2,22 @@
 	pkgs,
 }:
 let
-	bin = "${pkgs.lazysql}/bin/lazysql";
+	launcher = import ../launcher.nix { inherit pkgs; };
+	keepEnv = ["TERM" "HOME" "PATH"];
 	sandbox_restrictions = {
-		env = ["TERM" "HOME" "PATH"];
 		network = false;
 	};
+	bin = launcher.mkLauncher {
+		name = "lazysql";
+		target = "${pkgs.lazysql}/bin/lazysql";
+		inherit keepEnv;
+		setEnv = {
+			PATH = pkgs.lib.makeBinPath [
+				pkgs.ncurses
+			];
+		};
+	};
 	before = ''
-export PATH="${
-	pkgs.lib.makeBinPath [
-		pkgs.ncurses
-	]
-}"
-
 	'';
 
 	sandbox_setup = ''

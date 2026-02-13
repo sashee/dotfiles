@@ -3,6 +3,13 @@ let
   debugLogDir = "/tmp/nix-utils-debug";
   consts = import ../consts.nix;
   runner = import ./runner/default.nix { inherit pkgs; };
+  binPath = bin.path;
+  debugBinPath =
+    (bin.override {
+      name = "${name}-debug-shell";
+      target = "${pkgs.bash}/bin/bash";
+      extraArgs = [];
+    }).path;
 
   validateNoConflicts = let
     fsPaths' = builtins.attrNames (sandbox_restrictions.fs or {});
@@ -110,21 +117,9 @@ let
       "--tmpfs" "/etc/ssh/ssh_config.d"
     ];
 
-  envPassthrough =
-    let
-      base = pkgs.lib.unique (sandbox_restrictions.env or []);
-    in if (sandbox_restrictions.allow_nested_sandbox or false)
-      then base
-      else base ++ [ consts.SKIP_SANDBOX_ENV_VAR_NAME ];
-
   mkRunnerConfig = { commandString, extraBwrapArgs ? [], extraMountRules ? [] }:
     builtins.toJSON {
       program_name = name;
-      env = {
-        clear = builtins.hasAttr "env" sandbox_restrictions;
-        passthrough = envPassthrough;
-        static_values = {};
-      };
       bwrap = {
         bin = "${pkgs.bubblewrap}/bin/bwrap";
         args = bwrapBaseArgs ++ extraBwrapArgs;
@@ -162,8 +157,8 @@ let
 #!${pkgs.bash}/bin/bash
 set -eo pipefail
 
-if [ -n "$(${pkgs.coreutils}/bin/printenv ${consts.SKIP_SANDBOX_ENV_VAR_NAME} 2>/dev/null || true)" ]; then
-  echo "[${name}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME} is defined" >&2
+if [ "$(${pkgs.coreutils}/bin/printenv ${consts.SKIP_SANDBOX_ENV_VAR_NAME} 2>/dev/null || true)" = "true" ]; then
+  echo "[${name}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME}=true" >&2
   ${before}
   ${extraBefore}
   __nix_utils_cmd=$(cat <<'__NIX_UTILS_CMD__'
@@ -216,11 +211,11 @@ fi
   scripts = [
     (mkWrappedScript {
       scriptName = name;
-      commandString = bin;
+      commandString = binPath;
     })
     (mkWrappedScript {
       scriptName = "${name}-strace";
-      commandString = "${pkgs.strace}/bin/strace -f -e trace=%network,%file,%desc,%process -s 2000 -yy -o ${debugLogDir}/${name}-strace.log ${bin}";
+      commandString = "${pkgs.strace}/bin/strace -f -e trace=%network,%file,%desc,%process -s 2000 -yy -o ${debugLogDir}/${name}-strace.log ${binPath}";
       extraBwrapArgs = [ "--bind" debugLogDir debugLogDir ];
       extraBefore = ''
 ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
@@ -229,7 +224,7 @@ ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
     })
     (mkWrappedScript {
       scriptName = "${name}-debug";
-      commandString = "${pkgs.strace}/bin/strace -o ${debugLogDir}/${name}-strace.log ${pkgs.bash}/bin/bash";
+      commandString = "${pkgs.strace}/bin/strace -o ${debugLogDir}/${name}-strace.log ${debugBinPath}";
       extraBwrapArgs = [ "--bind" debugLogDir debugLogDir ];
       extraBefore = ''
 ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
@@ -244,7 +239,7 @@ ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
   ] ++ (
     if generate_unsafe then [
       (pkgs.writeScriptBin "${name}-unsafe" (mkRunScript {
-        commandString = bin;
+        commandString = binPath;
         runSandboxSetup = false;
       }))
     ] else []
