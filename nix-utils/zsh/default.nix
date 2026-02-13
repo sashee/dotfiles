@@ -10,13 +10,13 @@ let
 	# Note: bwrap does --ro-bind / / so system paths are already available read-only
 	# We only need to specify home directory paths that need write access
 	base_fs = {
-		"$HOME/.local/share/zsh" = "rw";
-		"$HOME/.cache" = "rw";
-		"$HOME/.wine" = "rw";
-		"$HOME/.vkquake" = "rw";
-		"$HOME/.local/share/freeorion" = "rw";
-		"$HOME/.config/freeorion" = "rw";
-		"$HOME/.config/transmission" = "rw";
+		"$HOME/.local/share/zsh" = { perm = "rw"; mkdir = true; };
+		"$HOME/.cache" = { perm = "rw"; };
+		"$HOME/.wine" = { perm = "rw"; };
+		"$HOME/.vkquake" = { perm = "rw"; };
+		"$HOME/.local/share/freeorion" = { perm = "rw"; };
+		"$HOME/.config/freeorion" = { perm = "rw"; };
+		"$HOME/.config/transmission" = { perm = "rw"; };
 	};
 
 
@@ -95,28 +95,20 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 		};
 	};
 
-	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/zsh/zsh_history
-		${builtins.concatStringsSep "\n" (map (prg: prg.sandbox_setup or "") prgs)}
-	'';
-
 	zsh_scripts = (import ../_wrapper/default.nix {
 		name = "zsh";
 		inherit pkgs bin;
 		sandbox_restrictions = merged_restrictions // { network = true; share_pid = true; };  # with network
-		inherit sandbox_setup;
 	}).scripts;
 
   	zsh_nonet_scripts = (import ../_wrapper/default.nix {
   		name = "zsh-nonet";
-  		inherit pkgs bin;
-	  		sandbox_restrictions = merged_restrictions // { share_pid = true; };  # same fs/env as zsh, no network (no network key)
-	  		inherit sandbox_setup;
-  		generate_unsafe = false;
-  	}).scripts;
+	  		inherit pkgs bin;
+		  		sandbox_restrictions = merged_restrictions // { share_pid = true; };  # same fs/env as zsh, no network (no network key)
+	  		generate_unsafe = false;
+	  	}).scripts;
  in
  {
  	scripts = zsh_scripts ++ zsh_nonet_scripts;
  	sandbox_restrictions = merged_restrictions;
- 	sandbox_setup = sandbox_setup;
  }

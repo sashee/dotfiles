@@ -7,20 +7,16 @@ let
 
 	sandbox_restrictions = {
 		fs = {
-			"/tmp/.X11-unix" = "ro";
-			"$HOME/.Xauthority" = "ro";
-			"$HOME/.config/libreoffice" = "rw";
+			"/tmp/.X11-unix" = { perm = "ro"; };
+			"$HOME/.Xauthority" = { perm = "ro"; };
+			"$HOME/.config/libreoffice" = { perm = "rw"; mkdir = true; };
 		};
 		network = false;
 	};
 
-	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/libreoffice
-	'';
-
 	scripts = builtins.concatLists (map (bin: (import ../_wrapper/default.nix {
 		name = builtins.baseNameOf bin;
-		inherit pkgs sandbox_restrictions sandbox_setup;
+		inherit pkgs sandbox_restrictions;
 		bin = launcher.mkLauncher {
 			name = builtins.baseNameOf bin;
 			target = bin;

@@ -5,22 +5,22 @@ let
 	launcher = import ../launcher.nix { inherit pkgs; };
 	sandbox_restrictions = {
 		fs = {
-			"/tmp/.X11-unix" = "ro";
-			"$HOME/.Xauthority" = "ro";
-			"$HOME/.XCompose" = "ro";
-			"$HOME/.config/chromium" = "rw";
-			"$HOME/Downloads" = "rw";
-			"$HOME/.cache/chromium" = "rw";
-			"$HOME/.local/share/chromium" = "rw";
-			"/etc/hostname" = "ro";
-			"/run/user/1000" = "ro";
-			"/run/user/1000/bus" = "ro";
-			"/run/user/1000/pipewire-0" = "ro";
-			"/run/user/1000/pipewire-0-manager" = "ro";
-			"/run/user/1000/pulse" = "ro";
-			"/tmp" = "rw";
-			"/usr/share/keyd" = "ro";
-			"/usr/share/keyd/keyd.compose" = "ro";
+			"/tmp/.X11-unix" = { perm = "ro"; };
+			"$HOME/.Xauthority" = { perm = "ro"; };
+			"$HOME/.XCompose" = { perm = "ro"; };
+			"$HOME/.config/chromium" = { perm = "rw"; mkdir = true; };
+			"$HOME/Downloads" = { perm = "rw"; };
+			"$HOME/.cache/chromium" = { perm = "rw"; mkdir = true; };
+			"$HOME/.local/share/chromium" = { perm = "rw"; mkdir = true; };
+			"/etc/hostname" = { perm = "ro"; };
+			"/run/user/1000" = { perm = "ro"; };
+			"/run/user/1000/bus" = { perm = "ro"; };
+			"/run/user/1000/pipewire-0" = { perm = "ro"; };
+			"/run/user/1000/pipewire-0-manager" = { perm = "ro"; };
+			"/run/user/1000/pulse" = { perm = "ro"; };
+			"/tmp" = { perm = "rw"; };
+			"/usr/share/keyd" = { perm = "ro"; };
+			"/usr/share/keyd/keyd.compose" = { perm = "ro"; };
 		};
 		network = true;
 		mount_dev = true;
@@ -29,16 +29,11 @@ let
 		name = "chromium";
 		target = "${pkgs.ungoogled-chromium}/bin/chromium";
 	};
-	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/chromium
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache/chromium
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/chromium
-	'';
 in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "chromium";
-		inherit pkgs bin sandbox_restrictions sandbox_setup;
+		inherit pkgs bin sandbox_restrictions;
 		restrict_to_current_folder = false;
 	}).scripts;
 	inherit sandbox_restrictions;

@@ -6,11 +6,11 @@ let
 	launcher = import ../launcher.nix { inherit pkgs; };
 	sandbox_restrictions = {
 		fs = {
-			"$HOME/.config/isd_tui" = "rw";
-			"$HOME/.local/share/isd_tui" = "rw";
-			"$HOME/.cache/isd_tui" = "rw";
-			"/run/user/1000/bus" = "ro";
-			"/run/dbus/system_bus_socket" = "ro";
+			"$HOME/.config/isd_tui" = { perm = "rw"; mkdir = true; };
+			"$HOME/.local/share/isd_tui" = { perm = "rw"; mkdir = true; };
+			"$HOME/.cache/isd_tui" = { perm = "rw"; mkdir = true; };
+			"/run/user/1000/bus" = { perm = "ro"; };
+			"/run/dbus/system_bus_socket" = { perm = "ro"; };
 		};
 		network = false;
 	};
@@ -22,16 +22,11 @@ let
 			VISUAL = "${builtins.elemAt nvim.scripts 0}/bin/nvim";
 		};
 	};
-	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/isd_tui
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/isd_tui
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache/isd_tui
-	'';
 in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "isd";
-		inherit pkgs bin sandbox_restrictions sandbox_setup;
+		inherit pkgs bin sandbox_restrictions;
 	}).scripts;
 	inherit sandbox_restrictions;
 }

@@ -132,10 +132,10 @@ export default [
 
 	base_sandbox_restrictions = {
 		fs = {
-			"$HOME/.local/state/nvim" = "rw";
-			"$HOME/.local/share/nvim" = "rw";
-			"$HOME/.cache" = "rw";
-			"$HOME/.gitconfig" = "ro";
+			"$HOME/.local/state/nvim" = { perm = "rw"; mkdir = true; };
+			"$HOME/.local/share/nvim" = { perm = "rw"; };
+			"$HOME/.cache" = { perm = "rw"; mkdir = true; };
+			"$HOME/.gitconfig" = { perm = "ro"; };
 		};
 		files = {
 			"/home/sashee/eslint.config.js" = "${eslintConfig}";
@@ -143,17 +143,11 @@ export default [
 		network = false;
 	};
 
-	base_sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/state/nvim
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache
-	'';
-
 	nvim_scripts = (import ../_wrapper/default.nix {
 		name = "nvim";
 		inherit pkgs;
 		bin = nvim_bin;
 		sandbox_restrictions = base_sandbox_restrictions;
-		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
 	nvim_net_scripts = (import ../_wrapper/default.nix {
@@ -163,7 +157,6 @@ export default [
 		sandbox_restrictions = base_sandbox_restrictions // {
 			network = true;
 		};
-		sandbox_setup = base_sandbox_setup;
 		generate_unsafe = false;
 	}).scripts;
 in

@@ -5,7 +5,7 @@ let
 	launcher = import ../launcher.nix { inherit pkgs; };
 	sandbox_restrictions = {
 		fs = {
-			"$HOME/.aws" = "ro";
+			"$HOME/.aws" = { perm = "ro"; };
 		};
 		network = true;
 	};

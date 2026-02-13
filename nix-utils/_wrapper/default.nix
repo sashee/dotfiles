@@ -1,4 +1,4 @@
-{ pkgs, name, sandbox_restrictions, bin, sandbox_setup ? "", generate_unsafe ? true, restrict_to_current_folder ? true }:
+{ pkgs, name, sandbox_restrictions, bin, generate_unsafe ? true, restrict_to_current_folder ? true }:
 let
   debugLogDir = "/tmp/nix-utils-debug";
   consts = import ../consts.nix;
@@ -63,13 +63,17 @@ let
     source = null;
   }) protectedToBlock;
 
-  explicitEntries = map (p: {
-    path = p;
-    perm = builtins.getAttr p explicitFs;
-    type = let
-      matching = builtins.filter (pp: pp.path == p) consts.protectedPaths;
-    in if matching == [] then "dir" else (builtins.head matching).type;
-    source = null;
+  explicitEntries = map (p:
+    let
+      entry = builtins.getAttr p explicitFs;
+    in {
+      path = p;
+      perm = entry.perm;
+      type = let
+        matching = builtins.filter (pp: pp.path == p) consts.protectedPaths;
+      in if matching == [] then "dir" else (builtins.head matching).type;
+      source = null;
+      mkdir = entry.mkdir or false;
   }) explicitPaths;
 
   fileEntries = map (dest: {
@@ -77,6 +81,7 @@ let
     perm = "ro";
     type = "file";
     source = builtins.getAttr dest (sandbox_restrictions.files or {});
+    mkdir = false;
   }) (builtins.attrNames (sandbox_restrictions.files or {}));
 
   allEntries = protectedEntries ++ explicitEntries ++ fileEntries;
@@ -93,6 +98,7 @@ let
       perm = winner.perm;
       type = winner.type;
       source = winner.source;
+      mkdir = winner.mkdir or false;
     }
   ) (builtins.attrNames groupedByPath);
 
@@ -155,7 +161,7 @@ let
       restrict_to_git_root = restrict_to_current_folder;
     };
 
-  mkRunScript = { commandString, configFile ? null, extraBefore ? "", runSandboxSetup ? true }:
+  mkRunScript = { commandString, configFile ? null, extraBefore ? "" }:
     ''
 #!${pkgs.bash}/bin/bash
 set -eo pipefail
@@ -169,7 +175,6 @@ __NIX_UTILS_CMD__
 )
   exec ${pkgs.bash}/bin/bash --noprofile --norc -c "$__nix_utils_cmd \"\$@\"" -- "$@"
 else
-  ${if runSandboxSetup then sandbox_setup else ""}
   ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
   ${extraBefore}
   ${if configFile == null then
@@ -245,7 +250,6 @@ ${pkgs.jq}/bin/jq . ${sandboxRestrictionsFile} >&2
     if generate_unsafe then [
       (pkgs.writeScriptBin "${name}-unsafe" (mkRunScript {
         commandString = binPath;
-        runSandboxSetup = false;
       }))
     ] else []
   );

@@ -9,8 +9,8 @@ let
 	'';
 	sandbox_restrictions = {
 		fs = {
-			"/run/user/1000/bus" = "ro";
-			"/run/dbus/system_bus_socket" = "ro";
+			"/run/user/1000/bus" = { perm = "ro"; };
+			"/run/dbus/system_bus_socket" = { perm = "ro"; };
 		};
 		network = false;
 	};
@@ -21,15 +21,11 @@ let
 			XDG_CONFIG_HOME = "${config}";
 		};
 	};
-	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/bluetuith
-
-	'';
 in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "bluetuith";
-		inherit pkgs bin sandbox_restrictions sandbox_setup;
+		inherit pkgs bin sandbox_restrictions;
 	}).scripts;
 	inherit sandbox_restrictions;
 }

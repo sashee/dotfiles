@@ -5,11 +5,11 @@ let
 	launcher = import ../launcher.nix { inherit pkgs; };
 	sandbox_restrictions = {
 		fs = {
-			"$HOME/.ssh/known_hosts" = "ro";
-			"$HOME/.gitconfig" = "ro";
-			"$HOME/.config/lazygit" = "rw";
-			"$HOME/.local/state/lazygit" = "rw";
-			"$SSH_AUTH_SOCK" = "rw";
+			"$HOME/.ssh/known_hosts" = { perm = "ro"; };
+			"$HOME/.gitconfig" = { perm = "ro"; };
+			"$HOME/.config/lazygit" = { perm = "rw"; mkdir = true; };
+			"$HOME/.local/state/lazygit" = { perm = "rw"; };
+			"$SSH_AUTH_SOCK" = { perm = "rw"; };
 		};
 		network = true;
 	};
@@ -25,14 +25,11 @@ let
 			];
 		};
 	};
-	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/lazygit
-	'';
 in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "lazygit";
-		inherit pkgs bin sandbox_restrictions sandbox_setup;
+		inherit pkgs bin sandbox_restrictions;
 	}).scripts;
 	inherit sandbox_restrictions;
 }

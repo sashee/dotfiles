@@ -5,9 +5,9 @@ let
 	launcher = import ../launcher.nix { inherit pkgs; };
 	base_sandbox_restrictions = {
 		fs = {
-			"$HOME/.npm" = "rw";
-			"$HOME/.npmrc" = "rw";
-			"$HOME/.cache" = "rw";
+			"$HOME/.npm" = { perm = "rw"; };
+			"$HOME/.npmrc" = { perm = "rw"; };
+			"$HOME/.cache" = { perm = "rw"; };
 		};
 		network = true;
 	};

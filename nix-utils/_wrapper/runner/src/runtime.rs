@@ -137,6 +137,8 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
         bwrap_args.push(restrict_path);
     }
 
+    ensure_mount_dirs(&config.mounts, &host_env)?;
+
     append_mount_args(&mut bwrap_args, &config.mounts, &host_env);
 
     for proxy in proxies.iter() {
@@ -460,6 +462,25 @@ fn append_mount_args(
             _ => {}
         }
     }
+}
+
+fn ensure_mount_dirs(
+    mounts: &[MountRule],
+    host_env: &HashMap<String, String>,
+) -> Result<(), RunnerError> {
+    for mount in mounts {
+        if !mount.mkdir || mount.source.is_some() || mount.r#type != "dir" {
+            continue;
+        }
+
+        let path = expand_value(&mount.path, host_env);
+        fs::create_dir_all(&path).map_err(|source| RunnerError::CreateDir {
+            path: path.into(),
+            source,
+        })?;
+    }
+
+    Ok(())
 }
 
 fn expand_value(input: &str, env_map: &HashMap<String, String>) -> String {

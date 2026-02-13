@@ -44,6 +44,8 @@ pub struct MountRule {
     pub r#type: String,
     #[serde(default)]
     pub source: Option<String>,
+    #[serde(default)]
+    pub mkdir: bool,
 }
 
 #[derive(Debug, Deserialize)]

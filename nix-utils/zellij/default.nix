@@ -57,16 +57,12 @@ keybinds {
 		};
 	};
 
-	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache/zellij
-		${zsh.sandbox_setup}
-	'';
 	merged_sandbox_restrictions = zsh.sandbox_restrictions // {
 		dont_die_with_parent = true;
 		share_pid = true;
 		fs = (zsh.sandbox_restrictions.fs or {}) // {
-			"/run/user/1000" = "rw";
-			"$HOME/.cache/zellij" = "rw";
+			"/run/user/1000" = { perm = "rw"; };
+			"$HOME/.cache/zellij" = { perm = "rw"; mkdir = true; };
 		};
 	};
 in
@@ -75,7 +71,6 @@ in
 		name = "zellij";
 		inherit pkgs bin;
 		sandbox_restrictions = merged_sandbox_restrictions // { network = true; };
-		inherit sandbox_setup;
 	}).scripts;
 	sandbox_restrictions = merged_sandbox_restrictions;
 }

@@ -19,10 +19,10 @@ let
 
 	sandbox_restrictions = {
 		fs = {
-			"$HOME/.local/share/opencode" = "rw";
-			"$HOME/.config/opencode" = "rw";
-			"$HOME/.local/state/opencode" = "rw";
-			"$HOME/.cache/opencode" = "rw";
+			"$HOME/.local/share/opencode" = { perm = "rw"; mkdir = true; };
+			"$HOME/.config/opencode" = { perm = "rw"; mkdir = true; };
+			"$HOME/.local/state/opencode" = { perm = "rw"; mkdir = true; };
+			"$HOME/.cache/opencode" = { perm = "rw"; mkdir = true; };
 		};
 		network = true;
 	};
@@ -34,17 +34,11 @@ let
 			OPENCODE_CONFIG = "${config}";
 		};
 	};
-	sandbox_setup = ''
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/opencode
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/opencode
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/state/opencode
-		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache/opencode
-	'';
 in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "opencode";
-		inherit pkgs bin sandbox_restrictions sandbox_setup;
+		inherit pkgs bin sandbox_restrictions;
 	}).scripts;
 	inherit sandbox_restrictions;
 }
