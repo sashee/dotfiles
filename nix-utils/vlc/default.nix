@@ -20,10 +20,6 @@ let
 		keepEnv = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR"];
 		extraArgs = [ "--no-qt-privacy-ask" ];
 	};
-	before = ''
-
-	'';
-
 	sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/vlc
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/vlc
@@ -32,7 +28,7 @@ in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "vlc";
-		inherit pkgs bin sandbox_restrictions before sandbox_setup;
+		inherit pkgs bin sandbox_restrictions sandbox_setup;
 	}).scripts;
 	inherit sandbox_restrictions;
 }

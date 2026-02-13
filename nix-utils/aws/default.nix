@@ -17,17 +17,11 @@ let
 			SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
 		};
 	};
-	before = ''
-	'';
-
-	sandbox_setup = ''
-
-	'';
 in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "aws";
-		inherit pkgs bin sandbox_restrictions before sandbox_setup;
+		inherit pkgs bin sandbox_restrictions;
 	}).scripts;
 	inherit sandbox_restrictions;
 }

@@ -14,17 +14,13 @@ let
 		network = false;
 	};
 
-	before = ''
-
-	'';
-
 	sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/libreoffice
 	'';
 
 	scripts = builtins.concatLists (map (bin: (import ../_wrapper/default.nix {
 		name = builtins.baseNameOf bin;
-		inherit pkgs sandbox_restrictions before sandbox_setup;
+		inherit pkgs sandbox_restrictions sandbox_setup;
 		bin = launcher.mkLauncher {
 			name = builtins.baseNameOf bin;
 			target = bin;

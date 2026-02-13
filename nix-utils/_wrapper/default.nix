@@ -1,4 +1,4 @@
-{ pkgs, name, sandbox_restrictions, sandbox_setup, before, bin, generate_unsafe ? true, restrict_to_current_folder ? true }:
+{ pkgs, name, sandbox_restrictions, bin, sandbox_setup ? "", generate_unsafe ? true, restrict_to_current_folder ? true }:
 let
   debugLogDir = "/tmp/nix-utils-debug";
   consts = import ../consts.nix;
@@ -162,7 +162,6 @@ set -eo pipefail
 
 if [ "$(${pkgs.coreutils}/bin/printenv ${consts.SKIP_SANDBOX_ENV_VAR_NAME} 2>/dev/null || true)" = "true" ]; then
   echo "[${name}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME}=true" >&2
-  ${before}
   ${extraBefore}
   __nix_utils_cmd=$(cat <<'__NIX_UTILS_CMD__'
 ${commandString}
@@ -170,7 +169,6 @@ __NIX_UTILS_CMD__
 )
   exec ${pkgs.bash}/bin/bash --noprofile --norc -c "$__nix_utils_cmd \"\$@\"" -- "$@"
 else
-  ${before}
   ${if runSandboxSetup then sandbox_setup else ""}
   ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
   ${extraBefore}

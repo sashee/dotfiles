@@ -34,9 +34,6 @@ let
 			OPENCODE_CONFIG = "${config}";
 		};
 	};
-	before = ''
-	'';
-
 	sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/opencode
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/opencode
@@ -47,7 +44,7 @@ in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "opencode";
-		inherit pkgs bin sandbox_restrictions before sandbox_setup;
+		inherit pkgs bin sandbox_restrictions sandbox_setup;
 	}).scripts;
 	inherit sandbox_restrictions;
 }

@@ -95,11 +95,8 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 		};
 	};
 
-	before = ''
-	${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/zsh/zsh_history
-	'';
-
 	sandbox_setup = ''
+		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/zsh/zsh_history
 		${builtins.concatStringsSep "\n" (map (prg: prg.sandbox_setup or "") prgs)}
 	'';
 
@@ -107,14 +104,14 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 		name = "zsh";
 		inherit pkgs bin;
 		sandbox_restrictions = merged_restrictions // { network = true; share_pid = true; };  # with network
-		inherit before sandbox_setup;
+		inherit sandbox_setup;
 	}).scripts;
 
   	zsh_nonet_scripts = (import ../_wrapper/default.nix {
   		name = "zsh-nonet";
   		inherit pkgs bin;
 	  		sandbox_restrictions = merged_restrictions // { share_pid = true; };  # same fs/env as zsh, no network (no network key)
-  		inherit before sandbox_setup;
+	  		inherit sandbox_setup;
   		generate_unsafe = false;
   	}).scripts;
  in

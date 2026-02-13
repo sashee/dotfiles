@@ -11,18 +11,11 @@ let
 		target = "${pkgs.k2pdfopt}/bin/k2pdfopt";
 		keepEnv = ["TERM"];
 	};
-	before = ''
-
-	'';
-
-	sandbox_setup = ''
-
-	'';
 in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "k2pdfopt";
-		inherit pkgs bin sandbox_restrictions before sandbox_setup;
+		inherit pkgs bin sandbox_restrictions;
 	}).scripts;
 	inherit sandbox_restrictions;
 }

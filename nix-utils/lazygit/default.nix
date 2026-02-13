@@ -25,9 +25,6 @@ let
 			];
 		};
 	};
-	before = ''
-	'';
-
 	sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/lazygit
 	'';
@@ -35,7 +32,7 @@ in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "lazygit";
-		inherit pkgs bin sandbox_restrictions before sandbox_setup;
+		inherit pkgs bin sandbox_restrictions sandbox_setup;
 	}).scripts;
 	inherit sandbox_restrictions;
 }

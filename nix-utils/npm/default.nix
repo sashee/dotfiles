@@ -35,19 +35,11 @@ let
 		target = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
 	});
 
-	base_before = ''
-	'';
-
-	base_sandbox_setup = ''
-	'';
-
 	npm_scripts = (import ../_wrapper/default.nix {
 		name = "npm";
 		inherit pkgs;
 		bin = npm_bin;
 		sandbox_restrictions = base_sandbox_restrictions;
-		before = base_before;
-		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
 	node_scripts = (import ../_wrapper/default.nix {
@@ -55,8 +47,6 @@ let
 		inherit pkgs;
 		bin = node_bin;
 		sandbox_restrictions = base_sandbox_restrictions;
-		before = base_before;
-		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
   	node_nonet_scripts = (import ../_wrapper/default.nix {
@@ -64,18 +54,14 @@ let
   		inherit pkgs;
 	  		bin = node_bin;
   		sandbox_restrictions = {};  # unrestricted filesystem, no network
-  		before = base_before;
-  		sandbox_setup = base_sandbox_setup;
- 		generate_unsafe = false;
- 	}).scripts;
+  		generate_unsafe = false;
+  	}).scripts;
 
 	npx_scripts = (import ../_wrapper/default.nix {
 		name = "npx";
 		inherit pkgs;
 		bin = npx_bin;
 		sandbox_restrictions = base_sandbox_restrictions;
-		before = base_before;
-		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
 	npx_fullnet_scripts = (import ../_wrapper/default.nix {
@@ -83,8 +69,6 @@ let
 		inherit pkgs;
 		bin = npx_bin;
 		sandbox_restrictions = base_sandbox_restrictions // { network = true; };  # with network
-		before = base_before;
-		sandbox_setup = base_sandbox_setup;
 		generate_unsafe = false;
 	}).scripts;
 in

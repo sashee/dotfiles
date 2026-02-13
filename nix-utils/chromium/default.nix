@@ -29,8 +29,6 @@ let
 		name = "chromium";
 		target = "${pkgs.ungoogled-chromium}/bin/chromium";
 	};
-	before = "";
-
 	sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/chromium
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache/chromium
@@ -40,7 +38,7 @@ in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "chromium";
-		inherit pkgs bin sandbox_restrictions before sandbox_setup;
+		inherit pkgs bin sandbox_restrictions sandbox_setup;
 		restrict_to_current_folder = false;
 	}).scripts;
 	inherit sandbox_restrictions;

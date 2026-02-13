@@ -143,9 +143,6 @@ export default [
 		network = false;
 	};
 
-	base_before = ''
-	'';
-
 	base_sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/state/nvim
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache
@@ -156,7 +153,6 @@ export default [
 		inherit pkgs;
 		bin = nvim_bin;
 		sandbox_restrictions = base_sandbox_restrictions;
-		before = base_before;
 		sandbox_setup = base_sandbox_setup;
 	}).scripts;
 
@@ -167,7 +163,6 @@ export default [
 		sandbox_restrictions = base_sandbox_restrictions // {
 			network = true;
 		};
-		before = base_before;
 		sandbox_setup = base_sandbox_setup;
 		generate_unsafe = false;
 	}).scripts;

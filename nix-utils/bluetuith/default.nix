@@ -21,9 +21,6 @@ let
 			XDG_CONFIG_HOME = "${config}";
 		};
 	};
-	before = ''
-	'';
-
 	sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/bluetuith
 
@@ -32,7 +29,7 @@ in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "bluetuith";
-		inherit pkgs bin sandbox_restrictions before sandbox_setup;
+		inherit pkgs bin sandbox_restrictions sandbox_setup;
 	}).scripts;
 	inherit sandbox_restrictions;
 }

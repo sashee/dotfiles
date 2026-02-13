@@ -11,18 +11,11 @@ let
 		target = "${pkgs.magic-wormhole}/bin/wormhole";
 		keepEnv = ["TERM"];
 	};
-	before = ''
-
-	'';
-
-	sandbox_setup = ''
-
-	'';
 in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "wormhole";
-		inherit pkgs bin sandbox_restrictions before sandbox_setup;
+		inherit pkgs bin sandbox_restrictions;
 	}).scripts;
 	inherit sandbox_restrictions;
 }

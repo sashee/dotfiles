@@ -22,9 +22,6 @@ let
 			VISUAL = "${builtins.elemAt nvim.scripts 0}/bin/nvim";
 		};
 	};
-	before = ''
-	'';
-
 	sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/isd_tui
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.local/share/isd_tui
@@ -34,7 +31,7 @@ in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "isd";
-		inherit pkgs bin sandbox_restrictions before sandbox_setup;
+		inherit pkgs bin sandbox_restrictions sandbox_setup;
 	}).scripts;
 	inherit sandbox_restrictions;
 }

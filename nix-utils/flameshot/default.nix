@@ -22,10 +22,6 @@ let
 		target = "${pkgs.flameshot}/bin/flameshot";
 		keepEnv = ["DISPLAY" "XAUTHORITY" "HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_CONFIG_HOME" "XDG_DATA_DIRS" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS"];
 	};
-	before = ''
-
-	'';
-
 	sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.config/flameshot
 	'';
@@ -33,7 +29,7 @@ in
 {
 	scripts = (import ../_wrapper/default.nix {
 		name = "flameshot";
-		inherit pkgs bin sandbox_restrictions before sandbox_setup;
+		inherit pkgs bin sandbox_restrictions sandbox_setup;
 	}).scripts;
 	inherit sandbox_restrictions;
 }

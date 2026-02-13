@@ -45,10 +45,6 @@ set-option -ga update-environment ' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_
 		extraArgs = [ "-f" "${config}" ];
 	};
 
-	before = ''
-
-	'';
-
 	sandbox_setup = zsh.sandbox_setup or ''
 
 	'';
@@ -58,7 +54,7 @@ in
 		name = "tmux";
 		inherit pkgs bin;
 		sandbox_restrictions = zsh.sandbox_restrictions // { network = true; };
-		inherit before sandbox_setup;
+		inherit sandbox_setup;
 	}).scripts;
 	inherit (zsh) sandbox_restrictions;
 }

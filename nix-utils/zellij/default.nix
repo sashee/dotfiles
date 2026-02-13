@@ -57,11 +57,10 @@ keybinds {
 		};
 	};
 
-	before = ''
+	sandbox_setup = ''
 		${pkgs.coreutils}/bin/mkdir -p $HOME/.cache/zellij
+		${zsh.sandbox_setup}
 	'';
-
-	sandbox_setup = zsh.sandbox_setup;
 	merged_sandbox_restrictions = zsh.sandbox_restrictions // {
 		dont_die_with_parent = true;
 		share_pid = true;
@@ -76,7 +75,7 @@ in
 		name = "zellij";
 		inherit pkgs bin;
 		sandbox_restrictions = merged_sandbox_restrictions // { network = true; };
-		inherit before sandbox_setup;
+		inherit sandbox_setup;
 	}).scripts;
 	sandbox_restrictions = merged_sandbox_restrictions;
 }
