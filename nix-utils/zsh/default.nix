@@ -101,7 +101,6 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 		sandbox_restrictions = merged_restrictions // {
 			network = true;
 			share_pid = true;
-			security.dumpable = "denied";
 		};  # with network
 	}).scripts;
 
@@ -110,7 +109,6 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 		  		inherit pkgs bin;
 			  		sandbox_restrictions = merged_restrictions // {
 			  			share_pid = true;
-			  			security.dumpable = "denied";
 			  		};  # same fs/env as zsh, no network (no network key)
 		  		generate_unsafe = false;
 	  	}).scripts;

@@ -133,7 +133,6 @@ let
     commandString,
     extraBwrapArgs ? [],
     extraMountRules ? [],
-    dumpablePolicy ? ((sandbox_restrictions.security or {}).dumpable or "denied_enforced"),
   }:
     builtins.toJSON {
       program_name = name;
@@ -149,9 +148,6 @@ let
       mounts = mountRules ++ extraMountRules;
       seccomp = {
         blocked_socket_families = blockedSocketFamilies;
-      };
-      security = {
-        dumpable = dumpablePolicy;
       };
       dbus = {
         proxy_bin = "${pkgs.xdg-dbus-proxy}/bin/xdg-dbus-proxy";
@@ -205,15 +201,11 @@ fi
     extraBwrapArgs ? [],
     extraMountRules ? [],
     extraBefore ? "",
-    dumpablePolicy ? null,
     showRunnerConfig ? false,
   }:
     let
       configFile = pkgs.writeText "${scriptName}-runner-config.json" (mkRunnerConfig {
         inherit commandString extraBwrapArgs extraMountRules;
-        dumpablePolicy = if dumpablePolicy == null
-          then ((sandbox_restrictions.security or {}).dumpable or "denied_enforced")
-          else dumpablePolicy;
       });
       extraBeforeWithRunnerConfig = extraBefore + pkgs.lib.optionalString showRunnerConfig ''
 echo "[${scriptName}] runner config:" >&2
@@ -251,7 +243,6 @@ ${pkgs.jq}/bin/jq . ${configFile} >&2
       scriptName = "${name}-strace";
       commandString = "${pkgs.strace}/bin/strace -f -e trace=%network,%file,%desc,%process -s 2000 -yy -o ${debugLogDir}/${name}-strace.log ${binPath}";
       extraBwrapArgs = [ "--bind" debugLogDir debugLogDir ];
-      dumpablePolicy = "allowed";
       extraBefore = ''
 ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
 : > ${debugLogDir}/${name}-strace.log

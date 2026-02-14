@@ -85,7 +85,6 @@ struct SeccompOutput {
     netlink_blocked: bool,
     packet_blocked: bool,
     bluetooth_blocked: bool,
-    dumpable_blocked: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -95,7 +94,6 @@ struct InfoOutput {
     unix_sockets: Vec<String>,
     network_access: bool,
     real_dev: bool,
-    dumpable: bool,
     seccomp: SeccompOutput,
     share: ShareConfig,
     protected_paths: Map<String, Value>,
@@ -209,7 +207,6 @@ fn read_optional_json(path: Option<&str>, label: &'static str) -> Result<Value, 
 
 fn collect_info(config: &InfoConfig, configured: ConfiguredOutput) -> InfoOutput {
     let devnull_writable = is_devnull_writable();
-    let (dumpable, dumpable_blocked) = probe_dumpable();
     let seccomp = SeccompOutput {
         inet_blocked: socket_blocked(devnull_writable, libc::AF_INET, libc::SOCK_STREAM, 0),
         inet6_blocked: socket_blocked(devnull_writable, libc::AF_INET6, libc::SOCK_STREAM, 0),
@@ -222,7 +219,6 @@ fn collect_info(config: &InfoConfig, configured: ConfiguredOutput) -> InfoOutput
             libc::SOCK_STREAM,
             0,
         ),
-        dumpable_blocked,
     };
     let mut sockets = if seccomp.unix_blocked {
         Vec::new()
@@ -248,7 +244,6 @@ fn collect_info(config: &InfoConfig, configured: ConfiguredOutput) -> InfoOutput
         unix_sockets: sockets,
         network_access: detect_network_access(),
         real_dev: Path::new("/dev/input").exists(),
-        dumpable,
         seccomp,
         share: ShareConfig {
             user: config.share.user,
@@ -259,46 +254,6 @@ fn collect_info(config: &InfoConfig, configured: ConfiguredOutput) -> InfoOutput
         },
         protected_paths,
     }
-}
-
-fn probe_dumpable() -> (bool, bool) {
-    let initial_dumpable = get_dumpable().unwrap_or(false);
-
-    let mut dumpable_blocked = false;
-    match set_dumpable(true) {
-        Ok(()) => {
-            if !initial_dumpable {
-                let _ = set_dumpable(false);
-            }
-        }
-        Err(err) => {
-            if let Some(code) = err.raw_os_error() {
-                dumpable_blocked = code == libc::EACCES || code == libc::EPERM;
-            }
-        }
-    }
-
-    let current_dumpable = get_dumpable().unwrap_or(initial_dumpable);
-    (current_dumpable, dumpable_blocked)
-}
-
-fn get_dumpable() -> io::Result<bool> {
-    let rc = unsafe { libc::prctl(libc::PR_GET_DUMPABLE, 0, 0, 0, 0) };
-    if rc == -1 {
-        return Err(io::Error::last_os_error());
-    }
-
-    Ok(rc != 0)
-}
-
-fn set_dumpable(is_dumpable: bool) -> io::Result<()> {
-    let value = if is_dumpable { 1 } else { 0 };
-    let rc = unsafe { libc::prctl(libc::PR_SET_DUMPABLE, value, 0, 0, 0) };
-    if rc == -1 {
-        return Err(io::Error::last_os_error());
-    }
-
-    Ok(())
 }
 
 fn collect_unix_sockets() -> Vec<String> {
