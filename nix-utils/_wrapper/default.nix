@@ -13,6 +13,9 @@ let
   debugBinPath = debugLauncher.path;
   launcherArgsFile = pkgs.writeText "${name}-launcher-args.json" (builtins.toJSON bin.args);
   sandboxRestrictionsFile = pkgs.writeText "${name}-sandbox-restrictions.json" (builtins.toJSON sandbox_restrictions);
+  runnerConfigFile = pkgs.writeText "${name}-runner-config.json" (mkRunnerConfig {
+    commandString = binPath;
+  });
 
   validateNoConflicts = let
     fsPaths' = builtins.attrNames (sandbox_restrictions.fs or {});
@@ -126,7 +129,12 @@ let
       "--tmpfs" "/etc/ssh/ssh_config.d"
     ];
 
-  mkRunnerConfig = { commandString, extraBwrapArgs ? [], extraMountRules ? [] }:
+  mkRunnerConfig = {
+    commandString,
+    extraBwrapArgs ? [],
+    extraMountRules ? [],
+    dumpablePolicy ? ((sandbox_restrictions.security or {}).dumpable or "denied_enforced"),
+  }:
     builtins.toJSON {
       program_name = name;
       bwrap = {
@@ -141,6 +149,9 @@ let
       mounts = mountRules ++ extraMountRules;
       seccomp = {
         blocked_socket_families = blockedSocketFamilies;
+      };
+      security = {
+        dumpable = dumpablePolicy;
       };
       dbus = {
         proxy_bin = "${pkgs.xdg-dbus-proxy}/bin/xdg-dbus-proxy";
@@ -188,13 +199,30 @@ exec ${pkgs.bash}/bin/bash --noprofile --norc -c "$__nix_utils_cmd \"\$@\"" -- "
 fi
 '';
 
-  mkWrappedScript = { scriptName, commandString, extraBwrapArgs ? [], extraMountRules ? [], extraBefore ? "" }:
+  mkWrappedScript = {
+    scriptName,
+    commandString,
+    extraBwrapArgs ? [],
+    extraMountRules ? [],
+    extraBefore ? "",
+    dumpablePolicy ? null,
+    showRunnerConfig ? false,
+  }:
     let
       configFile = pkgs.writeText "${scriptName}-runner-config.json" (mkRunnerConfig {
         inherit commandString extraBwrapArgs extraMountRules;
+        dumpablePolicy = if dumpablePolicy == null
+          then ((sandbox_restrictions.security or {}).dumpable or "denied_enforced")
+          else dumpablePolicy;
       });
+      extraBeforeWithRunnerConfig = extraBefore + pkgs.lib.optionalString showRunnerConfig ''
+echo "[${scriptName}] runner config:" >&2
+${pkgs.jq}/bin/jq . ${configFile} >&2
+'';
     in pkgs.writeScriptBin scriptName (mkRunScript {
-      inherit commandString configFile extraBefore;
+      commandString = commandString;
+      configFile = configFile;
+      extraBefore = extraBeforeWithRunnerConfig;
     });
 
   makeWrapper = { bwrapCmd, bin }:
@@ -211,7 +239,7 @@ fi
   runInBwrap = "";
 
   infoScript = import ../info.nix {
-    inherit pkgs name sandbox_restrictions consts makeWrapper runInBwrap;
+    inherit pkgs name sandbox_restrictions consts makeWrapper runInBwrap launcherArgsFile sandboxRestrictionsFile runnerConfigFile;
   };
 
   scripts = [
@@ -223,6 +251,7 @@ fi
       scriptName = "${name}-strace";
       commandString = "${pkgs.strace}/bin/strace -f -e trace=%network,%file,%desc,%process -s 2000 -yy -o ${debugLogDir}/${name}-strace.log ${binPath}";
       extraBwrapArgs = [ "--bind" debugLogDir debugLogDir ];
+      dumpablePolicy = "allowed";
       extraBefore = ''
 ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
 : > ${debugLogDir}/${name}-strace.log
@@ -232,6 +261,7 @@ ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
       scriptName = "${name}-debug";
       commandString = "${pkgs.strace}/bin/strace -o ${debugLogDir}/${name}-strace.log ${debugBinPath}";
       extraBwrapArgs = [ "--bind" debugLogDir debugLogDir ];
+      showRunnerConfig = true;
       extraBefore = ''
 ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
 : > ${debugLogDir}/${name}-strace.log

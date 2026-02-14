@@ -70,7 +70,10 @@ in
 	scripts = (import ../_wrapper/default.nix {
 		name = "zellij";
 		inherit pkgs bin;
-		sandbox_restrictions = merged_sandbox_restrictions // { network = true; };
+		sandbox_restrictions = merged_sandbox_restrictions // {
+			network = true;
+			security.dumpable = "denied";
+		};
 	}).scripts;
 	sandbox_restrictions = merged_sandbox_restrictions;
 }

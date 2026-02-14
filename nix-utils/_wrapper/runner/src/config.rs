@@ -18,6 +18,36 @@ pub struct RunnerConfig {
     pub dbus: DbusConfig,
     #[serde(default)]
     pub restrict_to_git_root: bool,
+    #[serde(default)]
+    pub security: SecurityConfig,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SecurityConfig {
+    #[serde(default)]
+    pub dumpable: DumpablePolicy,
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        Self {
+            dumpable: DumpablePolicy::DeniedEnforced,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DumpablePolicy {
+    Allowed,
+    Denied,
+    DeniedEnforced,
+}
+
+impl Default for DumpablePolicy {
+    fn default() -> Self {
+        Self::DeniedEnforced
+    }
 }
 
 #[derive(Debug, Deserialize)]

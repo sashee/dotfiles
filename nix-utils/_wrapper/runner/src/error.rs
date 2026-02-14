@@ -70,4 +70,10 @@ pub enum RunnerError {
 
     #[error("seccomp setup failed: {0}")]
     Seccomp(String),
+
+    #[error("failed to set dumpable state: {source}")]
+    SetDumpable {
+        #[source]
+        source: std::io::Error,
+    },
 }

@@ -10,6 +10,11 @@ let
 	};
 	sandbox_restrictions = {
 		network = false;
+		seccomp = {
+			block = {
+				AF_UNIX = true;
+			};
+		};
 	};
 	bin = launcher.mkLauncher {
 		name = "duckdb";

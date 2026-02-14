@@ -98,6 +98,7 @@ struct InfoSeccomp {
     netlink_blocked: bool,
     packet_blocked: bool,
     bluetooth_blocked: bool,
+    dumpable_blocked: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -115,6 +116,7 @@ struct InfoDoc {
     unix_sockets: Vec<String>,
     network_access: bool,
     real_dev: bool,
+    dumpable: bool,
     seccomp: InfoSeccomp,
     share: InfoShare,
     protected_paths: BTreeMap<String, bool>,
@@ -123,6 +125,7 @@ struct InfoDoc {
 #[derive(Debug, Serialize)]
 struct TableRow {
     name: String,
+    dumpable: bool,
     network_access: bool,
     real_dev: bool,
     seccomp_bitmap: String,
@@ -302,6 +305,7 @@ fn render_table_json(outputs: &[InfoDoc]) -> Result<String, AllInfoError> {
         .iter()
         .map(|doc| TableRow {
             name: doc.name.clone(),
+            dumpable: doc.dumpable,
             network_access: doc.network_access,
             real_dev: doc.real_dev,
             seccomp_bitmap: seccomp_bitmap(&doc.seccomp),
@@ -325,6 +329,7 @@ fn seccomp_bitmap(seccomp: &InfoSeccomp) -> String {
         seccomp.netlink_blocked,
         seccomp.packet_blocked,
         seccomp.bluetooth_blocked,
+        seccomp.dumpable_blocked,
     ]
     .iter()
     .map(|blocked| if *blocked { ' ' } else { 'X' })

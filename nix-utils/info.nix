@@ -1,4 +1,4 @@
-{pkgs, name, sandbox_restrictions, consts, makeWrapper, runInBwrap}:
+{pkgs, name, sandbox_restrictions, consts, makeWrapper, runInBwrap, launcherArgsFile, sandboxRestrictionsFile, runnerConfigFile}:
 
 let
   infoBin = import ./_wrapper/info/default.nix { inherit pkgs; };
@@ -19,7 +19,7 @@ let
   });
 
   infoWrapper = pkgs.writeScriptBin "${name}-info" (makeWrapper {
-    bin = "${infoBin}/bin/nix-sandbox-info --config ${infoConfig}";
+    bin = "${infoBin}/bin/nix-sandbox-info --config ${infoConfig} --launcher-args ${launcherArgsFile} --sandbox-restrictions ${sandboxRestrictionsFile} --runner-config ${runnerConfigFile}";
     bwrapCmd = runInBwrap;
   });
 in

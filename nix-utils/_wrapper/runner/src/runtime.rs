@@ -22,7 +22,7 @@ use nix::unistd::{Gid, Uid};
 use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook::iterator::{Handle as SignalHandle, Signals};
 
-use crate::config::{DbusProxyConfig, MountRule, RunnerConfig};
+use crate::config::{DbusProxyConfig, DumpablePolicy, MountRule, RunnerConfig};
 use crate::error::RunnerError;
 
 static NEXT_PROXY_ID: AtomicU64 = AtomicU64::new(0);
@@ -89,6 +89,14 @@ impl ProxyHandle {
 
 pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32, RunnerError> {
     let host_env = host_env_map();
+    apply_dumpable_policy(config.security.dumpable)?;
+    let deny_dumpable_enable = config.security.dumpable == DumpablePolicy::DeniedEnforced;
+    let blocked_socket_families = config
+        .seccomp
+        .as_ref()
+        .map(|s| s.blocked_socket_families.clone())
+        .unwrap_or_default();
+    let use_seccomp = !blocked_socket_families.is_empty() || deny_dumpable_enable;
 
     let mut proxies = Vec::new();
     for proxy in &config.dbus.proxies {
@@ -147,7 +155,7 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
         bwrap_args.push(proxy.source_bus_path.clone());
     }
 
-    if config.seccomp.is_some() {
+    if use_seccomp {
         bwrap_args.push("--seccomp".to_string());
         bwrap_args.push(SECCOMP_FD.to_string());
     }
@@ -164,8 +172,8 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
     );
     cmd.args(passthrough_args);
 
-    let seccomp_file = if let Some(seccomp) = &config.seccomp {
-        let seccomp_file = build_seccomp_filter_fd(&seccomp.blocked_socket_families)?;
+    let seccomp_file = if use_seccomp {
+        let seccomp_file = build_seccomp_filter_fd(&blocked_socket_families, deny_dumpable_enable)?;
         let target_fd = SECCOMP_FD;
         let source_fd = seccomp_file.as_raw_fd();
         unsafe {
@@ -230,7 +238,10 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
     }
 }
 
-fn build_seccomp_filter_fd(blocked_socket_families: &[i32]) -> Result<fs::File, RunnerError> {
+fn build_seccomp_filter_fd(
+    blocked_socket_families: &[i32],
+    deny_dumpable_enable: bool,
+) -> Result<fs::File, RunnerError> {
     let action_errno_eacces = libseccomp_sys::SCMP_ACT_ERRNO(nix::libc::EACCES as u16);
     let mut filter_file = create_seccomp_memfd()?;
 
@@ -266,6 +277,40 @@ fn build_seccomp_filter_fd(blocked_socket_families: &[i32]) -> Result<fs::File, 
             }
         }
 
+        if deny_dumpable_enable {
+            let dumpable_cmps = [
+                libseccomp_sys::scmp_arg_cmp {
+                    arg: 0,
+                    op: libseccomp_sys::scmp_compare::SCMP_CMP_EQ,
+                    datum_a: nix::libc::PR_SET_DUMPABLE as u64,
+                    datum_b: 0,
+                },
+                libseccomp_sys::scmp_arg_cmp {
+                    arg: 1,
+                    op: libseccomp_sys::scmp_compare::SCMP_CMP_EQ,
+                    datum_a: 1,
+                    datum_b: 0,
+                },
+            ];
+
+            let rc = unsafe {
+                libseccomp_sys::seccomp_rule_add_array(
+                    ctx,
+                    action_errno_eacces,
+                    nix::libc::SYS_prctl as i32,
+                    dumpable_cmps.len() as u32,
+                    dumpable_cmps.as_ptr(),
+                )
+            };
+
+            if rc < 0 {
+                return Err(RunnerError::Seccomp(format!(
+                    "failed to add seccomp rule for prctl(PR_SET_DUMPABLE, 1): errno {}",
+                    -rc
+                )));
+            }
+        }
+
         let export_rc = unsafe { libseccomp_sys::seccomp_export_bpf(ctx, filter_file.as_raw_fd()) };
         if export_rc < 0 {
             return Err(RunnerError::Seccomp(format!(
@@ -286,6 +331,25 @@ fn build_seccomp_filter_fd(blocked_socket_families: &[i32]) -> Result<fs::File, 
     }
 
     result.map(|_| filter_file)
+}
+
+fn apply_dumpable_policy(policy: DumpablePolicy) -> Result<(), RunnerError> {
+    match policy {
+        DumpablePolicy::Allowed => set_dumpable(true),
+        DumpablePolicy::Denied | DumpablePolicy::DeniedEnforced => set_dumpable(false),
+    }
+}
+
+fn set_dumpable(is_dumpable: bool) -> Result<(), RunnerError> {
+    let dumpable_value = if is_dumpable { 1 } else { 0 };
+    let rc = unsafe { nix::libc::prctl(nix::libc::PR_SET_DUMPABLE, dumpable_value, 0, 0, 0) };
+    if rc == -1 {
+        return Err(RunnerError::SetDumpable {
+            source: std::io::Error::last_os_error(),
+        });
+    }
+
+    Ok(())
 }
 
 fn create_seccomp_memfd() -> Result<fs::File, RunnerError> {

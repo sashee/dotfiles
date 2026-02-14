@@ -3,7 +3,6 @@ use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::os::fd::RawFd;
-use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::FileTypeExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
@@ -30,6 +29,20 @@ enum InfoError {
         source: serde_json::Error,
     },
 
+    #[error("failed to read {label} JSON {path}: {source}")]
+    ReadJson {
+        label: &'static str,
+        path: PathBuf,
+        source: io::Error,
+    },
+
+    #[error("invalid JSON in {label} {path}: {source}")]
+    ParseJson {
+        label: &'static str,
+        path: PathBuf,
+        source: serde_json::Error,
+    },
+
     #[error("failed to serialize output: {0}")]
     Serialize(serde_json::Error),
 }
@@ -37,6 +50,9 @@ enum InfoError {
 #[derive(Debug, Deserialize)]
 struct Cli {
     config_path: String,
+    launcher_args_path: Option<String>,
+    sandbox_restrictions_path: Option<String>,
+    runner_config_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -69,17 +85,27 @@ struct SeccompOutput {
     netlink_blocked: bool,
     packet_blocked: bool,
     bluetooth_blocked: bool,
+    dumpable_blocked: bool,
 }
 
 #[derive(Debug, Serialize)]
 struct InfoOutput {
     name: String,
+    configured: ConfiguredOutput,
     unix_sockets: Vec<String>,
     network_access: bool,
     real_dev: bool,
+    dumpable: bool,
     seccomp: SeccompOutput,
     share: ShareConfig,
     protected_paths: Map<String, Value>,
+}
+
+#[derive(Debug, Serialize)]
+struct ConfiguredOutput {
+    launcher_args: Value,
+    sandbox_restrictions: Value,
+    runner_config: Value,
 }
 
 fn main() {
@@ -93,8 +119,16 @@ fn run() -> Result<(), InfoError> {
     let cli = parse_cli(env::args_os().collect())?;
     let config_path = PathBuf::from(&cli.config_path);
     let config = read_config(&config_path)?;
+    let configured = ConfiguredOutput {
+        launcher_args: read_optional_json(cli.launcher_args_path.as_deref(), "launcher args")?,
+        sandbox_restrictions: read_optional_json(
+            cli.sandbox_restrictions_path.as_deref(),
+            "sandbox restrictions",
+        )?,
+        runner_config: read_optional_json(cli.runner_config_path.as_deref(), "runner config")?,
+    };
 
-    let output = collect_info(&config);
+    let output = collect_info(&config, configured);
     let json = serde_json::to_string_pretty(&output).map_err(InfoError::Serialize)?;
     println!("{json}");
 
@@ -102,22 +136,44 @@ fn run() -> Result<(), InfoError> {
 }
 
 fn parse_cli(args: Vec<OsString>) -> Result<Cli, InfoError> {
-    let usage = "nix-sandbox-info --config <path>".to_string();
+    let usage = "nix-sandbox-info --config <path> [--launcher-args <path>] [--sandbox-restrictions <path>] [--runner-config <path>]".to_string();
 
-    if args.len() != 3 {
+    if args.len() < 3 || args.len() % 2 == 0 {
         return Err(InfoError::Usage(usage));
     }
 
-    if args[1].as_os_str().as_bytes() != b"--config" {
-        return Err(InfoError::Usage(usage));
+    let mut config_path: Option<String> = None;
+    let mut launcher_args_path: Option<String> = None;
+    let mut sandbox_restrictions_path: Option<String> = None;
+    let mut runner_config_path: Option<String> = None;
+
+    let mut i = 1;
+    while i + 1 < args.len() {
+        let flag = args[i]
+            .to_str()
+            .ok_or_else(|| InfoError::Usage("flag must be valid UTF-8".to_string()))?;
+        let value = args[i + 1]
+            .to_str()
+            .ok_or_else(|| InfoError::Usage("path must be valid UTF-8".to_string()))?
+            .to_string();
+
+        match flag {
+            "--config" => config_path = Some(value),
+            "--launcher-args" => launcher_args_path = Some(value),
+            "--sandbox-restrictions" => sandbox_restrictions_path = Some(value),
+            "--runner-config" => runner_config_path = Some(value),
+            _ => return Err(InfoError::Usage(usage)),
+        }
+
+        i += 2;
     }
 
-    let config_path = args[2]
-        .to_str()
-        .ok_or_else(|| InfoError::Usage("config path must be valid UTF-8".to_string()))?
-        .to_string();
-
-    Ok(Cli { config_path })
+    Ok(Cli {
+        config_path: config_path.ok_or_else(|| InfoError::Usage(usage.clone()))?,
+        launcher_args_path,
+        sandbox_restrictions_path,
+        runner_config_path,
+    })
 }
 
 fn read_config(path: &Path) -> Result<InfoConfig, InfoError> {
@@ -132,10 +188,48 @@ fn read_config(path: &Path) -> Result<InfoConfig, InfoError> {
     })
 }
 
-fn collect_info(config: &InfoConfig) -> InfoOutput {
-    let mut sockets = collect_unix_sockets();
-    sockets.sort();
+fn read_optional_json(path: Option<&str>, label: &'static str) -> Result<Value, InfoError> {
+    let Some(path) = path else {
+        return Ok(Value::Null);
+    };
+
+    let path_buf = PathBuf::from(path);
+    let data = fs::read_to_string(&path_buf).map_err(|source| InfoError::ReadJson {
+        label,
+        path: path_buf.clone(),
+        source,
+    })?;
+
+    serde_json::from_str::<Value>(&data).map_err(|source| InfoError::ParseJson {
+        label,
+        path: path_buf,
+        source,
+    })
+}
+
+fn collect_info(config: &InfoConfig, configured: ConfiguredOutput) -> InfoOutput {
     let devnull_writable = is_devnull_writable();
+    let (dumpable, dumpable_blocked) = probe_dumpable();
+    let seccomp = SeccompOutput {
+        inet_blocked: socket_blocked(devnull_writable, libc::AF_INET, libc::SOCK_STREAM, 0),
+        inet6_blocked: socket_blocked(devnull_writable, libc::AF_INET6, libc::SOCK_STREAM, 0),
+        unix_blocked: socket_blocked(devnull_writable, libc::AF_UNIX, libc::SOCK_STREAM, 0),
+        netlink_blocked: socket_blocked(devnull_writable, libc::AF_NETLINK, libc::SOCK_DGRAM, 0),
+        packet_blocked: socket_blocked(devnull_writable, libc::AF_PACKET, libc::SOCK_RAW, 0),
+        bluetooth_blocked: socket_blocked(
+            devnull_writable,
+            libc::AF_BLUETOOTH,
+            libc::SOCK_STREAM,
+            0,
+        ),
+        dumpable_blocked,
+    };
+    let mut sockets = if seccomp.unix_blocked {
+        Vec::new()
+    } else {
+        collect_unix_sockets()
+    };
+    sockets.sort();
 
     let mut protected_paths = Map::new();
     for pp in &config.protected_paths {
@@ -150,27 +244,12 @@ fn collect_info(config: &InfoConfig) -> InfoOutput {
 
     InfoOutput {
         name: config.program_name.clone(),
+        configured,
         unix_sockets: sockets,
         network_access: detect_network_access(),
         real_dev: Path::new("/dev/input").exists(),
-        seccomp: SeccompOutput {
-            inet_blocked: socket_blocked(devnull_writable, libc::AF_INET, libc::SOCK_STREAM, 0),
-            inet6_blocked: socket_blocked(devnull_writable, libc::AF_INET6, libc::SOCK_STREAM, 0),
-            unix_blocked: socket_blocked(devnull_writable, libc::AF_UNIX, libc::SOCK_STREAM, 0),
-            netlink_blocked: socket_blocked(
-                devnull_writable,
-                libc::AF_NETLINK,
-                libc::SOCK_DGRAM,
-                0,
-            ),
-            packet_blocked: socket_blocked(devnull_writable, libc::AF_PACKET, libc::SOCK_RAW, 0),
-            bluetooth_blocked: socket_blocked(
-                devnull_writable,
-                libc::AF_BLUETOOTH,
-                libc::SOCK_STREAM,
-                0,
-            ),
-        },
+        dumpable,
+        seccomp,
         share: ShareConfig {
             user: config.share.user,
             uts: config.share.uts,
@@ -180,6 +259,46 @@ fn collect_info(config: &InfoConfig) -> InfoOutput {
         },
         protected_paths,
     }
+}
+
+fn probe_dumpable() -> (bool, bool) {
+    let initial_dumpable = get_dumpable().unwrap_or(false);
+
+    let mut dumpable_blocked = false;
+    match set_dumpable(true) {
+        Ok(()) => {
+            if !initial_dumpable {
+                let _ = set_dumpable(false);
+            }
+        }
+        Err(err) => {
+            if let Some(code) = err.raw_os_error() {
+                dumpable_blocked = code == libc::EACCES || code == libc::EPERM;
+            }
+        }
+    }
+
+    let current_dumpable = get_dumpable().unwrap_or(initial_dumpable);
+    (current_dumpable, dumpable_blocked)
+}
+
+fn get_dumpable() -> io::Result<bool> {
+    let rc = unsafe { libc::prctl(libc::PR_GET_DUMPABLE, 0, 0, 0, 0) };
+    if rc == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    Ok(rc != 0)
+}
+
+fn set_dumpable(is_dumpable: bool) -> io::Result<()> {
+    let value = if is_dumpable { 1 } else { 0 };
+    let rc = unsafe { libc::prctl(libc::PR_SET_DUMPABLE, value, 0, 0, 0) };
+    if rc == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    Ok(())
 }
 
 fn collect_unix_sockets() -> Vec<String> {

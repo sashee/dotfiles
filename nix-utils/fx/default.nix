@@ -5,6 +5,11 @@ let
 	launcher = import ../launcher.nix { inherit pkgs; };
 	sandbox_restrictions = {
 		network = false;
+		seccomp = {
+			block = {
+				AF_UNIX = true;
+			};
+		};
 	};
 	bin = launcher.mkLauncher {
 		name = "fx";

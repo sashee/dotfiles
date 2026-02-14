@@ -98,14 +98,21 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 	zsh_scripts = (import ../_wrapper/default.nix {
 		name = "zsh";
 		inherit pkgs bin;
-		sandbox_restrictions = merged_restrictions // { network = true; share_pid = true; };  # with network
+		sandbox_restrictions = merged_restrictions // {
+			network = true;
+			share_pid = true;
+			security.dumpable = "denied";
+		};  # with network
 	}).scripts;
 
-  	zsh_nonet_scripts = (import ../_wrapper/default.nix {
-  		name = "zsh-nonet";
-	  		inherit pkgs bin;
-		  		sandbox_restrictions = merged_restrictions // { share_pid = true; };  # same fs/env as zsh, no network (no network key)
-	  		generate_unsafe = false;
+	  	zsh_nonet_scripts = (import ../_wrapper/default.nix {
+	  		name = "zsh-nonet";
+		  		inherit pkgs bin;
+			  		sandbox_restrictions = merged_restrictions // {
+			  			share_pid = true;
+			  			security.dumpable = "denied";
+			  		};  # same fs/env as zsh, no network (no network key)
+		  		generate_unsafe = false;
 	  	}).scripts;
  in
  {
