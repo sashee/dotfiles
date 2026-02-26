@@ -1,8 +1,13 @@
 {
 	pkgs,
+	nixgl,
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
+	nixglWrapper = nixgl.auto.nixGLDefault;
+	nixglChromium = pkgs.writeShellScript "chromium-with-nixgl" ''
+		exec ${nixglWrapper}/bin/nixGL ${pkgs.ungoogled-chromium}/bin/chromium "$@"
+	'';
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = { perm = "ro"; };
@@ -24,10 +29,11 @@ let
 		};
 		network = true;
 		mount_dev = true;
+		share_user = true;
 	};
 	bin = launcher.mkLauncher {
 		name = "chromium";
-		target = "${pkgs.ungoogled-chromium}/bin/chromium";
+		target = "${nixglChromium}";
 	};
 in
 {

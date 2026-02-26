@@ -1,6 +1,8 @@
 let
   nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.11";
   pkgs = import nixpkgs { config = {allowUnfree = true;}; overlays = []; };
+  nixglSrc = fetchTarball "https://github.com/nix-community/nixGL/archive/main.tar.gz";
+  nixgl = import nixglSrc { inherit pkgs; };
 
 	nvim = import ./nvim/default.nix { inherit pkgs; };
 
@@ -25,7 +27,7 @@ let
 
 	# Programs not passed to zsh (have unrestricted filesystem)
 	other_programs = [
-		(import ./chromium/default.nix { inherit pkgs; })
+		(import ./chromium/default.nix { inherit pkgs nixgl; })
 		(import ./keepassxc/default.nix { inherit pkgs; })
 		(import ./libreoffice/default.nix { inherit pkgs; })
 		(import ./bluetuith/default.nix { inherit pkgs; })
