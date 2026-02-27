@@ -12,7 +12,12 @@ let
 {
   "$schema": "https://opencode.ai/schema.json",
 	"autoupdate": false,
-	"share": "disabled"
+	"share": "disabled",
+	"permission": {
+		"external_directory": {
+			"/nix": "allow"
+		}
+	}
 }
 		'';
 	};
