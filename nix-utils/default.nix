@@ -15,7 +15,7 @@ let
 		(import ./flameshot/default.nix { inherit pkgs; })
 		(import ./fx/default.nix { inherit pkgs; })
 		(import ./isd/default.nix { inherit pkgs nvim; })
-		#(import ./k2pdfopt/default.nix { inherit pkgs; })
+		(import ./k2pdfopt/default.nix { inherit pkgs; })
 		(import ./lazygit/default.nix { inherit pkgs; })
 		(import ./lazysql/default.nix { inherit pkgs; })
 		(import ./magic-wormhole/default.nix { inherit pkgs; })
@@ -29,6 +29,7 @@ let
 	# Programs not passed to zsh (have unrestricted filesystem)
 	other_programs = [
 		(import ./chromium/default.nix { inherit pkgs nixgl; })
+		(import ./tor-browser/default.nix { inherit pkgs; })
 		(import ./keepassxc/default.nix { inherit pkgs; })
 		(import ./libreoffice/default.nix { inherit pkgs; })
 		(import ./bluetuith/default.nix { inherit pkgs; })
