@@ -11,6 +11,10 @@ pub struct RunnerConfig {
     pub bwrap: BwrapConfig,
     pub command: CommandConfig,
     #[serde(default)]
+    pub debug_bwrap: bool,
+    #[serde(default)]
+    pub dev: DevConfig,
+    #[serde(default)]
     pub mounts: Vec<MountRule>,
     #[serde(default)]
     pub seccomp: Option<SeccompConfig>,
@@ -34,6 +38,15 @@ pub struct CommandConfig {
     pub bin: String,
     #[serde(default)]
     pub args: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Clone, Default)]
+#[serde(untagged)]
+pub enum DevConfig {
+    #[default]
+    Disabled,
+    Enabled(bool),
+    Allowlist(Vec<String>),
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -120,6 +133,22 @@ impl RunnerConfig {
             return Err(RunnerError::InvalidConfig(
                 "command.bin cannot be empty".to_string(),
             ));
+        }
+
+        match &self.dev {
+            DevConfig::Disabled => {}
+            DevConfig::Enabled(enabled) => {
+                let _ = *enabled;
+            }
+            DevConfig::Allowlist(patterns) => {
+                for pattern in patterns {
+                    if !pattern.starts_with("/dev/") {
+                        return Err(RunnerError::InvalidConfig(format!(
+                            "dev allowlist entries must start with /dev/, got {pattern}",
+                        )));
+                    }
+                }
+            }
         }
 
         for m in &self.mounts {

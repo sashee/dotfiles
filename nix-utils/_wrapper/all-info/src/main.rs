@@ -112,6 +112,7 @@ struct InfoShare {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct InfoDoc {
     name: String,
+    dev: Vec<String>,
     unix_sockets: Vec<String>,
     network_access: bool,
     real_dev: bool,
@@ -123,6 +124,7 @@ struct InfoDoc {
 #[derive(Debug, Serialize)]
 struct TableRow {
     name: String,
+    dev_count: usize,
     network_access: bool,
     real_dev: bool,
     seccomp_bitmap: String,
@@ -302,6 +304,7 @@ fn render_table_json(outputs: &[InfoDoc]) -> Result<String, AllInfoError> {
         .iter()
         .map(|doc| TableRow {
             name: doc.name.clone(),
+            dev_count: doc.dev.len(),
             network_access: doc.network_access,
             real_dev: doc.real_dev,
             seccomp_bitmap: seccomp_bitmap(&doc.seccomp),

@@ -16,7 +16,7 @@ let
 			"/usr/share/keyd/keyd.compose" = { perm = "ro"; };
 		};
 		network = true;
-		mount_dev = true;
+		dev = true;
 		share_user = true;
 	};
 	bin = launcher.mkLauncher {
@@ -32,4 +32,3 @@ in
 	}).scripts;
 	inherit sandbox_restrictions;
 }
-

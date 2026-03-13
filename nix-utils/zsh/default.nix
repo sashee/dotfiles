@@ -5,6 +5,7 @@
 let
 	consts = import ../consts.nix;
 	launcher = import ../launcher.nix { inherit pkgs; };
+	dev_allowlist = [ "/dev/ttyUSB*" "/dev/ttyACM*" ];
 
 	# Base filesystem restrictions for zsh
 	# Note: bwrap does --ro-bind / / so system paths are already available read-only
@@ -29,8 +30,8 @@ let
 			prg_restrictions = prg.sandbox_restrictions or {};
 		in
 		{
-			fs = acc.fs // (prg_restrictions.fs or {});
-			files = acc.files // (prg_restrictions.files or {});
+		fs = acc.fs // (prg_restrictions.fs or {});
+		files = acc.files // (prg_restrictions.files or {});
 		}
 	) {
 		fs = base_fs;
@@ -99,6 +100,7 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 		name = "zsh";
 		inherit pkgs bin;
 		sandbox_restrictions = merged_restrictions // {
+			dev = dev_allowlist;
 			network = true;
 			share_pid = true;
 		};  # with network
@@ -107,7 +109,8 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 	  	zsh_nonet_scripts = (import ../_wrapper/default.nix {
 	  		name = "zsh-nonet";
 		  		inherit pkgs bin;
-			  		sandbox_restrictions = merged_restrictions // {
+		  		sandbox_restrictions = merged_restrictions // {
+			  			dev = dev_allowlist;
 			  			share_pid = true;
 			  		};  # same fs/env as zsh, no network (no network key)
 		  		generate_unsafe = false;
@@ -115,5 +118,7 @@ export PROMPT="$PROMPT_PREF$PROMPT"
  in
  {
  	scripts = zsh_scripts ++ zsh_nonet_scripts;
- 	sandbox_restrictions = merged_restrictions;
+	sandbox_restrictions = merged_restrictions // {
+		dev = dev_allowlist;
+	};
  }

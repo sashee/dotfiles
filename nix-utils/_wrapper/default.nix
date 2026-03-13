@@ -108,6 +108,9 @@ let
   pathDepth = p: builtins.length (builtins.filter (x: x != "") (pkgs.lib.splitString "/" p));
   mountRules = builtins.sort (a: b: pathDepth a.path < pathDepth b.path) deduplicatedEntries;
 
+  devConfig = sandbox_restrictions.dev or false;
+  useRealDev = devConfig != false;
+
   bwrapBaseArgs =
     (pkgs.lib.optionals (!((sandbox_restrictions.share_user or false))) [ "--unshare-user" "--uid" "__CURRENT_UID__" "--gid" "__CURRENT_GID__" ])
     ++ (pkgs.lib.optionals (!((sandbox_restrictions.share_uts or false))) [ "--unshare-uts" ])
@@ -120,7 +123,7 @@ let
       "--ro-bind" "/" "/"
       "--tmpfs" "/home"
     ]
-    ++ (if (sandbox_restrictions.mount_dev or false)
+    ++ (if useRealDev
       then [ "--dev-bind" "/dev" "/dev" ]
       else [ "--dev" "/dev" ])
     ++ [
@@ -133,6 +136,7 @@ let
     commandString,
     extraBwrapArgs ? [],
     extraMountRules ? [],
+    debugBwrap ? false,
   }:
     builtins.toJSON {
       program_name = name;
@@ -149,6 +153,8 @@ let
       seccomp = {
         blocked_socket_families = blockedSocketFamilies;
       };
+      debug_bwrap = debugBwrap;
+      dev = devConfig;
       dbus = {
         proxy_bin = "${pkgs.xdg-dbus-proxy}/bin/xdg-dbus-proxy";
         proxies = map (busPath:
@@ -206,6 +212,7 @@ fi
     let
       configFile = pkgs.writeText "${scriptName}-runner-config.json" (mkRunnerConfig {
         inherit commandString extraBwrapArgs extraMountRules;
+        debugBwrap = showRunnerConfig;
       });
       extraBeforeWithRunnerConfig = extraBefore + pkgs.lib.optionalString showRunnerConfig ''
 echo "[${scriptName}] runner config:" >&2

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::env;
 use std::ffi::OsString;
 use std::fs;
@@ -6,6 +7,7 @@ use std::os::fd::RawFd;
 use std::os::unix::fs::FileTypeExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -91,6 +93,7 @@ struct SeccompOutput {
 struct InfoOutput {
     name: String,
     configured: ConfiguredOutput,
+    dev: Vec<String>,
     unix_sockets: Vec<String>,
     network_access: bool,
     real_dev: bool,
@@ -226,6 +229,9 @@ fn collect_info(config: &InfoConfig, configured: ConfiguredOutput) -> InfoOutput
         collect_unix_sockets()
     };
     sockets.sort();
+    let fake_dev_baseline = fake_dev_entry_names(&configured.runner_config);
+    let mut dev = collect_visible_dev_entries(&fake_dev_baseline);
+    dev.sort();
 
     let mut protected_paths = Map::new();
     for pp in &config.protected_paths {
@@ -241,6 +247,7 @@ fn collect_info(config: &InfoConfig, configured: ConfiguredOutput) -> InfoOutput
     InfoOutput {
         name: config.program_name.clone(),
         configured,
+        dev,
         unix_sockets: sockets,
         network_access: detect_network_access(),
         real_dev: Path::new("/dev/input").exists(),
@@ -256,30 +263,147 @@ fn collect_info(config: &InfoConfig, configured: ConfiguredOutput) -> InfoOutput
     }
 }
 
-fn collect_unix_sockets() -> Vec<String> {
+fn collect_visible_dev_entries(fake_dev_baseline: &HashSet<String>) -> Vec<String> {
     let mut out = Vec::new();
+    let Ok(entries) = fs::read_dir("/dev") else {
+        return out;
+    };
 
-    let walker = WalkDir::new("/")
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|e| !should_skip_path(e.path()));
-
-    for entry in walker {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(_) => continue,
+    for entry in entries {
+        let Ok(entry) = entry else {
+            continue;
         };
-
-        if entry.file_type().is_socket() {
-            out.push(to_relative_path(entry.path()));
+        let path = entry.path();
+        let Some(path_str) = path.to_str() else {
+            continue;
+        };
+        let Some(file_name) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+        if fake_dev_baseline.contains(&file_name) {
+            continue;
         }
+        if !is_accessible_dev_entry(&path) {
+            continue;
+        }
+        out.push(path_str.to_string());
     }
 
     out
 }
 
+fn fake_dev_entry_names(runner_config: &Value) -> HashSet<String> {
+    let Some(bwrap_bin) = runner_config
+        .get("bwrap")
+        .and_then(|v| v.get("bin"))
+        .and_then(Value::as_str)
+    else {
+        return HashSet::new();
+    };
+
+    let Some(command_bin) = runner_config
+        .get("command")
+        .and_then(|v| v.get("bin"))
+        .and_then(Value::as_str)
+    else {
+        return HashSet::new();
+    };
+
+    let output = match Command::new(bwrap_bin)
+        .args(["--ro-bind", "/", "/", "--dev", "/dev", command_bin])
+        .args([
+            "--noprofile",
+            "--norc",
+            "-c",
+            "for p in /dev/*; do printf '%s\n' \"${p##*/}\"; done",
+        ])
+        .output()
+    {
+        Ok(output) if output.status.success() => output,
+        _ => return HashSet::new(),
+    };
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+fn is_accessible_dev_entry(path: &Path) -> bool {
+    let symlink_meta = match fs::symlink_metadata(path) {
+        Ok(meta) => meta,
+        Err(_) => return false,
+    };
+
+    let file_type = symlink_meta.file_type();
+    if file_type.is_symlink() {
+        return fs::metadata(path).is_ok();
+    }
+
+    if file_type.is_dir() {
+        return fs::read_dir(path)
+            .map(|mut entries| entries.next().is_some())
+            .unwrap_or(false);
+    }
+
+    is_visible_file(&path.to_string_lossy())
+}
+
+fn collect_unix_sockets() -> Vec<String> {
+    let mut out = Vec::new();
+
+    for root in socket_scan_roots() {
+        let walker = WalkDir::new(root)
+            .follow_links(false)
+            .into_iter()
+            .filter_entry(|e| !should_skip_path(e.path()));
+
+        for entry in walker {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(_) => continue,
+            };
+
+            if entry.file_type().is_socket() {
+                out.push(to_relative_path(entry.path()));
+            }
+        }
+    }
+
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn socket_scan_roots() -> Vec<String> {
+    let mut roots = vec![
+        "/run".to_string(),
+        "/var/run".to_string(),
+        "/tmp".to_string(),
+    ];
+
+    if let Ok(runtime_dir) = env::var("XDG_RUNTIME_DIR") {
+        roots.push(runtime_dir);
+    }
+
+    roots
+        .into_iter()
+        .filter(|path| {
+            fs::metadata(path)
+                .map(|meta| meta.is_dir())
+                .unwrap_or(false)
+        })
+        .collect()
+}
+
 fn should_skip_path(path: &Path) -> bool {
-    if path == Path::new("/") {
+    if path == Path::new("/")
+        || path == Path::new("/run")
+        || path == Path::new("/var/run")
+        || path == Path::new("/tmp")
+    {
         return false;
     }
 

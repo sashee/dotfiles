@@ -22,7 +22,7 @@ let
 			};
 		};
 		network = true;  # Allow network namespace (for udev/netlink), but block inet via seccomp
-		mount_dev = true;
+		dev = true;
 		share_user = false;
 		share_ipc = false;
 		share_pid = false;

@@ -3,11 +3,11 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	sandbox_restrictions = {
-		fs = {
+		sandbox_restrictions = {
+			fs = {
+			};
+			dev = ["/dev/video0"];
 		};
-		mount_dev = true;
-	};
 	target = pkgs.writeShellScript "qrread" ''
 		${pkgs.zbar}/bin/zbarcam --nodisplay --oneshot --raw /dev/video0
 		echo ""
@@ -24,4 +24,3 @@ in
 	}).scripts;
 	inherit sandbox_restrictions;
 }
-

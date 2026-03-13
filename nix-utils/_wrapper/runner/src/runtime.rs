@@ -22,7 +22,9 @@ use nix::unistd::{Gid, Uid};
 use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook::iterator::{Handle as SignalHandle, Signals};
 
-use crate::config::{DbusProxyConfig, MountRule, RunnerConfig};
+use glob::Pattern;
+
+use crate::config::{DbusProxyConfig, DevConfig, MountRule, RunnerConfig};
 use crate::error::RunnerError;
 
 static NEXT_PROXY_ID: AtomicU64 = AtomicU64::new(0);
@@ -143,9 +145,12 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
         bwrap_args.push(restrict_path);
     }
 
-    ensure_mount_dirs(&config.mounts, &host_env)?;
+    let mut mounts = config.mounts.clone();
+    mounts.extend(dev_allowlist_block_mounts(&config)?);
 
-    append_mount_args(&mut bwrap_args, &config.mounts, &host_env);
+    ensure_mount_dirs(&mounts, &host_env)?;
+
+    append_mount_args(&mut bwrap_args, &mounts, &host_env);
 
     for proxy in proxies.iter() {
         bwrap_args.push("--bind".to_string());
@@ -169,6 +174,17 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
             .map(|arg| expand_value(arg, &host_env)),
     );
     cmd.args(passthrough_args);
+
+    if config.debug_bwrap {
+        let rendered = std::iter::once(config.bwrap.bin.as_str())
+            .chain(bwrap_args.iter().map(String::as_str))
+            .chain(std::iter::once(config.command.bin.as_str()))
+            .chain(config.command.args.iter().map(String::as_str))
+            .map(shell_escape)
+            .collect::<Vec<_>>()
+            .join(" ");
+        eprintln!("[{}] bwrap argv: {}", config.program_name, rendered);
+    }
 
     let seccomp_file = if use_seccomp {
         let seccomp_file = build_seccomp_filter_fd(&blocked_socket_families)?;
@@ -292,6 +308,107 @@ fn build_seccomp_filter_fd(blocked_socket_families: &[i32]) -> Result<fs::File, 
     }
 
     result.map(|_| filter_file)
+}
+
+fn dev_allowlist_block_mounts(config: &RunnerConfig) -> Result<Vec<MountRule>, RunnerError> {
+    let patterns = match &config.dev {
+        DevConfig::Allowlist(patterns) => patterns,
+        _ => return Ok(Vec::new()),
+    };
+
+    let compiled_patterns = patterns
+        .iter()
+        .map(|pattern| {
+            Pattern::new(pattern).map_err(|err| {
+                RunnerError::InvalidConfig(format!(
+                    "invalid dev allowlist pattern {pattern}: {err}"
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let fake_dev_entries = fake_dev_entry_names(config)?;
+    let mut block_mounts = Vec::new();
+    let read_dir = fs::read_dir("/dev").map_err(|source| RunnerError::OpenFile {
+        path: "/dev".into(),
+        source,
+    })?;
+
+    for entry in read_dir {
+        let entry = entry.map_err(|source| RunnerError::OpenFile {
+            path: "/dev".into(),
+            source,
+        })?;
+        let file_name = entry.file_name();
+        let Some(file_name) = file_name.to_str() else {
+            continue;
+        };
+
+        if fake_dev_entries.contains(file_name) {
+            continue;
+        }
+
+        let path = format!("/dev/{file_name}");
+        if compiled_patterns
+            .iter()
+            .any(|pattern| pattern.matches(&path))
+        {
+            continue;
+        }
+
+        let file_type = entry.file_type().map_err(|source| RunnerError::OpenFile {
+            path: path.clone().into(),
+            source,
+        })?;
+
+        if file_type.is_symlink() {
+            continue;
+        }
+
+        let mount_type = if file_type.is_dir() { "dir" } else { "file" };
+
+        block_mounts.push(MountRule {
+            path,
+            perm: "block".to_string(),
+            r#type: mount_type.to_string(),
+            source: None,
+            mkdir: false,
+        });
+    }
+
+    Ok(block_mounts)
+}
+
+fn fake_dev_entry_names(
+    config: &RunnerConfig,
+) -> Result<std::collections::HashSet<String>, RunnerError> {
+    let output = Command::new(&config.bwrap.bin)
+        .args(["--ro-bind", "/", "/", "--dev", "/dev", &config.command.bin])
+        .args([
+            "--noprofile",
+            "--norc",
+            "-c",
+            "for p in /dev/*; do printf '%s\n' \"${p##*/}\"; done",
+        ])
+        .output()
+        .map_err(|source| RunnerError::SpawnProcess {
+            program: config.bwrap.bin.clone(),
+            source,
+        })?;
+
+    if !output.status.success() {
+        return Err(RunnerError::InvalidConfig(format!(
+            "failed to probe fake /dev baseline: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+        .collect())
 }
 
 fn create_seccomp_memfd() -> Result<fs::File, RunnerError> {
@@ -651,4 +768,17 @@ fn sanitize_for_filename(input: &str) -> String {
             }
         })
         .collect()
+}
+
+fn shell_escape(input: &str) -> String {
+    if !input.is_empty()
+        && input
+            .bytes()
+            .all(|b| matches!(b, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'/' | b'.' | b'_' | b'-' | b':' | b'='))
+    {
+        return input.to_string();
+    }
+
+    let escaped = input.replace('\'', "'\"'\"'");
+    format!("'{}'", escaped)
 }
