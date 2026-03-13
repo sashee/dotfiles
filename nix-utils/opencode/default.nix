@@ -15,7 +15,7 @@ let
 	"share": "disabled",
 	"permission": {
 		"external_directory": {
-			"/nix": "allow"
+			"*": "allow"
 		}
 	}
 }
