@@ -30,6 +30,7 @@ let
 		network = true;
 		dev = true;
 		share_user = true;
+		share_ipc = true;
 	};
 	bin = launcher.mkLauncher {
 		name = "chromium";
