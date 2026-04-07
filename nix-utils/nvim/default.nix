@@ -139,7 +139,7 @@ export default [
 			"$HOME/.gitconfig" = { perm = "ro"; };
 		};
 		files = {
-			"/home/sashee/eslint.config.js" = "${eslintConfig}";
+			"$HOME/eslint.config.js" = "${eslintConfig}";
 		};
 		network = false;
 	};
