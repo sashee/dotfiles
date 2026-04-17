@@ -3,8 +3,24 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
+	rustSrc = import ../rust-src.nix { inherit pkgs; };
 	nixpkgs2 = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-unstable";
 	pkgs2 = import nixpkgs2 { config = {allowUnfree = true;}; overlays = [];};
+		hostToolsMcp = pkgs.rustPlatform.buildRustPackage {
+			pname = "host-tools-mcp";
+			version = "0.1.0";
+			src = rustSrc "opencode/host-tools-mcp";
+			sourceRoot = "nix-utils/opencode/host-tools-mcp";
+			cargoLock = {
+				lockFile = ./host-tools-mcp/Cargo.lock;
+			};
+			doCheck = true;
+		};
+	mcpRegisterBins = pkgs.runCommand "mcp-register-bins" {} ''
+		mkdir -p "$out/bin"
+		ln -s "${hostToolsMcp}/bin/mcp-register" "$out/bin/mcp-register"
+		ln -s "${hostToolsMcp}/bin/mcp-register-exec" "$out/bin/mcp-register-exec"
+	'';
 
 	agentsmd = pkgs.writeTextFile {
 		name = "AGENTS.md";
@@ -52,6 +68,10 @@ A useful refinement is to define exceptions explicitly:
 ## Exceptions
 - Mutation is acceptable when required by a library API, interoperability needs, or demonstrated performance constraints.
 - In those cases, keep mutation local and avoid exposing mutated shared state.
+
+## Sandboxing
+
+- You are running in a sandbox so you won't have access to the full system.
 		'';
 	};
 
@@ -63,6 +83,13 @@ A useful refinement is to define exceptions explicitly:
   "$schema": "https://opencode.ai/config.json",
 	"autoupdate": false,
 	"share": "disabled",
+	"mcp": {
+		"host-tools-mcp": {
+			"type": "local",
+			"command": ["${hostToolsMcp}/bin/host-tools-mcp"],
+			"enabled": true
+		}
+	},
 	"instructions": ["${agentsmd}"],
 	"permission": {
 		"external_directory": {
@@ -75,6 +102,7 @@ A useful refinement is to define exceptions explicitly:
 
 	sandbox_restrictions = {
 		fs = {
+			"/tmp/host-tools-mcp" = { perm = "rw"; mkdir = true; };
 			"$HOME/.local/share/opencode" = { perm = "rw"; mkdir = true; };
 			"$HOME/.config/opencode" = { perm = "rw"; mkdir = true; };
 			"$HOME/.local/state/opencode" = { perm = "rw"; mkdir = true; };
@@ -90,11 +118,12 @@ A useful refinement is to define exceptions explicitly:
 			OPENCODE_CONFIG = "${config}";
 		};
 	};
-in
-{
-	scripts = (import ../_wrapper/default.nix {
+	wrapper = import ../_wrapper/default.nix {
 		name = "opencode";
 		inherit pkgs bin sandbox_restrictions;
-	}).scripts;
+	};
+in
+{
+	scripts = wrapper.scripts ++ [ mcpRegisterBins ];
 	inherit sandbox_restrictions;
 }
