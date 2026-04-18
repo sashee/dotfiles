@@ -122,7 +122,7 @@ pub enum ServerToProvider {
 #[derive(Debug, Clone)]
 pub enum RegisteredCommand {
     Exact(Vec<String>),
-    Exec(String),
+    ArgvPrefix(Vec<String>),
 }
 
 impl RegisteredCommand {
@@ -136,14 +136,14 @@ impl RegisteredCommand {
         Ok(Self::Exact(argv))
     }
 
-    pub fn exec(executable: String) -> io::Result<Self> {
-        if executable.is_empty() {
+    pub fn argv_prefix(argv: Vec<String>) -> io::Result<Self> {
+        if argv.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "missing executable",
+                "missing command prefix",
             ));
         }
-        Ok(Self::Exec(executable))
+        Ok(Self::ArgvPrefix(argv))
     }
 
     pub fn tool_name(&self) -> String {
@@ -156,19 +156,26 @@ impl RegisteredCommand {
                 }
                 sanitize_tool_name(&parts)
             }
-            Self::Exec(executable) => sanitize_tool_name(&[basename(executable).to_string()]),
+            Self::ArgvPrefix(argv) => {
+                let mut parts = Vec::new();
+                if let Some((first, rest)) = argv.split_first() {
+                    parts.push(basename(first).to_string());
+                    parts.extend(rest.iter().cloned());
+                }
+                sanitize_tool_name(&parts)
+            }
         }
     }
 
     pub fn description(&self) -> String {
         match self {
             Self::Exact(argv) => format!(
-                "Runs the fixed command `{}`. Takes no arguments.",
+                "Runs the fixed command `{}`. Takes no command arguments and optionally accepts `timeoutMs`.",
                 argv.join(" ")
             ),
-            Self::Exec(executable) => format!(
-                "Runs the executable `{}`. Accepts arguments as a string array and only invokes this executable.",
-                basename(executable)
+            Self::ArgvPrefix(argv) => format!(
+                "Runs the fixed command prefix `{}`. Accepts trailing arguments as a string array and optionally accepts `timeoutMs`.",
+                argv.join(" ")
             ),
         }
     }
@@ -177,15 +184,24 @@ impl RegisteredCommand {
         let schema = match self {
             Self::Exact(_) => json!({
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "timeoutMs": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                },
                 "additionalProperties": false
             }),
-            Self::Exec(_) => json!({
+            Self::ArgvPrefix(_) => json!({
                 "type": "object",
                 "properties": {
                     "args": {
                         "type": "array",
                         "items": { "type": "string" }
+                    },
+                    "timeoutMs": {
+                        "type": "integer",
+                        "minimum": 1
                     }
                 },
                 "additionalProperties": false

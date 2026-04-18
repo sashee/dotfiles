@@ -19,7 +19,7 @@ let
 	mcpRegisterBins = pkgs.runCommand "mcp-register-bins" {} ''
 		mkdir -p "$out/bin"
 		ln -s "${hostToolsMcp}/bin/mcp-register" "$out/bin/mcp-register"
-		ln -s "${hostToolsMcp}/bin/mcp-register-exec" "$out/bin/mcp-register-exec"
+		ln -s "${hostToolsMcp}/bin/mcp-register-prefix" "$out/bin/mcp-register-prefix"
 	'';
 
 	agentsmd = pkgs.writeTextFile {

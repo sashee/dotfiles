@@ -203,6 +203,12 @@ struct ActiveCall {
     cancel_tx: oneshot::Sender<()>,
 }
 
+struct ParsedCommand {
+    program: String,
+    args: Vec<String>,
+    timeout_ms: Option<u64>,
+}
+
 enum RunnerEvent {
     Progress {
         call_id: String,
@@ -235,7 +241,11 @@ async fn run_command_call_inner(
     cancel_rx: &mut oneshot::Receiver<()>,
     events_tx: &mpsc::UnboundedSender<RunnerEvent>,
 ) -> Result<Option<CallToolResult>> {
-    let (program, args) = match parse_command(mode, arguments) {
+    let ParsedCommand {
+        program,
+        args,
+        timeout_ms,
+    } = match parse_command(mode, arguments) {
         Ok(command) => command,
         Err(result) => return Ok(Some(result)),
     };
@@ -266,6 +276,10 @@ async fn run_command_call_inner(
     let mut stderr_lines = Vec::new();
     let mut next_progress = 1usize;
     let mut exit_status = None;
+    let mut timed_out = false;
+    let timeout_sleep =
+        timeout_ms.map(|ms| Box::pin(tokio::time::sleep(Duration::from_millis(ms))));
+    let mut timeout_sleep = timeout_sleep;
 
     loop {
         tokio::select! {
@@ -310,6 +324,16 @@ async fn run_command_call_inner(
                 eprintln!("exit: cancelled");
                 return Ok(None);
             }
+            _ = async {
+                if let Some(sleep) = timeout_sleep.as_mut() {
+                    sleep.await;
+                }
+            }, if timeout_sleep.is_some() => {
+                timed_out = true;
+                terminate_child(&mut child).await;
+                exit_status = Some(child.wait().await.context("failed to wait for timed out child")?);
+                timeout_sleep = None;
+            }
         }
     }
 
@@ -325,37 +349,69 @@ async fn run_command_call_inner(
         eprintln!("exit: unknown");
     }
 
-    Ok(Some(build_result(status, stdout_lines, stderr_lines)))
+    Ok(Some(build_result(
+        status,
+        stdout_lines,
+        stderr_lines,
+        timed_out,
+        timeout_ms,
+    )))
 }
 
 fn parse_command(
     mode: &RegisteredCommand,
     arguments: &Map<String, Value>,
-) -> std::result::Result<(String, Vec<String>), CallToolResult> {
+) -> std::result::Result<ParsedCommand, CallToolResult> {
     match mode {
         RegisteredCommand::Exact(argv) => {
-            if !arguments.is_empty() {
-                return Err(CallToolResult::error(vec![Content::text(
-                    "This tool takes no arguments.".to_string(),
-                )]));
-            }
-            Ok((argv[0].clone(), argv[1..].to_vec()))
-        }
-        RegisteredCommand::Exec(executable) => {
             #[derive(Deserialize)]
             #[serde(deny_unknown_fields)]
-            struct ExecArgs {
-                #[serde(default)]
-                args: Vec<String>,
+            struct ExactArgs {
+                #[serde(rename = "timeoutMs")]
+                timeout_ms: Option<u64>,
             }
 
-            let parsed = serde_json::from_value::<ExecArgs>(Value::Object(arguments.clone()))
+            let parsed = serde_json::from_value::<ExactArgs>(Value::Object(arguments.clone()))
                 .map_err(|error| {
                     CallToolResult::error(vec![Content::text(format!(
-                        "Invalid args for executable tool: {error}"
+                        "Invalid args for exact tool: {error}"
                     ))])
                 })?;
-            Ok((executable.clone(), parsed.args))
+            Ok(ParsedCommand {
+                program: argv[0].clone(),
+                args: argv[1..].to_vec(),
+                timeout_ms: parsed.timeout_ms,
+            })
+        }
+        RegisteredCommand::ArgvPrefix(prefix) => {
+            #[derive(Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct PrefixArgs {
+                #[serde(default)]
+                args: Vec<String>,
+                #[serde(rename = "timeoutMs")]
+                timeout_ms: Option<u64>,
+            }
+
+            let parsed = serde_json::from_value::<PrefixArgs>(Value::Object(arguments.clone()))
+                .map_err(|error| {
+                    CallToolResult::error(vec![Content::text(format!(
+                        "Invalid args for prefix tool: {error}"
+                    ))])
+                })?;
+            let (program, fixed_args) = prefix
+                .split_first()
+                .expect("argv prefix should contain at least one element");
+            let args = fixed_args
+                .iter()
+                .cloned()
+                .chain(parsed.args)
+                .collect::<Vec<_>>();
+            Ok(ParsedCommand {
+                program: program.clone(),
+                args,
+                timeout_ms: parsed.timeout_ms,
+            })
         }
     }
 }
@@ -364,6 +420,8 @@ fn build_result(
     status: std::process::ExitStatus,
     stdout_lines: Vec<String>,
     stderr_lines: Vec<String>,
+    timed_out: bool,
+    timeout_ms: Option<u64>,
 ) -> CallToolResult {
     let stdout = stdout_lines.join("\n");
     let stderr = stderr_lines.join("\n");
@@ -371,10 +429,20 @@ fn build_result(
     let mut structured = Map::new();
     structured.insert(
         "exitCode".to_string(),
-        status.code().map_or(Value::Null, |code| Value::from(code)),
+        if timed_out {
+            Value::Null
+        } else {
+            status.code().map_or(Value::Null, |code| Value::from(code))
+        },
     );
     if let Some(signal) = status.signal() {
         structured.insert("signal".to_string(), Value::from(signal));
+    }
+    if timed_out {
+        structured.insert("timedOut".to_string(), Value::Bool(true));
+        if let Some(timeout_ms) = timeout_ms {
+            structured.insert("timedOutMs".to_string(), Value::from(timeout_ms));
+        }
     }
     structured.insert("stdout".to_string(), Value::from(stdout.clone()));
     structured.insert("stderr".to_string(), Value::from(stderr.clone()));
@@ -393,7 +461,7 @@ fn build_result(
         vec![Content::text(text_parts.join("\n"))]
     };
 
-    let mut result = if status.success() {
+    let mut result = if timed_out || status.success() {
         CallToolResult::structured(Value::Object(structured))
     } else {
         CallToolResult::structured_error(Value::Object(structured))

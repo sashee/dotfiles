@@ -8,7 +8,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use host_tools_mcp::log_root;
+use host_tools_mcp::{log_root, RegisteredCommand};
 use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 use rand::random;
@@ -16,6 +16,7 @@ use serde_json::{json, Value};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_millis(1500);
 const FILE_TIMEOUT: Duration = Duration::from_millis(1800);
+const EXTENDED_TIMEOUT: Duration = Duration::from_millis(3000);
 
 fn gen_test_id() -> String {
     format!("{:032x}", random::<u128>())
@@ -197,12 +198,8 @@ impl RegisterCli {
         Self::spawn(env!("CARGO_BIN_EXE_mcp-register"), args, test_id)
     }
 
-    fn exec(executable: &str, test_id: &str) -> Self {
-        Self::spawn(
-            env!("CARGO_BIN_EXE_mcp-register-exec"),
-            &[executable.to_string()],
-            test_id,
-        )
+    fn prefix(args: &[String], test_id: &str) -> Self {
+        Self::spawn(env!("CARGO_BIN_EXE_mcp-register-prefix"), args, test_id)
     }
 
     fn pid(&self) -> u32 {
@@ -304,7 +301,7 @@ fn exact_cli_registers_fixed_command_and_streams_progress() {
 }
 
 #[test]
-fn exec_cli_forwards_args_to_single_executable() {
+fn prefix_cli_forwards_args_to_command_prefix() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -316,7 +313,7 @@ fn exec_cli_forwards_args_to_single_executable() {
         "echo-args.sh",
         "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$*\"\n",
     );
-    let _cli = RegisterCli::exec(&script.to_string_lossy(), &test_id);
+    let _cli = RegisterCli::prefix(&[script.to_string_lossy().to_string()], &test_id);
 
     wait_for_tools(&mut server, &["echo_args_sh"]);
     call_tool(
@@ -369,17 +366,17 @@ fn exact_cli_rejects_tool_call_arguments_without_running_command() {
 
     let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
     assert_eq!(response["result"]["isError"], json!(true));
-    assert_eq!(
-        response["result"]["content"][0]["text"],
-        json!("This tool takes no arguments.")
-    );
+    assert!(response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("unknown field `message`"));
     assert!(!marker.exists(), "exact command should not have executed");
 
     let _ = cli;
 }
 
 #[test]
-fn exec_cli_rejects_invalid_args_and_unknown_fields() {
+fn prefix_cli_rejects_invalid_args_and_unknown_fields() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -395,7 +392,7 @@ fn exec_cli_rejects_invalid_args_and_unknown_fields() {
             marker.display()
         ),
     );
-    let _cli = RegisterCli::exec(&script.to_string_lossy(), &test_id);
+    let _cli = RegisterCli::prefix(&[script.to_string_lossy().to_string()], &test_id);
 
     wait_for_tools(&mut server, &["exec_validate_sh"]);
 
@@ -410,7 +407,7 @@ fn exec_cli_rejects_invalid_args_and_unknown_fields() {
     assert!(response["result"]["content"][0]["text"]
         .as_str()
         .unwrap_or_default()
-        .contains("Invalid args for executable tool"));
+        .contains("Invalid args for prefix tool"));
 
     call_tool(
         &mut server,
@@ -425,6 +422,346 @@ fn exec_cli_rejects_invalid_args_and_unknown_fields() {
         .unwrap_or_default()
         .contains("unknown field `unexpected`"));
     assert!(!marker.exists(), "exec command should not have executed");
+}
+
+#[test]
+fn prefix_cli_preserves_multi_part_prefix_before_ai_args() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let script = write_script(
+        &test_id,
+        "prefix-tail.sh",
+        "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$*\"\n",
+    );
+    let _cli = RegisterCli::prefix(
+        &["sh".to_string(), script.to_string_lossy().to_string()],
+        &test_id,
+    );
+    let tool_name = RegisteredCommand::argv_prefix(vec![
+        "sh".to_string(),
+        script.to_string_lossy().to_string(),
+    ])
+    .expect("valid prefix command")
+    .tool_name();
+
+    wait_for_tools(&mut server, &[tool_name.as_str()]);
+    call_tool(
+        &mut server,
+        2,
+        &tool_name,
+        json!({ "args": ["alpha", "beta"] }),
+    );
+    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    assert_eq!(
+        response["result"]["content"][0]["text"],
+        json!("alpha beta")
+    );
+    assert_eq!(
+        response["result"]["structuredContent"],
+        json!({
+            "exitCode": 0,
+            "stdout": "alpha beta",
+            "stderr": ""
+        })
+    );
+}
+
+#[test]
+fn exact_cli_timeout_returns_partial_output_and_term_side_effect() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let marker = temp_test_dir(&test_id).join("exact-timeout-terminated");
+    fs::create_dir_all(marker.parent().expect("marker should have parent"))
+        .expect("failed to create marker dir");
+    let script = write_script(
+        &test_id,
+        "exact-timeout.sh",
+        &format!(
+            "#!/bin/sh\nset -eu\ntrap 'touch {}; exit 0' TERM INT\nprintf 'before timeout\\n'\nwhile true; do sleep 1; done\n",
+            marker.display()
+        ),
+    );
+    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["exact_timeout_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "exact_timeout_sh",
+        json!({ "timeoutMs": 100 }),
+    );
+
+    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    wait_for_file(&marker);
+
+    assert_eq!(response["result"]["isError"], json!(false));
+    assert_eq!(
+        response["result"]["content"][0]["text"],
+        json!("before timeout")
+    );
+    assert_eq!(
+        response["result"]["structuredContent"],
+        json!({
+            "exitCode": null,
+            "stdout": "before timeout",
+            "stderr": "",
+            "timedOut": true,
+            "timedOutMs": 100
+        })
+    );
+}
+
+#[test]
+fn prefix_cli_timeout_returns_partial_output_and_term_side_effect() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let marker = temp_test_dir(&test_id).join("prefix-timeout-terminated");
+    fs::create_dir_all(marker.parent().expect("marker should have parent"))
+        .expect("failed to create marker dir");
+    let script = write_script(
+        &test_id,
+        "prefix-timeout.sh",
+        &format!(
+            "#!/bin/sh\nset -eu\ntrap 'touch {}; exit 0' TERM INT\nprintf 'prefix start:%s\\n' \"$1\"\nwhile true; do sleep 1; done\n",
+            marker.display()
+        ),
+    );
+    let _cli = RegisterCli::prefix(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["prefix_timeout_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "prefix_timeout_sh",
+        json!({ "args": ["hello"], "timeoutMs": 100 }),
+    );
+
+    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    wait_for_file(&marker);
+
+    assert_eq!(response["result"]["isError"], json!(false));
+    assert_eq!(
+        response["result"]["content"][0]["text"],
+        json!("prefix start:hello")
+    );
+    assert_eq!(
+        response["result"]["structuredContent"],
+        json!({
+            "exitCode": null,
+            "stdout": "prefix start:hello",
+            "stderr": "",
+            "timedOut": true,
+            "timedOutMs": 100
+        })
+    );
+}
+
+#[test]
+fn exact_cli_rejects_non_numeric_timeout() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let script = write_script(
+        &test_id,
+        "exact-invalid-timeout.sh",
+        "#!/bin/sh\nset -eu\nprintf 'unused\\n'\n",
+    );
+    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["exact_invalid_timeout_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "exact_invalid_timeout_sh",
+        json!({ "timeoutMs": "soon" }),
+    );
+
+    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    assert_eq!(response["result"]["isError"], json!(true));
+    assert!(response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("Invalid args for exact tool"));
+}
+
+#[test]
+fn prefix_cli_rejects_non_numeric_timeout() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let script = write_script(
+        &test_id,
+        "prefix-invalid-timeout.sh",
+        "#!/bin/sh\nset -eu\nprintf 'unused\\n'\n",
+    );
+    let _cli = RegisterCli::prefix(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["prefix_invalid_timeout_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "prefix_invalid_timeout_sh",
+        json!({ "args": ["hello"], "timeoutMs": "soon" }),
+    );
+
+    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    assert_eq!(response["result"]["isError"], json!(true));
+    assert!(response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("Invalid args for prefix tool"));
+}
+
+#[test]
+fn exact_cli_timeout_with_no_output_returns_empty_content() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let marker = temp_test_dir(&test_id).join("exact-timeout-no-output-terminated");
+    fs::create_dir_all(marker.parent().expect("marker should have parent"))
+        .expect("failed to create marker dir");
+    let script = write_script(
+        &test_id,
+        "exact-timeout-no-output.sh",
+        &format!(
+            "#!/bin/sh\nset -eu\ntrap 'touch {}; exit 0' TERM INT\nwhile true; do sleep 1; done\n",
+            marker.display()
+        ),
+    );
+    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["exact_timeout_no_output_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "exact_timeout_no_output_sh",
+        json!({ "timeoutMs": 100 }),
+    );
+
+    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    wait_for_file(&marker);
+
+    assert_eq!(response["result"]["isError"], json!(false));
+    assert_eq!(response["result"]["content"], json!([]));
+    assert_eq!(
+        response["result"]["structuredContent"],
+        json!({
+            "exitCode": null,
+            "stdout": "",
+            "stderr": "",
+            "timedOut": true,
+            "timedOutMs": 100
+        })
+    );
+}
+
+#[test]
+fn exact_cli_timeout_force_kills_when_term_is_ignored() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let script = write_script(
+        &test_id,
+        "exact-timeout-force-kill.sh",
+        "#!/bin/sh\nset -eu\ntrap '' TERM INT\nprintf 'ignoring term\\n'\nwhile true; do sleep 1; done\n",
+    );
+    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["exact_timeout_force_kill_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "exact_timeout_force_kill_sh",
+        json!({ "timeoutMs": 100 }),
+    );
+
+    let response = server.recv_matching(EXTENDED_TIMEOUT, |message| message["id"] == json!(2));
+
+    assert_eq!(response["result"]["isError"], json!(false));
+    assert_eq!(
+        response["result"]["content"][0]["text"],
+        json!("ignoring term")
+    );
+    assert_eq!(
+        response["result"]["structuredContent"]["timedOut"],
+        json!(true)
+    );
+    assert_eq!(
+        response["result"]["structuredContent"]["timedOutMs"],
+        json!(100)
+    );
+    assert_eq!(
+        response["result"]["structuredContent"]["exitCode"],
+        json!(null)
+    );
+}
+
+#[test]
+fn exact_cli_finishing_before_timeout_does_not_report_timeout() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let script = write_script(
+        &test_id,
+        "exact-finishes-before-timeout.sh",
+        "#!/bin/sh\nset -eu\nprintf 'done quickly\\n'\n",
+    );
+    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["exact_finishes_before_timeout_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "exact_finishes_before_timeout_sh",
+        json!({ "timeoutMs": 1000 }),
+    );
+
+    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+
+    assert_eq!(response["result"]["isError"], json!(false));
+    assert_eq!(
+        response["result"]["content"][0]["text"],
+        json!("done quickly")
+    );
+    assert_eq!(
+        response["result"]["structuredContent"],
+        json!({
+            "exitCode": 0,
+            "stdout": "done quickly",
+            "stderr": ""
+        })
+    );
+    assert_eq!(
+        response["result"]["structuredContent"].get("timedOut"),
+        None
+    );
 }
 
 #[test]
