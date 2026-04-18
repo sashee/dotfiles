@@ -588,7 +588,7 @@ impl ServerHandler for HostToolsMcp {
         )
         .with_instructions(
             &format!(
-                "Dynamic host tools are registered over the per-process UDS at {}/<timestamp>/registry.sock",
+                "Dynamic host tools are registered over the per-process UDS at {}/<datetime>/registry.sock",
                 log_root().display()
             ),
         )

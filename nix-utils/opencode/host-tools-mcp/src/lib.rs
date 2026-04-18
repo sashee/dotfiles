@@ -5,8 +5,8 @@ use std::io;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
+use chrono::Local;
 use rmcp::model::{CallToolResult, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -14,6 +14,13 @@ use serde_json::{json, Map, Value};
 pub mod register;
 
 pub const SOCKET_NAME: &str = "registry.sock";
+const MAX_TOOL_NAME_LEN: usize = 64;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionMode {
+    Pipe,
+    Pty,
+}
 
 pub fn log_root() -> PathBuf {
     env::var("TMPDIR")
@@ -27,10 +34,7 @@ pub fn create_server_dir() -> io::Result<PathBuf> {
     fs::create_dir_all(&root)?;
 
     for attempt in 0..100u32 {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(io::Error::other)?
-            .as_nanos();
+        let timestamp = Local::now().format("%Y-%m-%d_%H-%M-%S%.3f%z");
         let suffix = if attempt == 0 {
             String::new()
         } else {
@@ -121,34 +125,70 @@ pub enum ServerToProvider {
 
 #[derive(Debug, Clone)]
 pub enum RegisteredCommand {
-    Exact(Vec<String>),
-    ArgvPrefix(Vec<String>),
+    Exact {
+        argv: Vec<String>,
+        execution_mode: ExecutionMode,
+    },
+    ArgvPrefix {
+        argv: Vec<String>,
+        execution_mode: ExecutionMode,
+    },
 }
 
 impl RegisteredCommand {
     pub fn exact(argv: Vec<String>) -> io::Result<Self> {
+        Self::exact_with_mode(argv, ExecutionMode::Pipe)
+    }
+
+    pub fn exact_pty(argv: Vec<String>) -> io::Result<Self> {
+        Self::exact_with_mode(argv, ExecutionMode::Pty)
+    }
+
+    fn exact_with_mode(argv: Vec<String>, execution_mode: ExecutionMode) -> io::Result<Self> {
         if argv.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "missing command",
             ));
         }
-        Ok(Self::Exact(argv))
+        Ok(Self::Exact {
+            argv,
+            execution_mode,
+        })
     }
 
     pub fn argv_prefix(argv: Vec<String>) -> io::Result<Self> {
+        Self::argv_prefix_with_mode(argv, ExecutionMode::Pipe)
+    }
+
+    pub fn argv_prefix_pty(argv: Vec<String>) -> io::Result<Self> {
+        Self::argv_prefix_with_mode(argv, ExecutionMode::Pty)
+    }
+
+    fn argv_prefix_with_mode(argv: Vec<String>, execution_mode: ExecutionMode) -> io::Result<Self> {
         if argv.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "missing command prefix",
             ));
         }
-        Ok(Self::ArgvPrefix(argv))
+        Ok(Self::ArgvPrefix {
+            argv,
+            execution_mode,
+        })
+    }
+
+    pub fn execution_mode(&self) -> ExecutionMode {
+        match self {
+            Self::Exact { execution_mode, .. } | Self::ArgvPrefix { execution_mode, .. } => {
+                *execution_mode
+            }
+        }
     }
 
     pub fn tool_name(&self) -> String {
         match self {
-            Self::Exact(argv) => {
+            Self::Exact { argv, .. } => {
                 let mut parts = Vec::new();
                 if let Some((first, rest)) = argv.split_first() {
                     parts.push(basename(first).to_string());
@@ -156,7 +196,7 @@ impl RegisteredCommand {
                 }
                 sanitize_tool_name(&parts)
             }
-            Self::ArgvPrefix(argv) => {
+            Self::ArgvPrefix { argv, .. } => {
                 let mut parts = Vec::new();
                 if let Some((first, rest)) = argv.split_first() {
                     parts.push(basename(first).to_string());
@@ -169,20 +209,28 @@ impl RegisteredCommand {
 
     pub fn description(&self) -> String {
         match self {
-            Self::Exact(argv) => format!(
-                "Runs the fixed command `{}`. Takes no command arguments and optionally accepts `timeoutMs`.",
-                argv.join(" ")
+            Self::Exact {
+                argv,
+                execution_mode,
+            } => format!(
+                "Runs the fixed command `{}`{} Takes no command arguments and optionally accepts `timeoutMs`.",
+                argv.join(" "),
+                execution_mode_description(*execution_mode)
             ),
-            Self::ArgvPrefix(argv) => format!(
-                "Runs the fixed command prefix `{}`. Accepts trailing arguments as a string array and optionally accepts `timeoutMs`.",
-                argv.join(" ")
+            Self::ArgvPrefix {
+                argv,
+                execution_mode,
+            } => format!(
+                "Runs the fixed command prefix `{}`{} Accepts trailing arguments as a string array and optionally accepts `timeoutMs`.",
+                argv.join(" "),
+                execution_mode_description(*execution_mode)
             ),
         }
     }
 
     pub fn tool_definition(&self) -> Tool {
         let schema = match self {
-            Self::Exact(_) => json!({
+            Self::Exact { .. } => json!({
                 "type": "object",
                 "properties": {
                     "timeoutMs": {
@@ -192,7 +240,7 @@ impl RegisteredCommand {
                 },
                 "additionalProperties": false
             }),
-            Self::ArgvPrefix(_) => json!({
+            Self::ArgvPrefix { .. } => json!({
                 "type": "object",
                 "properties": {
                     "args": {
@@ -289,7 +337,16 @@ fn sanitize_tool_name(parts: &[String]) -> String {
     while name.contains("__") {
         name = name.replace("__", "_");
     }
-    name.trim_matches('_').to_string()
+    let trimmed = name.trim_matches('_');
+    let capped = trimmed.chars().take(MAX_TOOL_NAME_LEN).collect::<String>();
+    capped.trim_matches('_').to_string()
+}
+
+fn execution_mode_description(execution_mode: ExecutionMode) -> &'static str {
+    match execution_mode {
+        ExecutionMode::Pipe => ".",
+        ExecutionMode::Pty => " in a terminal-emulated PTY with rendered plain-text output. Stdout and stderr are combined.",
+    }
 }
 
 fn basename(path: &str) -> &str {
@@ -308,5 +365,27 @@ pub fn progress_message(line_index: usize, stream: &str, line: &str) -> Progress
         progress: line_index as f64,
         total: None,
         message: Some(format!("{stream}: {line}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RegisteredCommand, MAX_TOOL_NAME_LEN};
+
+    #[test]
+    fn tool_name_is_capped() {
+        let command = RegisteredCommand::exact(vec![
+            "/tmp/this-is-a-very-long-command-name-that-keeps-going-and-going-and-going".into(),
+            "with-even-more-arguments".into(),
+            "and-even-more-arguments".into(),
+        ])
+        .expect("command should parse");
+
+        let tool_name = command.tool_name();
+        assert!(tool_name.len() <= MAX_TOOL_NAME_LEN);
+        assert_eq!(
+            tool_name,
+            "this_is_a_very_long_command_name_that_keeps_going_and_going_and"
+        );
     }
 }

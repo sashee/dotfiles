@@ -4,9 +4,26 @@ use host_tools_mcp::{register::run_register, RegisteredCommand};
 #[tokio::main]
 async fn main() -> Result<()> {
     let argv = std::env::args().skip(1).collect::<Vec<_>>();
+    let (pty, argv) = parse_args(argv)?;
     if argv.is_empty() {
-        bail!("usage: mcp-register <command> [args...]");
+        bail!("usage: mcp-register [--pty] <command> [args...]");
     }
-    let mode = RegisteredCommand::exact(argv).context("invalid exact command")?;
+    let mode = if pty {
+        RegisteredCommand::exact_pty(argv)
+    } else {
+        RegisteredCommand::exact(argv)
+    }
+    .context("invalid exact command")?;
     run_register(mode).await
+}
+
+fn parse_args(argv: Vec<String>) -> Result<(bool, Vec<String>)> {
+    if argv.first().is_some_and(|arg| arg == "--pty") {
+        if argv.len() == 1 {
+            bail!("usage: mcp-register [--pty] <command> [args...]");
+        }
+        Ok((true, argv[1..].to_vec()))
+    } else {
+        Ok((false, argv))
+    }
 }

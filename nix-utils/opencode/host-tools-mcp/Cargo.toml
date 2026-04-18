@@ -7,12 +7,13 @@ publish = false
 [dependencies]
 anyhow = "1.0"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-nix = { version = "0.29", features = ["process", "signal"] }
+nix = { version = "0.29", features = ["process", "signal", "term"] }
 rmcp = { version = "1.4.0", features = ["server", "macros", "schemars", "transport-async-rw"] }
 schemars = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["io-std", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
+vt100 = "0.16"
 
 [dev-dependencies]
 rand = "0.8"

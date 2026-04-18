@@ -255,7 +255,10 @@ fn startup_creates_artifacts_and_empty_tool_list() {
         .process_dir()
         .file_name()
         .and_then(|name| name.to_str())
-        .is_some_and(|name| name.chars().all(|ch| ch.is_ascii_digit() || ch == '-')));
+        .is_some_and(|name| {
+            name.chars()
+                .all(|ch| ch.is_ascii_digit() || matches!(ch, '-' | '_' | '+' | '.'))
+        }));
 }
 
 #[test]

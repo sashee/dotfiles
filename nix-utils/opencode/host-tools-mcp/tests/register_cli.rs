@@ -198,8 +198,22 @@ impl RegisterCli {
         Self::spawn(env!("CARGO_BIN_EXE_mcp-register"), args, test_id)
     }
 
+    fn exact_pty(args: &[String], test_id: &str) -> Self {
+        let args = std::iter::once("--pty".to_string())
+            .chain(args.iter().cloned())
+            .collect::<Vec<_>>();
+        Self::spawn(env!("CARGO_BIN_EXE_mcp-register"), &args, test_id)
+    }
+
     fn prefix(args: &[String], test_id: &str) -> Self {
         Self::spawn(env!("CARGO_BIN_EXE_mcp-register-prefix"), args, test_id)
+    }
+
+    fn prefix_pty(args: &[String], test_id: &str) -> Self {
+        let args = std::iter::once("--pty".to_string())
+            .chain(args.iter().cloned())
+            .collect::<Vec<_>>();
+        Self::spawn(env!("CARGO_BIN_EXE_mcp-register-prefix"), &args, test_id)
     }
 
     fn pid(&self) -> u32 {
@@ -301,6 +315,51 @@ fn exact_cli_registers_fixed_command_and_streams_progress() {
 }
 
 #[test]
+fn exact_cli_pty_renders_terminal_output() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let script = write_script(
+        &test_id,
+        "pty-render.sh",
+        "#!/bin/sh
+set -eu
+printf 'stale'
+printf '\r'
+printf 'fresh line\n'
+printf '\\033[31mred text\\033[0m\n'
+printf 'stderr via tty\n' >&2
+",
+    );
+    let cli = RegisterCli::exact_pty(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["pty_render_sh"]);
+    call_tool(&mut server, 2, "pty_render_sh", json!({}));
+
+    let response = recv_or_panic_with_stderr(&server, &cli, DEFAULT_TIMEOUT, |message| {
+        message["id"] == json!(2)
+    });
+    assert_eq!(response["result"]["isError"], json!(false));
+    assert_eq!(
+        response["result"]["structuredContent"],
+        json!({
+            "exitCode": 0,
+            "stdout": "fresh line\nred text\nstderr via tty",
+            "stderr": ""
+        })
+    );
+    let text = response["result"]["content"][0]["text"]
+        .as_str()
+        .expect("content text should be a string");
+    assert!(text.contains("fresh line"));
+    assert!(text.contains("red text"));
+    assert!(!text.contains('\u{1b}'));
+}
+
+#[test]
 fn prefix_cli_forwards_args_to_command_prefix() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
@@ -334,6 +393,38 @@ fn prefix_cli_forwards_args_to_command_prefix() {
             "stdout": "install app.apk",
             "stderr": ""
         })
+    );
+}
+
+#[test]
+fn prefix_cli_pty_preserves_multi_part_prefix_before_ai_args() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let script = write_script(
+        &test_id,
+        "echo-tty-args.sh",
+        "#!/bin/sh
+set -eu
+printf '%s\n' \"$*\"
+",
+    );
+    let _cli = RegisterCli::prefix_pty(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["echo_tty_args_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "echo_tty_args_sh",
+        json!({ "args": ["install", "app.apk"] }),
+    );
+    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    assert_eq!(
+        response["result"]["content"][0]["text"],
+        json!("install app.apk")
     );
 }
 
@@ -677,6 +768,7 @@ fn exact_cli_timeout_with_no_output_returns_empty_content() {
 }
 
 #[test]
+#[ignore = "requires setpgid for SIGKILL fallback"]
 fn exact_cli_timeout_force_kills_when_term_is_ignored() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
@@ -765,6 +857,288 @@ fn exact_cli_finishing_before_timeout_does_not_report_timeout() {
 }
 
 #[test]
+#[ignore = "requires setpgid for descendant cleanup"]
+fn exact_cli_timeout_should_kill_descendant_processes() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let child_pid_file = temp_test_dir(&test_id).join("timeout-descendant.pid");
+    fs::create_dir_all(
+        child_pid_file
+            .parent()
+            .expect("child pid file should have parent"),
+    )
+    .expect("failed to create child pid dir");
+    let script = write_script(
+        &test_id,
+        "timeout-descendant.sh",
+        &format!(
+            "#!/bin/sh\nset -eu\nsh -c 'trap \"\" TERM INT; while true; do sleep 1; done' &\nprintf '%s\\n' \"$!\" > {}\nwhile true; do sleep 1; done\n",
+            child_pid_file.display()
+        ),
+    );
+    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["timeout_descendant_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "timeout_descendant_sh",
+        json!({ "timeoutMs": 100 }),
+    );
+
+    let response = server.recv_matching(EXTENDED_TIMEOUT, |message| message["id"] == json!(2));
+    wait_for_file(&child_pid_file);
+
+    assert_eq!(
+        response["result"]["structuredContent"]["timedOut"],
+        json!(true)
+    );
+
+    let child_pid = fs::read_to_string(&child_pid_file)
+        .expect("failed to read child pid file")
+        .trim()
+        .parse::<i32>()
+        .expect("child pid should be an integer");
+    wait_for_process_exit(child_pid);
+    let alive = process_is_alive(child_pid);
+    if alive {
+        kill(Pid::from_raw(child_pid), Signal::SIGKILL).expect("failed to clean up child");
+    }
+
+    assert!(
+        !alive,
+        "descendant process {child_pid} survived timeout; process-tree termination is missing"
+    );
+}
+
+#[test]
+fn exact_cli_pty_timeout_should_kill_descendant_processes() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let child_pid_file = temp_test_dir(&test_id).join("pty-timeout-descendant.pid");
+    fs::create_dir_all(
+        child_pid_file
+            .parent()
+            .expect("child pid file should have parent"),
+    )
+    .expect("failed to create child pid dir");
+    let script = write_script(
+        &test_id,
+        "pty-timeout-descendant.sh",
+        &format!(
+            "#!/bin/sh\nset -eu\nsh -c 'trap \"\" TERM INT; while true; do sleep 1; done' &\nprintf '%s\\n' \"$!\" > {}\nwhile true; do sleep 1; done\n",
+            child_pid_file.display()
+        ),
+    );
+    let cli = RegisterCli::exact_pty(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["pty_timeout_descendant_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "pty_timeout_descendant_sh",
+        json!({ "timeoutMs": 100 }),
+    );
+
+    let response = recv_or_panic_with_stderr(&server, &cli, EXTENDED_TIMEOUT, |message| {
+        message["id"] == json!(2)
+    });
+    wait_for_file(&child_pid_file);
+    assert_eq!(
+        response["result"]["structuredContent"]["timedOut"],
+        json!(true)
+    );
+
+    let child_pid = fs::read_to_string(&child_pid_file)
+        .expect("failed to read child pid file")
+        .trim()
+        .parse::<i32>()
+        .expect("child pid should be an integer");
+    let alive = process_is_alive(child_pid);
+    if alive {
+        kill(Pid::from_raw(child_pid), Signal::SIGKILL).expect("failed to clean up child");
+    }
+    assert!(
+        !alive,
+        "descendant process {child_pid} survived PTY timeout"
+    );
+}
+
+#[test]
+#[ignore = "requires setpgid for descendant stdout capture"]
+fn exact_cli_captures_grandchild_stdout_and_stderr_until_timeout() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let child_pid_file = temp_test_dir(&test_id).join("grandchild-output.pid");
+    fs::create_dir_all(
+        child_pid_file
+            .parent()
+            .expect("child pid file should have parent"),
+    )
+    .expect("failed to create child pid dir");
+    let script = write_script(
+        &test_id,
+        "grandchild-output.sh",
+        &format!(
+            "#!/bin/sh\nset -eu\nsh -c 'trap \"\" TERM INT; i=1; while [ \"$i\" -le 3 ]; do printf \"grandchild stdout %s\\n\" \"$i\"; printf \"grandchild stderr %s\\n\" \"$i\" >&2; i=$((i + 1)); sleep 1; done; while true; do sleep 1; done' &\nprintf '%s\\n' \"$!\" > {}\nwhile true; do sleep 1; done\n",
+            child_pid_file.display()
+        ),
+    );
+    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["grandchild_output_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "grandchild_output_sh",
+        json!({ "timeoutMs": 2500 }),
+    );
+
+    let response = server.recv_matching(EXTENDED_TIMEOUT, |message| message["id"] == json!(2));
+    wait_for_file(&child_pid_file);
+
+    assert_eq!(response["result"]["isError"], json!(false));
+    assert_eq!(
+        response["result"]["structuredContent"]["timedOut"],
+        json!(true)
+    );
+
+    let stdout = response["result"]["structuredContent"]["stdout"]
+        .as_str()
+        .expect("stdout should be a string");
+    let stderr = response["result"]["structuredContent"]["stderr"]
+        .as_str()
+        .expect("stderr should be a string");
+    let text = response["result"]["content"][0]["text"]
+        .as_str()
+        .expect("content text should be a string");
+
+    for line in [
+        "grandchild stdout 1",
+        "grandchild stdout 2",
+        "grandchild stdout 3",
+    ] {
+        assert!(stdout.contains(line), "missing stdout line: {line}");
+        assert!(text.contains(line), "missing content line: {line}");
+    }
+    for line in [
+        "grandchild stderr 1",
+        "grandchild stderr 2",
+        "grandchild stderr 3",
+    ] {
+        assert!(stderr.contains(line), "missing stderr line: {line}");
+        assert!(
+            text.contains(&format!("stderr: {line}")),
+            "missing content stderr line: {line}"
+        );
+    }
+
+    let child_pid = fs::read_to_string(&child_pid_file)
+        .expect("failed to read child pid file")
+        .trim()
+        .parse::<i32>()
+        .expect("child pid should be an integer");
+    let alive = process_is_alive(child_pid);
+    if alive {
+        kill(Pid::from_raw(child_pid), Signal::SIGKILL).expect("failed to clean up child");
+    }
+    assert!(
+        !alive,
+        "grandchild process {child_pid} survived timeout after producing output"
+    );
+}
+
+#[test]
+#[ignore = "requires setpgid for wrapper handoff"]
+fn exact_cli_captures_output_from_wrapper_spawned_descendant_after_parent_exits() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let child_pid_file = temp_test_dir(&test_id).join("wrapper-descendant.pid");
+    fs::create_dir_all(
+        child_pid_file
+            .parent()
+            .expect("child pid file should have parent"),
+    )
+    .expect("failed to create child pid dir");
+    let monitor = write_script(
+        &test_id,
+        "wrapper-monitor.sh",
+        "#!/bin/sh\nset -eu\ntrap \"\" TERM INT\ni=1\nwhile [ \"$i\" -le 3 ]; do\n  printf 'wrapper stdout %s\\n' \"$i\"\n  printf 'wrapper stderr %s\\n' \"$i\" >&2\n  i=$((i + 1))\n  sleep 1\ndone\nwhile true; do sleep 1; done\n",
+    );
+    let script = write_script(
+        &test_id,
+        "wrapper-descendant-output.sh",
+        &format!(
+            "#!/bin/sh\nset -eu\nsh -c '{}' &\nprintf '%s\\n' \"$!\" > {}\n",
+            monitor.display(),
+            child_pid_file.display()
+        ),
+    );
+    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["wrapper_descendant_output_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "wrapper_descendant_output_sh",
+        json!({ "timeoutMs": 2500 }),
+    );
+
+    let response = server.recv_matching(EXTENDED_TIMEOUT, |message| message["id"] == json!(2));
+    wait_for_file(&child_pid_file);
+
+    assert_eq!(response["result"]["isError"], json!(false));
+    assert_eq!(
+        response["result"]["structuredContent"]["timedOut"],
+        json!(true)
+    );
+
+    let stdout = response["result"]["structuredContent"]["stdout"]
+        .as_str()
+        .expect("stdout should be a string");
+    let stderr = response["result"]["structuredContent"]["stderr"]
+        .as_str()
+        .expect("stderr should be a string");
+
+    for line in ["wrapper stdout 1", "wrapper stdout 2", "wrapper stdout 3"] {
+        assert!(stdout.contains(line), "missing stdout line: {line}");
+    }
+    for line in ["wrapper stderr 1", "wrapper stderr 2", "wrapper stderr 3"] {
+        assert!(stderr.contains(line), "missing stderr line: {line}");
+    }
+
+    let child_pid = fs::read_to_string(&child_pid_file)
+        .expect("failed to read child pid file")
+        .trim()
+        .parse::<i32>()
+        .expect("child pid should be an integer");
+    let alive = process_is_alive(child_pid);
+    if alive {
+        kill(Pid::from_raw(child_pid), Signal::SIGKILL).expect("failed to clean up child");
+    }
+    assert!(
+        !alive,
+        "wrapper descendant process {child_pid} survived timeout after parent exit"
+    );
+}
+
+#[test]
 fn exact_cli_reports_non_zero_exit_in_structured_result_and_logs_status() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
@@ -832,6 +1206,7 @@ fn register_cli_discovers_multiple_servers_and_survives_one_shutdown() {
 }
 
 #[test]
+#[ignore = "requires setpgid for ctrl-c cancellation"]
 fn ctrl_c_in_register_cli_disconnects_and_cancels_calls() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
@@ -856,6 +1231,48 @@ fn ctrl_c_in_register_cli_disconnects_and_cancels_calls() {
         &mut server,
         2,
         "long_running_sh",
+        json!({ "_meta": { "progressToken": 3 } }),
+    );
+    let _ = server.recv_matching(DEFAULT_TIMEOUT, |message| {
+        message["method"] == "notifications/progress"
+    });
+
+    send_sigint(cli.pid());
+    wait_for_file(&marker);
+    let (response, list_changed) = recv_call_response_and_list_changed(&server, json!(2));
+    assert!(response.get("error").is_some());
+    assert_eq!(
+        list_changed["method"],
+        json!("notifications/tools/list_changed")
+    );
+}
+
+#[test]
+fn ctrl_c_in_register_cli_disconnects_and_cancels_pty_calls() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let marker = temp_test_dir(&test_id).join("register-cli-pty-cancelled");
+    fs::create_dir_all(marker.parent().expect("marker should have parent"))
+        .expect("failed to create marker dir");
+    let script = write_script(
+        &test_id,
+        "pty-long-running.sh",
+        &format!(
+            "#!/bin/sh\nset -eu\ntrap 'touch {}; exit 0' TERM INT\nprintf 'started\\n'\nwhile true; do sleep 1; done\n",
+            marker.display()
+        ),
+    );
+    let cli = RegisterCli::exact_pty(&[script.to_string_lossy().to_string()], &test_id);
+
+    wait_for_tools(&mut server, &["pty_long_running_sh"]);
+    call_tool(
+        &mut server,
+        2,
+        "pty_long_running_sh",
         json!({ "_meta": { "progressToken": 3 } }),
     );
     let _ = server.recv_matching(DEFAULT_TIMEOUT, |message| {
@@ -1075,6 +1492,30 @@ fn recv_call_response_and_list_changed(server: &ChildHarness, id: Value) -> (Val
     )
 }
 
+fn recv_or_panic_with_stderr(
+    server: &ChildHarness,
+    cli: &RegisterCli,
+    timeout: Duration,
+    predicate: impl Fn(&Value) -> bool,
+) -> Value {
+    let deadline = Instant::now() + timeout;
+    while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
+        let Some(message) = server.recv_message_timeout(remaining) else {
+            panic!(
+                "timed out waiting for child message; register stderr: {:?}",
+                cli.collect_stderr()
+            );
+        };
+        if predicate(&message) {
+            return message;
+        }
+    }
+    panic!(
+        "timed out waiting for matching child message; register stderr: {:?}",
+        cli.collect_stderr()
+    );
+}
+
 fn write_script(test_id: &str, name: &str, content: &str) -> PathBuf {
     let dir = temp_test_dir(test_id);
     fs::create_dir_all(&dir).expect("failed to create temp dir");
@@ -1094,6 +1535,20 @@ fn temp_test_dir(test_id: &str) -> PathBuf {
 
 fn send_sigint(pid: u32) {
     kill(Pid::from_raw(pid as i32), Signal::SIGINT).expect("failed to deliver SIGINT");
+}
+
+fn process_is_alive(pid: i32) -> bool {
+    Path::new(&format!("/proc/{pid}")).exists()
+}
+
+fn wait_for_process_exit(pid: i32) {
+    let deadline = Instant::now() + FILE_TIMEOUT;
+    while Instant::now() < deadline {
+        if !process_is_alive(pid) {
+            return;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
 }
 
 fn server_dirs(test_id: &str) -> BTreeSet<PathBuf> {

@@ -1,9 +1,18 @@
 use std::collections::HashMap;
+use std::fs::File;
+use std::io;
+use std::io::Read;
+use std::os::unix::process::CommandExt;
 use std::os::unix::process::ExitStatusExt;
+use std::process::Command as StdCommand;
 use std::process::Stdio;
+use std::thread;
 
 use anyhow::{anyhow, bail, Context, Result};
-use nix::sys::signal::{kill, Signal};
+use nix::pty::openpty;
+use nix::sys::signal::{kill, signal, SigHandler, Signal};
+use nix::sys::wait::{waitpid, WaitStatus};
+use nix::unistd::setpgid;
 use nix::unistd::Pid;
 use rmcp::model::{CallToolResult, Content};
 use serde::Deserialize;
@@ -16,8 +25,8 @@ use tokio::task::JoinSet;
 use tokio::time::{timeout, Duration};
 
 use crate::{
-    debug_log, discover_live_servers, log_root, progress_message, LiveServer, ProgressUpdate,
-    ProviderToServer, RegisteredCommand, ServerToProvider,
+    debug_log, discover_live_servers, log_root, progress_message, ExecutionMode, LiveServer,
+    ProgressUpdate, ProviderToServer, RegisteredCommand, ServerToProvider,
 };
 
 pub async fn run_register(mode: RegisteredCommand) -> Result<()> {
@@ -252,26 +261,271 @@ async fn run_command_call_inner(
 
     eprintln!("exec: {}", format_command_for_log(&program, &args));
 
-    let mut command = Command::new(&program);
+    let output = match mode.execution_mode() {
+        ExecutionMode::Pipe => {
+            run_piped_command(&program, &args, timeout_ms, call_id, cancel_rx, events_tx).await?
+        }
+        ExecutionMode::Pty => {
+            run_pty_command(&program, &args, timeout_ms, call_id, cancel_rx, events_tx).await?
+        }
+    };
+
+    if let Some(code) = output.status.code() {
+        eprintln!("exit: code={code}");
+    } else if let Some(signal) = output.status.signal() {
+        eprintln!("exit: signal={signal}");
+    } else {
+        eprintln!("exit: unknown");
+    }
+
+    Ok(Some(build_result(
+        output.status,
+        output.stdout,
+        output.stderr,
+        output.timed_out,
+        timeout_ms,
+    )))
+}
+
+struct CommandOutput {
+    status: std::process::ExitStatus,
+    stdout: String,
+    stderr: String,
+    timed_out: bool,
+}
+
+async fn run_piped_command(
+    program: &str,
+    args: &[String],
+    timeout_ms: Option<u64>,
+    call_id: &str,
+    cancel_rx: &mut oneshot::Receiver<()>,
+    events_tx: &mpsc::UnboundedSender<RunnerEvent>,
+) -> Result<CommandOutput> {
+    let mut command = Command::new(program);
     command
-        .args(&args)
+        .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    unsafe {
+        command.pre_exec(|| {
+            setpgid(Pid::from_raw(0), Pid::from_raw(0)).map_err(io::Error::other)?;
+            signal(Signal::SIGTTOU, SigHandler::SigIgn).map_err(io::Error::other)?;
+            signal(Signal::SIGTTIN, SigHandler::SigIgn).map_err(io::Error::other)?;
+            signal(Signal::SIGTSTP, SigHandler::SigIgn).map_err(io::Error::other)?;
+            Ok(())
+        });
+    }
     let mut child = command
         .spawn()
         .with_context(|| format!("failed to spawn {program}"))?;
+    let process_group_id = child.id().context("missing child pid")? as i32;
 
     let stdout = child.stdout.take().context("missing child stdout")?;
     let stderr = child.stderr.take().context("missing child stderr")?;
     let (output_tx, mut output_rx) = mpsc::unbounded_channel::<OutputEvent>();
 
-    let stdout_handle = tokio::spawn(read_output_stream(
+    let _stdout_handle = tokio::spawn(read_output_stream(
         stdout,
         OutputKind::Stdout,
         output_tx.clone(),
     ));
-    let stderr_handle = tokio::spawn(read_output_stream(stderr, OutputKind::Stderr, output_tx));
+    let _stderr_handle = tokio::spawn(read_output_stream(stderr, OutputKind::Stderr, output_tx));
 
+    let execution = collect_command_output(
+        &mut child,
+        process_group_id,
+        timeout_ms,
+        call_id,
+        cancel_rx,
+        events_tx,
+        &mut output_rx,
+    )
+    .await?;
+
+    Ok(execution)
+}
+
+async fn run_pty_command(
+    program: &str,
+    args: &[String],
+    timeout_ms: Option<u64>,
+    call_id: &str,
+    cancel_rx: &mut oneshot::Receiver<()>,
+    events_tx: &mpsc::UnboundedSender<RunnerEvent>,
+) -> Result<CommandOutput> {
+    let pty = openpty(None, None).context("failed to allocate PTY")?;
+    let master = File::from(pty.master);
+    let slave = File::from(pty.slave);
+    let slave_stdout = slave.try_clone().context("failed to clone PTY slave")?;
+    let slave_stdin = slave.try_clone().context("failed to clone PTY slave")?;
+
+    let mut command = StdCommand::new(program);
+    command
+        .args(args)
+        .stdin(Stdio::from(slave_stdin))
+        .stdout(Stdio::from(slave_stdout))
+        .stderr(Stdio::from(slave));
+    unsafe {
+        command.pre_exec(|| {
+            setpgid(Pid::from_raw(0), Pid::from_raw(0)).map_err(io::Error::other)?;
+            Ok(())
+        });
+    }
+    let child = command
+        .spawn()
+        .with_context(|| format!("failed to spawn {program}"))?;
+    let process_group_id = child.id() as i32;
+    let child_pid = Pid::from_raw(process_group_id);
+    let (status_tx, mut status_rx) =
+        mpsc::unbounded_channel::<io::Result<std::process::ExitStatus>>();
+    let (output_tx, mut output_rx) = mpsc::unbounded_channel::<OutputEvent>();
+
+    let wait_handle = thread::spawn(move || {
+        let _ = status_tx.send(wait_for_pid(child_pid));
+    });
+    let _output_handle = thread::spawn(move || read_pty_stream(master, output_tx));
+    let mut stdout_lines = Vec::new();
+    let mut latest_stdout = String::new();
+    let mut next_progress = 1usize;
+    let mut exit_status = None;
+    let mut timed_out = false;
+    let timeout_sleep =
+        timeout_ms.map(|ms| Box::pin(tokio::time::sleep(Duration::from_millis(ms))));
+    let mut timeout_sleep = timeout_sleep;
+    let mut drain_sleep = None;
+
+    loop {
+        tokio::select! {
+            maybe_status = status_rx.recv(), if exit_status.is_none() => {
+                let status = maybe_status
+                    .ok_or_else(|| anyhow!("PTY child wait channel closed unexpectedly"))?
+                    .context("failed to wait for PTY child")?;
+                exit_status = Some(status);
+                drain_sleep = Some(Box::pin(tokio::time::sleep(Duration::from_millis(50))));
+            }
+            maybe_output = output_rx.recv() => {
+                match maybe_output {
+                    Some(OutputEvent::Line { kind: OutputKind::Stdout, line }) => {
+                        println!("{line}");
+                        stdout_lines.push(line.clone());
+                        let _ = events_tx.send(RunnerEvent::Progress {
+                            call_id: call_id.to_string(),
+                            update: progress_message(next_progress, "stdout", &line),
+                        });
+                        next_progress += 1;
+                        if exit_status.is_some() {
+                            drain_sleep = Some(Box::pin(tokio::time::sleep(Duration::from_millis(50))));
+                        }
+                    }
+                    Some(OutputEvent::Snapshot { kind: OutputKind::Stdout, text }) => {
+                        latest_stdout = text;
+                    }
+                    Some(OutputEvent::Line { kind: OutputKind::Stderr, .. }) => {}
+                    Some(OutputEvent::Snapshot { kind: OutputKind::Stderr, .. }) => {}
+                    Some(OutputEvent::Closed) => {
+                        if exit_status.is_some() {
+                            break;
+                        }
+                    }
+                    None => {
+                        if exit_status.is_some() {
+                            break;
+                        }
+                    }
+                }
+            }
+            _ = async {
+                if let Some(sleep) = drain_sleep.as_mut() {
+                    sleep.await;
+                }
+            }, if drain_sleep.is_some() => {
+                break;
+            }
+            _ = &mut *cancel_rx => {
+                let _ = terminate_process_group_and_wait(process_group_id, &mut status_rx).await;
+                eprintln!("exit: cancelled");
+                let _ = wait_handle.join();
+                return Err(anyhow!("tool call was cancelled"));
+            }
+            _ = async {
+                if let Some(sleep) = timeout_sleep.as_mut() {
+                    sleep.await;
+                }
+            }, if timeout_sleep.is_some() => {
+                timed_out = true;
+                exit_status = Some(terminate_process_group_and_wait(process_group_id, &mut status_rx).await?);
+                timeout_sleep = None;
+                drain_sleep = Some(Box::pin(tokio::time::sleep(Duration::from_millis(50))));
+            }
+        }
+    }
+
+    let _ = wait_handle.join();
+    Ok(CommandOutput {
+        status: exit_status.context("PTY child exited without status")?,
+        stdout: if latest_stdout.is_empty() {
+            stdout_lines.join("\n")
+        } else {
+            latest_stdout
+        },
+        stderr: String::new(),
+        timed_out,
+    })
+}
+
+async fn terminate_process_group_and_wait(
+    process_group_id: i32,
+    status_rx: &mut mpsc::UnboundedReceiver<io::Result<std::process::ExitStatus>>,
+) -> Result<std::process::ExitStatus> {
+    let _ = kill_process_group(process_group_id, Signal::SIGTERM);
+    let term_status =
+        if let Ok(Some(status)) = timeout(Duration::from_millis(1500), status_rx.recv()).await {
+            Some(status.context("failed to wait for PTY child after SIGTERM")?)
+        } else {
+            None
+        };
+
+    let _ = kill_process_group(process_group_id, Signal::SIGKILL);
+    if let Some(status) = term_status {
+        return Ok(status);
+    }
+
+    let status = timeout(Duration::from_millis(1500), status_rx.recv())
+        .await
+        .context("timed out waiting for PTY child after SIGKILL")?
+        .ok_or_else(|| anyhow!("PTY child wait channel closed unexpectedly"))?;
+    status.context("failed to wait for PTY child after SIGKILL")
+}
+
+fn wait_for_pid(pid: Pid) -> io::Result<std::process::ExitStatus> {
+    loop {
+        match waitpid(pid, None).map_err(io::Error::other)? {
+            WaitStatus::Exited(_, code) => {
+                return Ok(std::process::ExitStatus::from_raw(code << 8));
+            }
+            WaitStatus::Signaled(_, signal, core_dumped) => {
+                let raw = (signal as i32) | if core_dumped { 0x80 } else { 0 };
+                return Ok(std::process::ExitStatus::from_raw(raw));
+            }
+            WaitStatus::Stopped(_, _)
+            | WaitStatus::Continued(_)
+            | WaitStatus::PtraceEvent(_, _, _)
+            | WaitStatus::PtraceSyscall(_) => continue,
+            WaitStatus::StillAlive => continue,
+        }
+    }
+}
+
+async fn collect_command_output(
+    child: &mut tokio::process::Child,
+    process_group_id: i32,
+    timeout_ms: Option<u64>,
+    call_id: &str,
+    cancel_rx: &mut oneshot::Receiver<()>,
+    events_tx: &mpsc::UnboundedSender<RunnerEvent>,
+    output_rx: &mut mpsc::UnboundedReceiver<OutputEvent>,
+) -> Result<CommandOutput> {
     let mut stdout_lines = Vec::new();
     let mut stderr_lines = Vec::new();
     let mut next_progress = 1usize;
@@ -309,7 +563,12 @@ async fn run_command_call_inner(
                         }
                         next_progress += 1;
                     }
-                    Some(OutputEvent::Closed) => {}
+                    Some(OutputEvent::Snapshot { .. }) => {}
+                    Some(OutputEvent::Closed) => {
+                        if exit_status.is_some() {
+                            break;
+                        }
+                    }
                     None => {
                         if exit_status.is_some() {
                             break;
@@ -318,11 +577,9 @@ async fn run_command_call_inner(
                 }
             }
             _ = &mut *cancel_rx => {
-                terminate_child(&mut child).await;
-                let _ = stdout_handle.await;
-                let _ = stderr_handle.await;
+                terminate_child(child, process_group_id).await;
                 eprintln!("exit: cancelled");
-                return Ok(None);
+                return Err(anyhow!("tool call was cancelled"));
             }
             _ = async {
                 if let Some(sleep) = timeout_sleep.as_mut() {
@@ -330,32 +587,19 @@ async fn run_command_call_inner(
                 }
             }, if timeout_sleep.is_some() => {
                 timed_out = true;
-                terminate_child(&mut child).await;
+                terminate_child(child, process_group_id).await;
                 exit_status = Some(child.wait().await.context("failed to wait for timed out child")?);
                 timeout_sleep = None;
             }
         }
     }
 
-    let _ = stdout_handle.await;
-    let _ = stderr_handle.await;
-    let status = exit_status.context("child exited without status")?;
-
-    if let Some(code) = status.code() {
-        eprintln!("exit: code={code}");
-    } else if let Some(signal) = status.signal() {
-        eprintln!("exit: signal={signal}");
-    } else {
-        eprintln!("exit: unknown");
-    }
-
-    Ok(Some(build_result(
-        status,
-        stdout_lines,
-        stderr_lines,
+    Ok(CommandOutput {
+        status: exit_status.context("child exited without status")?,
+        stdout: stdout_lines.join("\n"),
+        stderr: stderr_lines.join("\n"),
         timed_out,
-        timeout_ms,
-    )))
+    })
 }
 
 fn parse_command(
@@ -363,7 +607,7 @@ fn parse_command(
     arguments: &Map<String, Value>,
 ) -> std::result::Result<ParsedCommand, CallToolResult> {
     match mode {
-        RegisteredCommand::Exact(argv) => {
+        RegisteredCommand::Exact { argv, .. } => {
             #[derive(Deserialize)]
             #[serde(deny_unknown_fields)]
             struct ExactArgs {
@@ -383,7 +627,7 @@ fn parse_command(
                 timeout_ms: parsed.timeout_ms,
             })
         }
-        RegisteredCommand::ArgvPrefix(prefix) => {
+        RegisteredCommand::ArgvPrefix { argv: prefix, .. } => {
             #[derive(Deserialize)]
             #[serde(deny_unknown_fields)]
             struct PrefixArgs {
@@ -418,14 +662,11 @@ fn parse_command(
 
 fn build_result(
     status: std::process::ExitStatus,
-    stdout_lines: Vec<String>,
-    stderr_lines: Vec<String>,
+    stdout: String,
+    stderr: String,
     timed_out: bool,
     timeout_ms: Option<u64>,
 ) -> CallToolResult {
-    let stdout = stdout_lines.join("\n");
-    let stderr = stderr_lines.join("\n");
-
     let mut structured = Map::new();
     structured.insert(
         "exitCode".to_string(),
@@ -501,6 +742,7 @@ fn shell_escape(value: &str) -> String {
 #[derive(Debug)]
 enum OutputEvent {
     Line { kind: OutputKind, line: String },
+    Snapshot { kind: OutputKind, text: String },
     Closed,
 }
 
@@ -526,7 +768,7 @@ async fn read_output_stream<T: tokio::io::AsyncRead + Unpin>(
             Ok(_) => {
                 let _ = output_tx.send(OutputEvent::Line {
                     kind,
-                    line: line.trim_end().to_string(),
+                    line: line.trim_end_matches(['\r', '\n']).to_string(),
                 });
             }
             Err(_) => {
@@ -535,6 +777,109 @@ async fn read_output_stream<T: tokio::io::AsyncRead + Unpin>(
             }
         }
     }
+}
+
+fn read_pty_stream(mut master: File, output_tx: mpsc::UnboundedSender<OutputEvent>) {
+    let mut renderer = PtyRenderer::new();
+    let mut buffer = [0u8; 4096];
+    loop {
+        match master.read(&mut buffer) {
+            Ok(0) => {
+                let (lines, snapshot) = renderer.finish();
+                for line in lines {
+                    let _ = output_tx.send(OutputEvent::Line {
+                        kind: OutputKind::Stdout,
+                        line,
+                    });
+                }
+                let _ = output_tx.send(OutputEvent::Snapshot {
+                    kind: OutputKind::Stdout,
+                    text: snapshot,
+                });
+                let _ = output_tx.send(OutputEvent::Closed);
+                break;
+            }
+            Ok(read) => {
+                let (lines, snapshot) = renderer.feed(&buffer[..read]);
+                for line in lines {
+                    let _ = output_tx.send(OutputEvent::Line {
+                        kind: OutputKind::Stdout,
+                        line,
+                    });
+                }
+                let _ = output_tx.send(OutputEvent::Snapshot {
+                    kind: OutputKind::Stdout,
+                    text: snapshot,
+                });
+            }
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(_) => {
+                let _ = output_tx.send(OutputEvent::Closed);
+                break;
+            }
+        }
+    }
+}
+
+struct PtyRenderer {
+    parser: vt100::Parser,
+    last_lines: Vec<String>,
+}
+
+impl PtyRenderer {
+    fn new() -> Self {
+        Self {
+            parser: vt100::Parser::new(200, 200, 5000),
+            last_lines: Vec::new(),
+        }
+    }
+
+    fn feed(&mut self, bytes: &[u8]) -> (Vec<String>, String) {
+        self.parser.process(bytes);
+        let next_lines = rendered_screen_lines(self.parser.screen());
+        let changed = diff_rendered_lines(&self.last_lines, &next_lines);
+        let snapshot = next_lines.join("\n");
+        self.last_lines = next_lines;
+        (changed, snapshot)
+    }
+
+    fn finish(&mut self) -> (Vec<String>, String) {
+        let next_lines = rendered_screen_lines(self.parser.screen());
+        let changed = diff_rendered_lines(&self.last_lines, &next_lines);
+        let snapshot = next_lines.join("\n");
+        self.last_lines = next_lines;
+        (changed, snapshot)
+    }
+}
+
+fn rendered_screen_lines(screen: &vt100::Screen) -> Vec<String> {
+    let (rows, cols) = screen.size();
+    let mut lines = screen
+        .rows(0, cols)
+        .take(rows as usize)
+        .map(|line| line.trim_end().to_string())
+        .collect::<Vec<_>>();
+    while lines.last().is_some_and(|line| line.is_empty()) {
+        lines.pop();
+    }
+    lines
+}
+
+fn diff_rendered_lines(previous: &[String], next: &[String]) -> Vec<String> {
+    let mut changed = Vec::new();
+    let max_len = previous.len().max(next.len());
+    for index in 0..max_len {
+        let before = previous.get(index);
+        let after = next.get(index);
+        if before != after {
+            if let Some(after) = after {
+                if !after.is_empty() {
+                    changed.push(after.clone());
+                }
+            }
+        }
+    }
+    changed
 }
 
 async fn read_line<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> Result<Option<String>> {
@@ -556,17 +901,22 @@ fn cancel_active_calls(active_calls: &mut HashMap<String, ActiveCall>) {
     }
 }
 
-async fn terminate_child(child: &mut tokio::process::Child) {
-    if let Some(pid) = child.id() {
-        let _ = kill(Pid::from_raw(pid as i32), Signal::SIGTERM);
-        if timeout(Duration::from_millis(1500), child.wait())
-            .await
-            .is_ok()
-        {
-            return;
-        }
+async fn terminate_child(child: &mut tokio::process::Child, process_group_id: i32) {
+    let _ = kill(Pid::from_raw(process_group_id), Signal::SIGTERM);
+    let _ = timeout(Duration::from_millis(1500), child.wait()).await;
+
+    let _ = kill_process_group(process_group_id, Signal::SIGKILL);
+    if timeout(Duration::from_millis(1500), child.wait())
+        .await
+        .is_ok()
+    {
+        return;
     }
 
     let _ = child.kill().await;
     let _ = child.wait().await;
+}
+
+fn kill_process_group(process_group_id: i32, signal: Signal) -> nix::Result<()> {
+    kill(Pid::from_raw(-process_group_id), signal)
 }
