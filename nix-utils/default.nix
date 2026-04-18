@@ -24,6 +24,7 @@ let
 		nvim
 		(import ./npm/default.nix { inherit pkgs; })
 		(import ./qrread/default.nix { inherit pkgs; })
+		(import ./libreoffice/default.nix { inherit pkgs; })
 	];
 
 	# Programs not passed to zsh (have unrestricted filesystem)
@@ -31,7 +32,6 @@ let
 		(import ./chromium/default.nix { inherit pkgs nixgl; })
 		(import ./tor-browser/default.nix { inherit pkgs; })
 		(import ./keepassxc/default.nix { inherit pkgs; })
-		(import ./libreoffice/default.nix { inherit pkgs; })
 		(import ./bluetuith/default.nix { inherit pkgs; })
 	];
 

@@ -10,6 +10,7 @@ let
 			"/tmp/.X11-unix" = { perm = "ro"; };
 			"$HOME/.Xauthority" = { perm = "ro"; };
 			"$HOME/.config/libreoffice" = { perm = "rw"; mkdir = true; };
+			"/run/user/1000/libreoffice-dbus" = { perm = "rw"; mkdir = true;};
 		};
 		network = false;
 	};
