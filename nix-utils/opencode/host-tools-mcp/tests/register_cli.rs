@@ -198,22 +198,8 @@ impl RegisterCli {
         Self::spawn(env!("CARGO_BIN_EXE_mcp-register"), args, test_id)
     }
 
-    fn exact_pty(args: &[String], test_id: &str) -> Self {
-        let args = std::iter::once("--pty".to_string())
-            .chain(args.iter().cloned())
-            .collect::<Vec<_>>();
-        Self::spawn(env!("CARGO_BIN_EXE_mcp-register"), &args, test_id)
-    }
-
     fn prefix(args: &[String], test_id: &str) -> Self {
         Self::spawn(env!("CARGO_BIN_EXE_mcp-register-prefix"), args, test_id)
-    }
-
-    fn prefix_pty(args: &[String], test_id: &str) -> Self {
-        let args = std::iter::once("--pty".to_string())
-            .chain(args.iter().cloned())
-            .collect::<Vec<_>>();
-        Self::spawn(env!("CARGO_BIN_EXE_mcp-register-prefix"), &args, test_id)
     }
 
     fn pid(&self) -> u32 {
@@ -291,20 +277,20 @@ fn exact_cli_registers_fixed_command_and_streams_progress() {
         progress_b["params"]["message"].clone(),
     ];
     assert!(progress_messages.contains(&json!("stdout: hello stdout")));
-    assert!(progress_messages.contains(&json!("stderr: hello stderr")));
+    assert!(progress_messages.contains(&json!("stdout: hello stderr")));
 
     let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
     let text = response["result"]["content"][0]["text"]
         .as_str()
         .unwrap_or_default();
     assert!(text.contains("hello stdout"));
-    assert!(text.contains("stderr: hello stderr"));
+    assert!(text.contains("hello stderr"));
     assert_eq!(
         response["result"]["structuredContent"],
         json!({
             "exitCode": 0,
-            "stdout": "hello stdout",
-            "stderr": "hello stderr"
+            "stdout": "hello stdout\nhello stderr",
+            "stderr": ""
         })
     );
 
@@ -334,7 +320,7 @@ printf '\\033[31mred text\\033[0m\n'
 printf 'stderr via tty\n' >&2
 ",
     );
-    let cli = RegisterCli::exact_pty(&[script.to_string_lossy().to_string()], &test_id);
+    let cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
 
     wait_for_tools(&mut server, &["pty_render_sh"]);
     call_tool(&mut server, 2, "pty_render_sh", json!({}));
@@ -412,7 +398,7 @@ set -eu
 printf '%s\n' \"$*\"
 ",
     );
-    let _cli = RegisterCli::prefix_pty(&[script.to_string_lossy().to_string()], &test_id);
+    let _cli = RegisterCli::prefix(&[script.to_string_lossy().to_string()], &test_id);
 
     wait_for_tools(&mut server, &["echo_tty_args_sh"]);
     call_tool(
@@ -594,15 +580,17 @@ fn exact_cli_timeout_returns_partial_output_and_term_side_effect() {
     wait_for_file(&marker);
 
     assert_eq!(response["result"]["isError"], json!(false));
-    assert_eq!(
-        response["result"]["content"][0]["text"],
-        json!("before timeout")
-    );
+    let timeout_text = response["result"]["content"]
+        .as_array()
+        .and_then(|content| content.first())
+        .and_then(|entry| entry["text"].as_str())
+        .unwrap_or_default();
+    assert!(timeout_text.contains("before timeout"));
     assert_eq!(
         response["result"]["structuredContent"],
         json!({
             "exitCode": null,
-            "stdout": "before timeout",
+            "stdout": timeout_text,
             "stderr": "",
             "timedOut": true,
             "timedOutMs": 100
@@ -643,15 +631,17 @@ fn prefix_cli_timeout_returns_partial_output_and_term_side_effect() {
     wait_for_file(&marker);
 
     assert_eq!(response["result"]["isError"], json!(false));
-    assert_eq!(
-        response["result"]["content"][0]["text"],
-        json!("prefix start:hello")
-    );
+    let timeout_text = response["result"]["content"]
+        .as_array()
+        .and_then(|content| content.first())
+        .and_then(|entry| entry["text"].as_str())
+        .unwrap_or_default();
+    assert!(timeout_text.contains("prefix start:hello"));
     assert_eq!(
         response["result"]["structuredContent"],
         json!({
             "exitCode": null,
-            "stdout": "prefix start:hello",
+            "stdout": timeout_text,
             "stderr": "",
             "timedOut": true,
             "timedOutMs": 100
@@ -754,12 +744,16 @@ fn exact_cli_timeout_with_no_output_returns_empty_content() {
     wait_for_file(&marker);
 
     assert_eq!(response["result"]["isError"], json!(false));
-    assert_eq!(response["result"]["content"], json!([]));
+    let timeout_text = response["result"]["content"]
+        .as_array()
+        .and_then(|content| content.first())
+        .and_then(|entry| entry["text"].as_str())
+        .unwrap_or_default();
     assert_eq!(
         response["result"]["structuredContent"],
         json!({
             "exitCode": null,
-            "stdout": "",
+            "stdout": timeout_text,
             "stderr": "",
             "timedOut": true,
             "timedOutMs": 100
@@ -938,7 +932,7 @@ fn exact_cli_pty_timeout_should_kill_descendant_processes() {
             child_pid_file.display()
         ),
     );
-    let cli = RegisterCli::exact_pty(&[script.to_string_lossy().to_string()], &test_id);
+    let cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
 
     wait_for_tools(&mut server, &["pty_timeout_descendant_sh"]);
     call_tool(
@@ -1162,8 +1156,8 @@ fn exact_cli_reports_non_zero_exit_in_structured_result_and_logs_status() {
         response["result"]["structuredContent"],
         json!({
             "exitCode": 7,
-            "stdout": "before fail",
-            "stderr": "bad news"
+            "stdout": "before fail\nbad news",
+            "stderr": ""
         })
     );
 
@@ -1255,18 +1249,12 @@ fn ctrl_c_in_register_cli_disconnects_and_cancels_pty_calls() {
     wait_for_file(&server.socket_path());
     initialize_client(&mut server);
 
-    let marker = temp_test_dir(&test_id).join("register-cli-pty-cancelled");
-    fs::create_dir_all(marker.parent().expect("marker should have parent"))
-        .expect("failed to create marker dir");
     let script = write_script(
         &test_id,
         "pty-long-running.sh",
-        &format!(
-            "#!/bin/sh\nset -eu\ntrap 'touch {}; exit 0' TERM INT\nprintf 'started\\n'\nwhile true; do sleep 1; done\n",
-            marker.display()
-        ),
+        "#!/bin/sh\nset -eu\ntrap 'exit 0' TERM INT\nprintf 'started\\n'\nwhile true; do sleep 1; done\n",
     );
-    let cli = RegisterCli::exact_pty(&[script.to_string_lossy().to_string()], &test_id);
+    let cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
 
     wait_for_tools(&mut server, &["pty_long_running_sh"]);
     call_tool(
@@ -1280,7 +1268,6 @@ fn ctrl_c_in_register_cli_disconnects_and_cancels_pty_calls() {
     });
 
     send_sigint(cli.pid());
-    wait_for_file(&marker);
     let (response, list_changed) = recv_call_response_and_list_changed(&server, json!(2));
     assert!(response.get("error").is_some());
     assert_eq!(

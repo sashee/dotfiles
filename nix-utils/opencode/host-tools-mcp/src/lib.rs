@@ -137,10 +137,6 @@ pub enum RegisteredCommand {
 
 impl RegisteredCommand {
     pub fn exact(argv: Vec<String>) -> io::Result<Self> {
-        Self::exact_with_mode(argv, ExecutionMode::Pipe)
-    }
-
-    pub fn exact_pty(argv: Vec<String>) -> io::Result<Self> {
         Self::exact_with_mode(argv, ExecutionMode::Pty)
     }
 
@@ -158,10 +154,6 @@ impl RegisteredCommand {
     }
 
     pub fn argv_prefix(argv: Vec<String>) -> io::Result<Self> {
-        Self::argv_prefix_with_mode(argv, ExecutionMode::Pipe)
-    }
-
-    pub fn argv_prefix_pty(argv: Vec<String>) -> io::Result<Self> {
         Self::argv_prefix_with_mode(argv, ExecutionMode::Pty)
     }
 
