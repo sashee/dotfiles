@@ -14,7 +14,6 @@ let
 		"$HOME/.local/share/zsh" = { perm = "rw"; mkdir = true; };
 		"$HOME/.cache" = { perm = "rw"; };
 		"$HOME/.wine" = { perm = "rw"; };
-		"$HOME/.vkquake" = { perm = "rw"; };
 		"$HOME/.local/share/freeorion" = { perm = "rw"; };
 		"$HOME/.config/freeorion" = { perm = "rw"; };
 		"$HOME/.config/transmission" = { perm = "rw"; };

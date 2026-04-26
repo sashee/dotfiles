@@ -25,6 +25,7 @@ let
 		(import ./npm/default.nix { inherit pkgs; })
 		(import ./qrread/default.nix { inherit pkgs; })
 		(import ./libreoffice/default.nix { inherit pkgs; })
+		(import ./vkquake/default.nix { inherit pkgs nixgl; })
 	];
 
 	# Programs not passed to zsh (have unrestricted filesystem)
