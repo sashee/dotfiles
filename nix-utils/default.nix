@@ -23,7 +23,7 @@ let
 		(import ./vlc/default.nix { inherit pkgs; })
 		nvim
 		(import ./npm/default.nix { inherit pkgs; })
-		(import ./qrread/default.nix { inherit pkgs; })
+		(import ./jwt/default.nix { inherit pkgs; })
 		(import ./libreoffice/default.nix { inherit pkgs; })
 	];
 
@@ -34,6 +34,7 @@ let
 		(import ./keepassxc/default.nix { inherit pkgs; })
 		(import ./bluetuith/default.nix { inherit pkgs; })
 		(import ./vkquake/default.nix { inherit pkgs nixgl; })
+		(import ./qrread/default.nix { inherit pkgs; })
 	];
 
 	zsh = import ./zsh/default.nix { inherit pkgs; prgs = zsh_programs; };
