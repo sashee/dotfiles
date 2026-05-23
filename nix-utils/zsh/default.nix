@@ -5,7 +5,7 @@
 let
 	consts = import ../consts.nix;
 	launcher = import ../launcher.nix { inherit pkgs; };
-	dev_allowlist = [ "/dev/ttyUSB*" "/dev/ttyACM*" ];
+	dev_allowlist = [ "/dev/ttyUSB*" "/dev/ttyACM*" "/dev/kvm"];
 
 	# Base filesystem restrictions for zsh
 	# Note: bwrap does --ro-bind / / so system paths are already available read-only
