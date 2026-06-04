@@ -19,20 +19,20 @@ let
 
 	node_tool_bin = launcher.mkLauncher {
 		name = "node";
-		target = "${pkgs.nodePackages_latest.nodejs}/bin/node";
+		target = "${pkgs.nodejs}/bin/node";
 		setEnv = certEnv;
 	};
 
 	npm_bin = node_tool_bin.override (_: {
 		name = "npm";
-		target = "${pkgs.nodePackages_latest.nodejs}/bin/npm";
+		target = "${pkgs.nodejs}/bin/npm";
 	});
 
 	node_bin = node_tool_bin;
 
 	npx_bin = node_tool_bin.override (_: {
 		name = "npx";
-		target = "${pkgs.nodePackages_latest.nodejs}/bin/npx";
+		target = "${pkgs.nodejs}/bin/npx";
 	});
 
 	npm_scripts = (import ../_wrapper/default.nix {

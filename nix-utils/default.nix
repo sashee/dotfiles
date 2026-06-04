@@ -1,5 +1,5 @@
 let
-  nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.11";
+  nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-26.05";
   pkgs = import nixpkgs { config = {allowUnfree = true;}; overlays = []; };
   nixglSrc = fetchTarball "https://github.com/nix-community/nixGL/archive/main.tar.gz";
   nixgl = import nixglSrc { inherit pkgs; };

@@ -84,7 +84,7 @@ export default [
 		pkgs.lua-language-server
 		pkgs.typescript-language-server
 		pkgs.bash
-		pkgs.nodePackages.nodejs
+		pkgs.nodejs
 		pkgs.git
 		pkgs.ripgrep
 		pkgs.tmux
