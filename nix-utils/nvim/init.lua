@@ -127,10 +127,6 @@ vim.api.nvim_create_autocmd('LspAttach', {
   end,
 })
 
-require("nvim-treesitter.configs").setup({
-  --ensure_installed = {"html", "markdown", "javascript", "typescript", "lua"},
-})
-
 vim.api.nvim_create_autocmd({ 'FileType' }, {
 	pattern = '*',
 	callback = function()
@@ -142,7 +138,7 @@ vim.api.nvim_create_autocmd({ 'FileType' }, {
 vim.api.nvim_create_autocmd({ 'BufNewFile', 'BufRead' }, {
 	pattern = '*',
 	callback = function()
-		vim.opt_local.foldexpr = "nvim_treesitter#foldexpr()"
+		vim.opt_local.foldexpr = "v:lua.vim.treesitter.foldexpr()"
 		vim.opt_local.foldenable = false
 	end,
 })
