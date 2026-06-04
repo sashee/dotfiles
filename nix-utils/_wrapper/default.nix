@@ -50,12 +50,8 @@ let
   explicitFs = sandbox_restrictions.fs or {};
   explicitPaths = builtins.attrNames explicitFs;
 
-  isPathCovered = protected:
-    builtins.any (explicit:
-      explicit == protected
-      || pkgs.lib.hasPrefix (protected + "/") explicit
-      || pkgs.lib.hasPrefix (explicit + "/") protected
-    ) (explicitPaths ++ dbusPaths);
+	isPathCovered = protected:
+		builtins.elem protected (explicitPaths ++ dbusPaths);
 
   protectedToBlock = builtins.filter (p: !(isPathCovered p.path)) consts.protectedPaths;
 

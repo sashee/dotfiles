@@ -62,6 +62,7 @@ keybinds {
 		share_pid = true;
 		fs = (zsh.sandbox_restrictions.fs or {}) // {
 			"$XDG_RUNTIME_DIR" = { perm = "rw"; };
+			"$XDG_RUNTIME_DIR/bus" = { perm = "ro"; };
 			"$HOME/.cache/zellij" = { perm = "rw"; mkdir = true; };
 		};
 	};
