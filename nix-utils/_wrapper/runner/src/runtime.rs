@@ -808,3 +808,63 @@ fn shell_escape(input: &str) -> String {
     let escaped = input.replace('\'', "'\"'\"'");
     format!("'{}'", escaped)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use crate::error::RunnerError;
+
+    use super::*;
+
+    fn env_map() -> HashMap<String, String> {
+        HashMap::from([
+            ("HOME".to_string(), "/home/test".to_string()),
+            ("XDG_RUNTIME_DIR".to_string(), "/run/user/123".to_string()),
+            (
+                "SSH_AUTH_SOCK".to_string(),
+                "/tmp/ssh-agent.sock".to_string(),
+            ),
+        ])
+    }
+
+    #[test]
+    fn expands_xdg_runtime_dir_path() {
+        assert_eq!(
+            expand_path_value("$XDG_RUNTIME_DIR/bus", &env_map()).unwrap(),
+            "/run/user/123/bus"
+        );
+    }
+
+    #[test]
+    fn expands_braced_xdg_runtime_dir_path() {
+        assert_eq!(
+            expand_path_value("${XDG_RUNTIME_DIR}/bus", &env_map()).unwrap(),
+            "/run/user/123/bus"
+        );
+    }
+
+    #[test]
+    fn expands_home_path() {
+        assert_eq!(
+            expand_path_value("$HOME/.config", &env_map()).unwrap(),
+            "/home/test/.config"
+        );
+    }
+
+    #[test]
+    fn expands_other_runtime_path_vars() {
+        assert_eq!(
+            expand_path_value("$SSH_AUTH_SOCK", &env_map()).unwrap(),
+            "/tmp/ssh-agent.sock"
+        );
+    }
+
+    #[test]
+    fn errors_when_xdg_runtime_dir_is_missing() {
+        let err = expand_path_value("$XDG_RUNTIME_DIR/bus", &HashMap::new()).unwrap_err();
+        assert!(
+            matches!(err, RunnerError::InvalidConfig(message) if message.contains("XDG_RUNTIME_DIR"))
+        );
+    }
+}

@@ -47,6 +47,12 @@ enum InfoError {
 
     #[error("failed to serialize output: {0}")]
     Serialize(serde_json::Error),
+
+    #[error("unsupported path expansion in protected path {path}: {var}")]
+    UnsupportedPathExpansion { path: String, var: String },
+
+    #[error("protected path {path} references ${var}, but {var} is not set")]
+    MissingPathEnv { path: String, var: String },
 }
 
 #[derive(Debug, Deserialize)]
@@ -129,7 +135,7 @@ fn run() -> Result<(), InfoError> {
         runner_config: read_optional_json(cli.runner_config_path.as_deref(), "runner config")?,
     };
 
-    let output = collect_info(&config, configured);
+    let output = collect_info(&config, configured)?;
     let json = serde_json::to_string_pretty(&output).map_err(InfoError::Serialize)?;
     println!("{json}");
 
@@ -208,7 +214,10 @@ fn read_optional_json(path: Option<&str>, label: &'static str) -> Result<Value, 
     })
 }
 
-fn collect_info(config: &InfoConfig, configured: ConfiguredOutput) -> InfoOutput {
+fn collect_info(
+    config: &InfoConfig,
+    configured: ConfiguredOutput,
+) -> Result<InfoOutput, InfoError> {
     let devnull_writable = is_devnull_writable();
     let seccomp = SeccompOutput {
         inet_blocked: socket_blocked(devnull_writable, libc::AF_INET, libc::SOCK_STREAM, 0),
@@ -235,7 +244,7 @@ fn collect_info(config: &InfoConfig, configured: ConfiguredOutput) -> InfoOutput
 
     let mut protected_paths = Map::new();
     for pp in &config.protected_paths {
-        let path = expand_home_path(&pp.path);
+        let path = expand_path(&pp.path)?;
         let visible = if pp.r#type == "dir" {
             is_visible_dir(&path)
         } else {
@@ -244,7 +253,7 @@ fn collect_info(config: &InfoConfig, configured: ConfiguredOutput) -> InfoOutput
         protected_paths.insert(pp.path.clone(), Value::Bool(visible));
     }
 
-    InfoOutput {
+    Ok(InfoOutput {
         name: config.program_name.clone(),
         configured,
         dev,
@@ -260,7 +269,7 @@ fn collect_info(config: &InfoConfig, configured: ConfiguredOutput) -> InfoOutput
             ipc: config.share.ipc,
         },
         protected_paths,
-    }
+    })
 }
 
 fn collect_visible_dev_entries(fake_dev_baseline: &HashSet<String>) -> Vec<String> {
@@ -468,22 +477,140 @@ fn is_devnull_writable() -> bool {
         .is_ok()
 }
 
-fn expand_home_path(path: &str) -> String {
-    if let Ok(home) = env::var("HOME") {
-        if let Some(rest) = path.strip_prefix("$HOME") {
-            return format!("{home}{rest}");
-        }
+fn expand_path(path: &str) -> Result<String, InfoError> {
+    expand_path_with_env(path, |name| env::var(name).ok())
+}
 
-        if let Some(rest) = path.strip_prefix("${HOME}") {
-            return format!("{home}{rest}");
-        }
+fn expand_path_with_env<F>(path: &str, env_lookup: F) -> Result<String, InfoError>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    if let Some(rest) = path.strip_prefix('~') {
+        return expand_supported_path_var(path, "HOME", rest, env_lookup);
+    }
 
-        if let Some(rest) = path.strip_prefix("~") {
-            return format!("{home}{rest}");
+    let Some((name, rest)) = env_prefix(path) else {
+        return Ok(path.to_string());
+    };
+
+    if !matches!(name.as_str(), "HOME" | "XDG_RUNTIME_DIR") {
+        return Err(InfoError::UnsupportedPathExpansion {
+            path: path.to_string(),
+            var: name,
+        });
+    }
+
+    expand_supported_path_var(path, &name, &rest, env_lookup)
+}
+
+fn expand_supported_path_var<F>(
+    path: &str,
+    name: &str,
+    rest: &str,
+    env_lookup: F,
+) -> Result<String, InfoError>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let Some(value) = env_lookup(name) else {
+        return Err(InfoError::MissingPathEnv {
+            path: path.to_string(),
+            var: name.to_string(),
+        });
+    };
+
+    Ok(format!("{value}{rest}"))
+}
+
+fn env_prefix(path: &str) -> Option<(String, String)> {
+    if let Some(rest) = path.strip_prefix("${") {
+        let (name, rest) = rest.split_once('}')?;
+        return Some((name.to_string(), rest.to_string()));
+    }
+
+    let rest = path.strip_prefix('$')?;
+    let name_len = rest
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .map(char::len_utf8)
+        .sum();
+
+    if name_len == 0 {
+        return None;
+    }
+
+    Some((rest[..name_len].to_string(), rest[name_len..].to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lookup(name: &str) -> Option<String> {
+        match name {
+            "HOME" => Some("/home/test".to_string()),
+            "XDG_RUNTIME_DIR" => Some("/run/user/123".to_string()),
+            _ => None,
         }
     }
 
-    path.to_string()
+    #[test]
+    fn expands_xdg_runtime_dir_prefix() {
+        assert_eq!(
+            expand_path_with_env("$XDG_RUNTIME_DIR/bus", lookup).unwrap(),
+            "/run/user/123/bus"
+        );
+    }
+
+    #[test]
+    fn expands_braced_xdg_runtime_dir_prefix() {
+        assert_eq!(
+            expand_path_with_env("${XDG_RUNTIME_DIR}/bus", lookup).unwrap(),
+            "/run/user/123/bus"
+        );
+    }
+
+    #[test]
+    fn expands_home_prefixes() {
+        assert_eq!(
+            expand_path_with_env("$HOME/.config", lookup).unwrap(),
+            "/home/test/.config"
+        );
+        assert_eq!(
+            expand_path_with_env("${HOME}/.config", lookup).unwrap(),
+            "/home/test/.config"
+        );
+        assert_eq!(
+            expand_path_with_env("~/.config", lookup).unwrap(),
+            "/home/test/.config"
+        );
+    }
+
+    #[test]
+    fn leaves_absolute_paths_unchanged() {
+        assert_eq!(
+            expand_path_with_env("/run/docker.sock", lookup).unwrap(),
+            "/run/docker.sock"
+        );
+    }
+
+    #[test]
+    fn errors_for_unsupported_env_expansion() {
+        let err = expand_path_with_env("$FOO/bar", lookup).unwrap_err();
+        assert!(matches!(
+            err,
+            InfoError::UnsupportedPathExpansion { ref var, .. } if var == "FOO"
+        ));
+    }
+
+    #[test]
+    fn errors_for_missing_supported_env_expansion() {
+        let err = expand_path_with_env("$XDG_RUNTIME_DIR/bus", |_| None).unwrap_err();
+        assert!(matches!(
+            err,
+            InfoError::MissingPathEnv { ref var, .. } if var == "XDG_RUNTIME_DIR"
+        ));
+    }
 }
 
 fn is_visible_dir(path: &str) -> bool {
