@@ -14,15 +14,15 @@ let
 			"$HOME/.Xauthority" = { perm = "ro"; };
 			"$HOME/.vkquake" = { perm = "rw"; };
 			"$HOME/quake" = { perm = "rw"; };
-			"/run/user/1000/pipewire-0" = { perm = "ro"; };
-			"/run/user/1000/pulse" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/pipewire-0" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/pulse" = { perm = "ro"; };
 			"/tmp" = { perm = "rw"; };
 		};
 		network = false;
 		dev = true;
 	};
 	bin = launcher.mkLauncher {
-		name = "chromium";
+		name = "vkquake";
 		target = "${nixglVkQuake}";
 	};
 in
@@ -34,4 +34,3 @@ in
 	}).scripts;
 	inherit sandbox_restrictions;
 }
-

@@ -9,7 +9,7 @@ let
 			"$HOME/.config/isd_tui" = { perm = "rw"; mkdir = true; };
 			"$HOME/.local/share/isd_tui" = { perm = "rw"; mkdir = true; };
 			"$HOME/.cache/isd_tui" = { perm = "rw"; mkdir = true; };
-			"/run/user/1000/bus" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/bus" = { perm = "ro"; };
 			"/run/dbus/system_bus_socket" = { perm = "ro"; };
 		};
 		network = false;
@@ -17,7 +17,7 @@ let
 	bin = launcher.mkLauncher {
 		name = "isd";
 		target = "${pkgs.isd}/bin/isd";
-		keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "DBUS_SESSION_BUS_ADDRESS" "VISUAL" "EDITOR"];
+		keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "XDG_RUNTIME_DIR" "DBUS_SESSION_BUS_ADDRESS" "VISUAL" "EDITOR"];
 		setEnv = {
 			VISUAL = "${builtins.elemAt nvim.scripts 0}/bin/nvim";
 		};

@@ -10,14 +10,14 @@
 		{ path = "/tmp/.X11-unix"; type = "dir"; }
 		# High risk sockets
 		{ path = "/run/docker.sock"; type = "file"; }
-		{ path = "/run/user/1000/gnupg"; type = "dir"; }
-		{ path = "/run/user/1000/bus"; type = "file"; }
+		{ path = "$XDG_RUNTIME_DIR/gnupg"; type = "dir"; }
+		{ path = "$XDG_RUNTIME_DIR/bus"; type = "file"; }
 		{ path = "/run/dbus/system_bus_socket"; type = "file"; }
 		# Medium risk sockets
 		{ path = "/run/libvirt"; type = "dir"; }
-		{ path = "/run/user/1000/pipewire-0"; type = "file"; }
-		{ path = "/run/user/1000/pipewire-0-manager"; type = "file"; }
-		{ path = "/run/user/1000/pulse"; type = "dir"; }
-		{ path = "/run/user/1000/p11-kit"; type = "dir"; }
+		{ path = "$XDG_RUNTIME_DIR/pipewire-0"; type = "file"; }
+		{ path = "$XDG_RUNTIME_DIR/pipewire-0-manager"; type = "file"; }
+		{ path = "$XDG_RUNTIME_DIR/pulse"; type = "dir"; }
+		{ path = "$XDG_RUNTIME_DIR/p11-kit"; type = "dir"; }
 	];
 }

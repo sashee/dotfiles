@@ -18,11 +18,11 @@ let
 			"$HOME/.cache/chromium" = { perm = "rw"; mkdir = true; };
 			"$HOME/.local/share/chromium" = { perm = "rw"; mkdir = true; };
 			"/etc/hostname" = { perm = "ro"; };
-			"/run/user/1000" = { perm = "ro"; };
-			"/run/user/1000/bus" = { perm = "ro"; };
-			"/run/user/1000/pipewire-0" = { perm = "ro"; };
-			"/run/user/1000/pipewire-0-manager" = { perm = "ro"; };
-			"/run/user/1000/pulse" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/bus" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/pipewire-0" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/pipewire-0-manager" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/pulse" = { perm = "ro"; };
 			"/tmp" = { perm = "rw"; };
 			"/usr/share/keyd" = { perm = "ro"; };
 			"/usr/share/keyd/keyd.compose" = { perm = "ro"; };

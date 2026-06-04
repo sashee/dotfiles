@@ -9,7 +9,7 @@ let
 	'';
 	sandbox_restrictions = {
 		fs = {
-			"/run/user/1000/bus" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/bus" = { perm = "ro"; };
 			"/run/dbus/system_bus_socket" = { perm = "ro"; };
 		};
 		network = false;

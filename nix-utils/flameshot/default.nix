@@ -10,7 +10,7 @@ let
 			"$HOME/.config/flameshot" = { perm = "rw"; mkdir = true; };
 		};
 		dbus = {
-			"/run/user/1000/bus" = {
+			"$XDG_RUNTIME_DIR/bus" = {
 				own = ["org.flameshot.Flameshot"];
 				log = true;
 			};

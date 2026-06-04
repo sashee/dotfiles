@@ -61,7 +61,7 @@ keybinds {
 		dont_die_with_parent = true;
 		share_pid = true;
 		fs = (zsh.sandbox_restrictions.fs or {}) // {
-			"/run/user/1000" = { perm = "rw"; };
+			"$XDG_RUNTIME_DIR" = { perm = "rw"; };
 			"$HOME/.cache/zellij" = { perm = "rw"; mkdir = true; };
 		};
 	};

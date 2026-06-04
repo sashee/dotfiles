@@ -9,8 +9,8 @@ let
 			"$HOME/.Xauthority" = { perm = "ro"; };
 			"$HOME/.local/share/vlc" = { perm = "rw"; mkdir = true; };
 			"$HOME/.config/vlc" = { perm = "rw"; mkdir = true; };
-			"/run/user/1000/pipewire-0" = { perm = "ro"; };
-			"/run/user/1000/pulse" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/pipewire-0" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/pulse" = { perm = "ro"; };
 		};
 		network = false;
 	};

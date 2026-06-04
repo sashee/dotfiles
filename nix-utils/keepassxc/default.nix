@@ -12,7 +12,7 @@ let
 			"$HOME/safe" = { perm = "rw"; };
 			"$HOME/.cache/keepassxc" = { perm = "rw"; mkdir = true; };
 			"$SSH_AUTH_SOCK" = { perm = "ro"; };
-			"/run/user/1000/bus" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/bus" = { perm = "ro"; };
 			"/run/udev" = { perm = "ro"; };
 		};
 		seccomp = {

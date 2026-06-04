@@ -104,6 +104,7 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
             proxy,
             &config.dbus.proxy_bin,
             &config.program_name,
+            &host_env,
         )?);
     }
     let proxies = ProxyGuard::from_vec(proxies);
@@ -150,7 +151,7 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
 
     ensure_mount_dirs(&mounts, &host_env)?;
 
-    append_mount_args(&mut bwrap_args, &mounts, &host_env);
+    append_mount_args(&mut bwrap_args, &mounts, &host_env)?;
 
     for proxy in proxies.iter() {
         bwrap_args.push("--bind".to_string());
@@ -430,6 +431,7 @@ fn start_dbus_proxy(
     cfg: &DbusProxyConfig,
     proxy_bin: &str,
     program_name: &str,
+    host_env: &HashMap<String, String>,
 ) -> Result<ProxyHandle, RunnerError> {
     let mut proxy_cmd = Command::new(if proxy_bin.is_empty() {
         "xdg-dbus-proxy"
@@ -437,12 +439,15 @@ fn start_dbus_proxy(
         proxy_bin
     });
 
+    let source_bus_path = expand_path_value(&cfg.source_bus_path, host_env)?;
     let socket_path = cfg
         .proxy_socket_path
-        .clone()
+        .as_deref()
+        .map(|path| expand_path_value(path, host_env))
+        .transpose()?
         .unwrap_or_else(default_proxy_socket_path);
 
-    proxy_cmd.arg(format!("unix:path={}", cfg.source_bus_path));
+    proxy_cmd.arg(format!("unix:path={source_bus_path}"));
     proxy_cmd.arg(&socket_path);
     proxy_cmd.arg("--filter");
     proxy_cmd.stdin(Stdio::null());
@@ -455,7 +460,7 @@ fn start_dbus_proxy(
             source,
         })?;
 
-        let log_path = dbus_log_path(program_name, &cfg.source_bus_path);
+        let log_path = dbus_log_path(program_name, &source_bus_path);
         let log_file = OpenOptions::new()
             .create(true)
             .write(true)
@@ -515,7 +520,7 @@ fn start_dbus_proxy(
 
     Ok(ProxyHandle {
         socket_path,
-        source_bus_path: cfg.source_bus_path.clone(),
+        source_bus_path,
         child,
     })
 }
@@ -542,14 +547,14 @@ fn append_mount_args(
     args: &mut Vec<String>,
     mounts: &[MountRule],
     host_env: &HashMap<String, String>,
-) {
+) -> Result<(), RunnerError> {
     for mount in mounts {
-        let path = expand_value(&mount.path, host_env);
+        let path = expand_path_value(&mount.path, host_env)?;
         match mount.perm.as_str() {
             "rw" => {
                 if let Some(source) = &mount.source {
                     args.push("--bind-try".to_string());
-                    args.push(expand_value(source, host_env));
+                    args.push(expand_path_value(source, host_env)?);
                     args.push(path);
                 } else {
                     args.push("--bind-try".to_string());
@@ -560,7 +565,7 @@ fn append_mount_args(
             "ro" => {
                 if let Some(source) = &mount.source {
                     args.push("--ro-bind-try".to_string());
-                    args.push(expand_value(source, host_env));
+                    args.push(expand_path_value(source, host_env)?);
                     args.push(path);
                 } else {
                     args.push("--ro-bind-try".to_string());
@@ -585,6 +590,8 @@ fn append_mount_args(
             _ => {}
         }
     }
+
+    Ok(())
 }
 
 fn ensure_mount_dirs(
@@ -596,7 +603,7 @@ fn ensure_mount_dirs(
             continue;
         }
 
-        let path = expand_value(&mount.path, host_env);
+        let path = expand_path_value(&mount.path, host_env)?;
         fs::create_dir_all(&path).map_err(|source| RunnerError::CreateDir {
             path: path.into(),
             source,
@@ -604,6 +611,25 @@ fn ensure_mount_dirs(
     }
 
     Ok(())
+}
+
+fn expand_path_value(
+    input: &str,
+    env_map: &HashMap<String, String>,
+) -> Result<String, RunnerError> {
+    if references_env_var(input, "XDG_RUNTIME_DIR") && !env_map.contains_key("XDG_RUNTIME_DIR") {
+        return Err(RunnerError::InvalidConfig(
+            "path references $XDG_RUNTIME_DIR, but XDG_RUNTIME_DIR is not set".to_string(),
+        ));
+    }
+
+    Ok(expand_value(input, env_map))
+}
+
+fn references_env_var(input: &str, name: &str) -> bool {
+    [format!("${name}"), format!("${{{name}}}")]
+        .iter()
+        .any(|needle| input.contains(needle))
 }
 
 fn expand_value(input: &str, env_map: &HashMap<String, String>) -> String {
