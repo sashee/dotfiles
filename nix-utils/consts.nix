@@ -8,6 +8,8 @@
 		{ path = "$HOME/.local/share/opencode"; type = "dir"; }
 		# X11 display socket
 		{ path = "/tmp/.X11-unix"; type = "dir"; }
+		# Wayland display socket
+		{ path = "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"; type = "file"; }
 		# High risk sockets
 		{ path = "/run/docker.sock"; type = "file"; }
 		{ path = "$XDG_RUNTIME_DIR/gnupg"; type = "dir"; }

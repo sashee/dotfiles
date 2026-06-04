@@ -549,6 +549,10 @@ fn append_mount_args(
     host_env: &HashMap<String, String>,
 ) -> Result<(), RunnerError> {
     for mount in mounts {
+        if references_missing_optional_env_var(&mount.path, host_env) {
+            continue;
+        }
+
         let path = expand_path_value(&mount.path, host_env)?;
         match mount.perm.as_str() {
             "rw" => {
@@ -603,6 +607,10 @@ fn ensure_mount_dirs(
             continue;
         }
 
+        if references_missing_optional_env_var(&mount.path, host_env) {
+            continue;
+        }
+
         let path = expand_path_value(&mount.path, host_env)?;
         fs::create_dir_all(&path).map_err(|source| RunnerError::CreateDir {
             path: path.into(),
@@ -630,6 +638,12 @@ fn references_env_var(input: &str, name: &str) -> bool {
     [format!("${name}"), format!("${{{name}}}")]
         .iter()
         .any(|needle| input.contains(needle))
+}
+
+fn references_missing_optional_env_var(input: &str, env_map: &HashMap<String, String>) -> bool {
+    ["WAYLAND_DISPLAY"]
+        .iter()
+        .any(|name| references_env_var(input, name) && !env_map.contains_key(*name))
 }
 
 fn expand_value(input: &str, env_map: &HashMap<String, String>) -> String {
@@ -858,6 +872,14 @@ mod tests {
             expand_path_value("$SSH_AUTH_SOCK", &env_map()).unwrap(),
             "/tmp/ssh-agent.sock"
         );
+    }
+
+    #[test]
+    fn detects_missing_optional_wayland_display_path() {
+        assert!(references_missing_optional_env_var(
+            "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY",
+            &env_map()
+        ));
     }
 
     #[test]

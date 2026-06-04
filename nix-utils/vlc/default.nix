@@ -6,6 +6,7 @@ let
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" = { perm = "ro"; };
 			"$HOME/.Xauthority" = { perm = "ro"; };
 			"$HOME/.local/share/vlc" = { perm = "rw"; mkdir = true; };
 			"$HOME/.config/vlc" = { perm = "rw"; mkdir = true; };

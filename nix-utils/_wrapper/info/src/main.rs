@@ -244,6 +244,11 @@ fn collect_info(
 
     let mut protected_paths = Map::new();
     for pp in &config.protected_paths {
+        if references_missing_optional_env_var(&pp.path, |name| env::var(name).ok()) {
+            protected_paths.insert(pp.path.clone(), Value::Bool(false));
+            continue;
+        }
+
         let path = expand_path(&pp.path)?;
         let visible = if pp.r#type == "dir" {
             is_visible_dir(&path)
@@ -486,32 +491,74 @@ where
     F: Fn(&str) -> Option<String>,
 {
     if let Some(rest) = path.strip_prefix('~') {
-        return expand_supported_path_var(path, "HOME", rest, env_lookup);
+        let home = lookup_supported_path_var(path, "HOME", &env_lookup)?;
+        return expand_path_with_env(&format!("{home}{rest}"), env_lookup);
     }
 
-    let Some((name, rest)) = env_prefix(path) else {
-        return Ok(path.to_string());
-    };
+    let mut out = String::new();
+    let chars: Vec<char> = path.chars().collect();
+    let mut i = 0usize;
 
-    if !matches!(name.as_str(), "HOME" | "XDG_RUNTIME_DIR") {
-        return Err(InfoError::UnsupportedPathExpansion {
-            path: path.to_string(),
-            var: name,
-        });
+    while i < chars.len() {
+        if chars[i] != '$' {
+            out.push(chars[i]);
+            i += 1;
+            continue;
+        }
+
+        if i + 1 >= chars.len() {
+            out.push('$');
+            i += 1;
+            continue;
+        }
+
+        if chars[i + 1] == '{' {
+            let mut j = i + 2;
+            while j < chars.len() && chars[j] != '}' {
+                j += 1;
+            }
+            if j >= chars.len() {
+                out.push('$');
+                i += 1;
+                continue;
+            }
+
+            let name: String = chars[(i + 2)..j].iter().collect();
+            out.push_str(&lookup_supported_path_var(path, &name, &env_lookup)?);
+            i = j + 1;
+            continue;
+        }
+
+        let mut j = i + 1;
+        while j < chars.len() && (chars[j].is_ascii_alphanumeric() || chars[j] == '_') {
+            j += 1;
+        }
+
+        if j == i + 1 {
+            out.push('$');
+            i += 1;
+            continue;
+        }
+
+        let name: String = chars[(i + 1)..j].iter().collect();
+        out.push_str(&lookup_supported_path_var(path, &name, &env_lookup)?);
+        i = j;
     }
 
-    expand_supported_path_var(path, &name, &rest, env_lookup)
+    Ok(out)
 }
 
-fn expand_supported_path_var<F>(
-    path: &str,
-    name: &str,
-    rest: &str,
-    env_lookup: F,
-) -> Result<String, InfoError>
+fn lookup_supported_path_var<F>(path: &str, name: &str, env_lookup: &F) -> Result<String, InfoError>
 where
     F: Fn(&str) -> Option<String>,
 {
+    if !matches!(name, "HOME" | "XDG_RUNTIME_DIR" | "WAYLAND_DISPLAY") {
+        return Err(InfoError::UnsupportedPathExpansion {
+            path: path.to_string(),
+            var: name.to_string(),
+        });
+    }
+
     let Some(value) = env_lookup(name) else {
         return Err(InfoError::MissingPathEnv {
             path: path.to_string(),
@@ -519,27 +566,22 @@ where
         });
     };
 
-    Ok(format!("{value}{rest}"))
+    Ok(value)
 }
 
-fn env_prefix(path: &str) -> Option<(String, String)> {
-    if let Some(rest) = path.strip_prefix("${") {
-        let (name, rest) = rest.split_once('}')?;
-        return Some((name.to_string(), rest.to_string()));
-    }
+fn references_env_var(input: &str, name: &str) -> bool {
+    [format!("${name}"), format!("${{{name}}}")]
+        .iter()
+        .any(|needle| input.contains(needle))
+}
 
-    let rest = path.strip_prefix('$')?;
-    let name_len = rest
-        .chars()
-        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-        .map(char::len_utf8)
-        .sum();
-
-    if name_len == 0 {
-        return None;
-    }
-
-    Some((rest[..name_len].to_string(), rest[name_len..].to_string()))
+fn references_missing_optional_env_var<F>(path: &str, env_lookup: F) -> bool
+where
+    F: Fn(&str) -> Option<String>,
+{
+    ["WAYLAND_DISPLAY"]
+        .iter()
+        .any(|name| references_env_var(path, name) && env_lookup(name).is_none())
 }
 
 #[cfg(test)]
@@ -550,6 +592,7 @@ mod tests {
         match name {
             "HOME" => Some("/home/test".to_string()),
             "XDG_RUNTIME_DIR" => Some("/run/user/123".to_string()),
+            "WAYLAND_DISPLAY" => Some("wayland-0".to_string()),
             _ => None,
         }
     }
@@ -567,6 +610,18 @@ mod tests {
         assert_eq!(
             expand_path_with_env("${XDG_RUNTIME_DIR}/bus", lookup).unwrap(),
             "/run/user/123/bus"
+        );
+    }
+
+    #[test]
+    fn expands_wayland_display_path() {
+        assert_eq!(
+            expand_path_with_env("$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY", lookup).unwrap(),
+            "/run/user/123/wayland-0"
+        );
+        assert_eq!(
+            expand_path_with_env("${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}", lookup).unwrap(),
+            "/run/user/123/wayland-0"
         );
     }
 
@@ -609,6 +664,17 @@ mod tests {
         assert!(matches!(
             err,
             InfoError::MissingPathEnv { ref var, .. } if var == "XDG_RUNTIME_DIR"
+        ));
+    }
+
+    #[test]
+    fn detects_missing_optional_wayland_display_path() {
+        assert!(references_missing_optional_env_var(
+            "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY",
+            |name| match name {
+                "XDG_RUNTIME_DIR" => Some("/run/user/123".to_string()),
+                _ => None,
+            }
         ));
     }
 }

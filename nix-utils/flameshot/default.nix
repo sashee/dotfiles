@@ -6,6 +6,7 @@ let
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = { perm = "rw"; };
+			"$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" = { perm = "rw"; };
 			"$HOME/.Xauthority" = { perm = "ro"; };
 			"$HOME/.config/flameshot" = { perm = "rw"; mkdir = true; };
 		};

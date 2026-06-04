@@ -6,6 +6,7 @@ let
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" = { perm = "ro"; };
 			"$HOME/.Xauthority" = { perm = "ro"; };
 			"$HOME/.XCompose" = { perm = "ro"; };
 			"$HOME/.config/torbrowser" = { perm = "rw"; mkdir = true; };

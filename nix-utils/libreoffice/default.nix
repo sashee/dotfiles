@@ -8,6 +8,7 @@ let
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = { perm = "ro"; };
+			"$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" = { perm = "ro"; };
 			"$HOME/.Xauthority" = { perm = "ro"; };
 			"$HOME/.config/libreoffice" = { perm = "rw"; mkdir = true; };
 			"$XDG_RUNTIME_DIR/libreoffice-dbus" = { perm = "rw"; mkdir = true;};

@@ -16,7 +16,7 @@ let
       effectiveKeepEnv =
         if keepEnv == null
           then null
-          else pkgs.lib.unique (keepEnv ++ [ "XDG_RUNTIME_DIR" skipSandboxEnvVar ]);
+          else pkgs.lib.unique (keepEnv ++ [ "XDG_RUNTIME_DIR" "WAYLAND_DISPLAY" skipSandboxEnvVar ]);
       launcher = pkgs.writeShellScriptBin "${name}-launcher" ''
 set -euo pipefail
 
