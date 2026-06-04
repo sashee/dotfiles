@@ -11,6 +11,7 @@ let
 			"$HOME/.Xauthority" = { perm = "ro"; };
 			"$HOME/.config/libreoffice" = { perm = "rw"; mkdir = true; };
 			"/run/user/1000/libreoffice-dbus" = { perm = "rw"; mkdir = true;};
+			"$HOME" = {perm = "rw";};
 		};
 		network = false;
 	};
