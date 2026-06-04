@@ -2,3 +2,5 @@
 	name = ${GIT_NAME}
 	email = ${GIT_EMAIL}
 
+[core]
+	hooksPath = /dev/null
