@@ -4,10 +4,11 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	nixglWrapper = nixgl.nixVulkanIntel;
-	nixglVkQuake = pkgs.writeShellScript "vkquake-with-nixgl" ''
-		exec ${nixglWrapper}/bin/nixVulkanIntel ${pkgs.vkquake}/bin/vkquake "$@"
+	vkquakeTarget = "${pkgs.vkquake}/bin/vkquake";
+	wrappedVkquake = pkgs.writeShellScript "vkquake-with-nixgl" ''
+		exec ${nixgl.nixVulkanIntel}/bin/nixVulkanIntel ${vkquakeTarget} "$@"
 	'';
+	target = if nixgl == null then vkquakeTarget else "${wrappedVkquake}";
 	sandbox_restrictions = {
 		fs = {
 			"/tmp/.X11-unix" = { perm = "ro"; };
@@ -23,7 +24,7 @@ let
 	};
 	bin = launcher.mkLauncher {
 		name = "vkquake";
-		target = "${nixglVkQuake}";
+		inherit target;
 	};
 in
 {

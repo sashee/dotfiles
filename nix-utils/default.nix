@@ -1,8 +1,15 @@
+{
+  pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-26.05") {
+    config = {allowUnfree = true;};
+    overlays = [];
+  },
+  unstable ? import (fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-unstable") {
+    config = {allowUnfree = true;};
+    overlays = [];
+  },
+  nixgl ? import (fetchTarball "https://github.com/nix-community/nixGL/archive/main.tar.gz") { inherit pkgs; },
+}:
 let
-  nixpkgs = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-26.05";
-  pkgs = import nixpkgs { config = {allowUnfree = true;}; overlays = []; };
-  nixglSrc = fetchTarball "https://github.com/nix-community/nixGL/archive/main.tar.gz";
-  nixgl = import nixglSrc { inherit pkgs; };
 
 	nvim = import ./nvim/default.nix { inherit pkgs; };
 
@@ -19,7 +26,7 @@ let
 		(import ./lazygit/default.nix { inherit pkgs; })
 		(import ./lazysql/default.nix { inherit pkgs; })
 		(import ./magic-wormhole/default.nix { inherit pkgs; })
-		(import ./opencode/default.nix { inherit pkgs; })
+		(import ./opencode/default.nix { inherit pkgs unstable; })
 		(import ./vlc/default.nix { inherit pkgs; })
 		nvim
 		(import ./npm/default.nix { inherit pkgs; })

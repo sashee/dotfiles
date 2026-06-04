@@ -1,11 +1,10 @@
 {
 	pkgs,
+	unstable,
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
 	rustSrc = import ../rust-src.nix { inherit pkgs; };
-	nixpkgs2 = fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-unstable";
-	pkgs2 = import nixpkgs2 { config = {allowUnfree = true;}; overlays = [];};
 		hostToolsMcp = pkgs.rustPlatform.buildRustPackage {
 			pname = "host-tools-mcp";
 			version = "0.1.0";
@@ -112,7 +111,7 @@ A useful refinement is to define exceptions explicitly:
 	};
 	bin = launcher.mkLauncher {
 		name = "opencode";
-		target = "${pkgs2.opencode}/bin/opencode";
+		target = "${unstable.opencode}/bin/opencode";
 		keepEnv = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "LANG" "TERM" "OPENCODE_CONFIG"];
 		setEnv = {
 			OPENCODE_CONFIG = "${config}";
