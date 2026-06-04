@@ -11,9 +11,6 @@ let
 			"$HOME/.config/torbrowser" = { perm = "rw"; mkdir = true; };
 			"$HOME/.cache/torbrowser" = { perm = "rw"; mkdir = true; };
 			"$HOME/.local/share/torbrowser" = { perm = "rw"; mkdir = true; };
-			"/etc/hostname" = { perm = "ro"; };
-			"/usr/share/keyd" = { perm = "ro"; };
-			"/usr/share/keyd/keyd.compose" = { perm = "ro"; };
 		};
 		network = true;
 		dev = true;

@@ -13,6 +13,7 @@
 		{ path = "$XDG_RUNTIME_DIR/gnupg"; type = "dir"; }
 		{ path = "$XDG_RUNTIME_DIR/bus"; type = "file"; }
 		{ path = "/run/dbus/system_bus_socket"; type = "file"; }
+		{ path = "/etc/ssh/ssh_config.d"; type = "dir"; }
 		# Medium risk sockets
 		{ path = "/run/libvirt"; type = "dir"; }
 		{ path = "$XDG_RUNTIME_DIR/pipewire-0"; type = "file"; }

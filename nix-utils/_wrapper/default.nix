@@ -127,10 +127,9 @@ let
       then [ "--dev-bind" "/dev" "/dev" ]
       else [ "--dev" "/dev" ])
     ++ [
-      "--proc" "/proc"
-      "--tmpfs" "/tmp"
-      "--tmpfs" "/etc/ssh/ssh_config.d"
-    ];
+		"--proc" "/proc"
+		"--tmpfs" "/tmp"
+	];
 
   mkRunnerConfig = {
     commandString,

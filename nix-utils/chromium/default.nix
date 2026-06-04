@@ -18,15 +18,12 @@ let
 			"$HOME/Downloads" = { perm = "rw"; };
 			"$HOME/.cache/chromium" = { perm = "rw"; mkdir = true; };
 			"$HOME/.local/share/chromium" = { perm = "rw"; mkdir = true; };
-			"/etc/hostname" = { perm = "ro"; };
 			"$XDG_RUNTIME_DIR" = { perm = "ro"; };
 			"$XDG_RUNTIME_DIR/bus" = { perm = "ro"; };
 			"$XDG_RUNTIME_DIR/pipewire-0" = { perm = "ro"; };
 			"$XDG_RUNTIME_DIR/pipewire-0-manager" = { perm = "ro"; };
 			"$XDG_RUNTIME_DIR/pulse" = { perm = "ro"; };
 			"/tmp" = { perm = "rw"; };
-			"/usr/share/keyd" = { perm = "ro"; };
-			"/usr/share/keyd/keyd.compose" = { perm = "ro"; };
 		};
 		network = true;
 		dev = true;
