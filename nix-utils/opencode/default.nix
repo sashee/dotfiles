@@ -108,6 +108,7 @@ A useful refinement is to define exceptions explicitly:
 			"$HOME/.cache/opencode" = { perm = "rw"; mkdir = true; };
 		};
 		network = true;
+		dev = ["/dev/kvm"];
 	};
 	bin = launcher.mkLauncher {
 		name = "opencode";
