@@ -8,6 +8,7 @@ let
 			"$HOME/.npm" = { perm = "rw"; };
 			"$HOME/.npmrc" = { perm = "rw"; };
 			"$HOME/.cache" = { perm = "rw"; };
+			"$HOME/.local/share/pnpm" = { perm = "rw"; };
 		};
 		network = true;
 	};
