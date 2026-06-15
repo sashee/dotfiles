@@ -217,3 +217,109 @@ impl RunnerConfig {
 pub fn resolve_config_path(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(json: &str) -> RunnerConfig {
+        serde_json::from_str(json).expect("test json should deserialize")
+    }
+
+    const VALID: &str = r#"{
+        "program_name": "t",
+        "bwrap": { "bin": "/bin/bwrap" },
+        "command": { "bin": "/bin/sh" }
+    }"#;
+
+    fn is_invalid(c: &RunnerConfig) -> bool {
+        matches!(c.validate(), Err(RunnerError::InvalidConfig(_)))
+    }
+
+    #[test]
+    fn accepts_minimal_valid_config() {
+        assert!(parse(VALID).validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_empty_program_name() {
+        assert!(is_invalid(&parse(
+            r#"{"program_name":"","bwrap":{"bin":"/b"},"command":{"bin":"/s"}}"#
+        )));
+    }
+
+    #[test]
+    fn rejects_empty_bwrap_bin() {
+        assert!(is_invalid(&parse(
+            r#"{"program_name":"t","bwrap":{"bin":""},"command":{"bin":"/s"}}"#
+        )));
+    }
+
+    #[test]
+    fn rejects_empty_command_bin() {
+        assert!(is_invalid(&parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":""}}"#
+        )));
+    }
+
+    #[test]
+    fn rejects_bad_mount_perm() {
+        assert!(is_invalid(&parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "mounts":[{"path":"/x","perm":"bogus"}]}"#
+        )));
+    }
+
+    #[test]
+    fn rejects_bad_mount_type() {
+        assert!(is_invalid(&parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "mounts":[{"path":"/x","perm":"rw","type":"weird"}]}"#
+        )));
+    }
+
+    #[test]
+    fn rejects_empty_mount_path() {
+        assert!(is_invalid(&parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "mounts":[{"path":"","perm":"rw"}]}"#
+        )));
+    }
+
+    #[test]
+    fn rejects_dev_pattern_without_dev_prefix() {
+        assert!(is_invalid(&parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "dev":["/foo"]}"#
+        )));
+    }
+
+    #[test]
+    fn accepts_dev_pattern_with_dev_prefix() {
+        assert!(parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "dev":["/dev/ttyUSB*"]}"#
+        )
+        .validate()
+        .is_ok());
+    }
+
+    #[test]
+    fn rejects_duplicate_dbus_socket() {
+        assert!(is_invalid(&parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "dbus":{"proxies":[
+                 {"source_bus_path":"/a","proxy_socket_path":"/tmp/p.sock"},
+                 {"source_bus_path":"/b","proxy_socket_path":"/tmp/p.sock"}
+               ]}}"#
+        )));
+    }
+
+    #[test]
+    fn rejects_negative_seccomp_family() {
+        assert!(is_invalid(&parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "seccomp":{"blocked_socket_families":[-1]}}"#
+        )));
+    }
+}

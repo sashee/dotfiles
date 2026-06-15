@@ -763,7 +763,13 @@ fn find_git_root_or_cwd() -> String {
         Err(_) => return "/".to_string(),
     };
 
-    let mut current = cwd.as_path();
+    resolve_restrict_path(&cwd)
+}
+
+/// Walks up from `cwd` to the nearest ancestor containing a `.git` entry and
+/// returns it; if none is found, returns `cwd` unchanged.
+fn resolve_restrict_path(cwd: &Path) -> String {
+    let mut current = cwd;
     loop {
         if current.join(".git").exists() {
             return current
@@ -965,5 +971,195 @@ mod tests {
             expand_value("$$HOME/$HOME", &env_map()).unwrap(),
             "$HOME//home/test"
         );
+    }
+
+    // --- append_mount_args: the mount rule -> bwrap arg translation ---
+
+    fn mount(path: &str, perm: &str, ty: &str, source: Option<&str>) -> MountRule {
+        MountRule {
+            path: path.to_string(),
+            perm: perm.to_string(),
+            r#type: ty.to_string(),
+            source: source.map(|s| s.to_string()),
+            mkdir: false,
+        }
+    }
+
+    fn run_mounts(mounts: &[MountRule]) -> Result<Vec<String>, RunnerError> {
+        let mut args = Vec::new();
+        append_mount_args(&mut args, mounts, &env_map(), &optional_env_vars())?;
+        Ok(args)
+    }
+
+    #[test]
+    fn rw_mount_without_source_binds_path_to_itself() {
+        assert_eq!(
+            run_mounts(&[mount("/data", "rw", "dir", None)]).unwrap(),
+            vec!["--bind-try", "/data", "/data"]
+        );
+    }
+
+    #[test]
+    fn rw_mount_with_source_binds_source_to_path() {
+        assert_eq!(
+            run_mounts(&[mount("/data", "rw", "dir", Some("/src"))]).unwrap(),
+            vec!["--bind-try", "/src", "/data"]
+        );
+    }
+
+    #[test]
+    fn ro_mount_uses_ro_bind_try() {
+        assert_eq!(
+            run_mounts(&[mount("/data", "ro", "dir", None)]).unwrap(),
+            vec!["--ro-bind-try", "/data", "/data"]
+        );
+        assert_eq!(
+            run_mounts(&[mount("/data", "ro", "dir", Some("/src"))]).unwrap(),
+            vec!["--ro-bind-try", "/src", "/data"]
+        );
+    }
+
+    #[test]
+    fn block_dir_on_existing_path_uses_tmpfs() {
+        assert_eq!(
+            run_mounts(&[mount("/", "block", "dir", None)]).unwrap(),
+            vec!["--tmpfs", "/"]
+        );
+    }
+
+    #[test]
+    fn block_file_on_existing_path_binds_dev_null() {
+        // /dev/null exists and is a non-directory node.
+        assert_eq!(
+            run_mounts(&[mount("/dev/null", "block", "file", None)]).unwrap(),
+            vec!["--ro-bind", "/dev/null", "/dev/null"]
+        );
+    }
+
+    #[test]
+    fn block_on_nonexistent_path_is_skipped() {
+        assert!(run_mounts(&[mount("/nonexistent-zzz-12345", "block", "dir", None)])
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn mount_referencing_missing_optional_var_is_skipped() {
+        // env_map() has no WAYLAND_DISPLAY, which is in the optional list.
+        assert!(
+            run_mounts(&[mount("$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY", "rw", "file", None)])
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn mount_path_is_expanded_from_env() {
+        assert_eq!(
+            run_mounts(&[mount("$XDG_RUNTIME_DIR/wl", "rw", "dir", None)]).unwrap(),
+            vec!["--bind-try", "/run/user/123/wl", "/run/user/123/wl"]
+        );
+    }
+
+    #[test]
+    fn mount_with_undefined_required_var_errors() {
+        let err = run_mounts(&[mount("$NOPE/x", "rw", "dir", None)]).unwrap_err();
+        assert!(matches!(err, RunnerError::UndefinedVariable { name } if name == "NOPE"));
+    }
+
+    // --- pure helpers ---
+
+    #[test]
+    fn replace_runtime_tokens_replaces_uid_and_gid() {
+        assert_eq!(
+            replace_runtime_tokens("__CURRENT_UID__"),
+            Uid::current().as_raw().to_string()
+        );
+        assert_eq!(
+            replace_runtime_tokens("__CURRENT_GID__"),
+            Gid::current().as_raw().to_string()
+        );
+    }
+
+    #[test]
+    fn replace_runtime_tokens_only_matches_whole_string() {
+        assert_eq!(
+            replace_runtime_tokens("uid=__CURRENT_UID__"),
+            "uid=__CURRENT_UID__"
+        );
+        assert_eq!(replace_runtime_tokens("plain"), "plain");
+    }
+
+    #[test]
+    fn shell_escape_leaves_simple_strings_unquoted() {
+        assert_eq!(shell_escape("/nix/store/abc-1.2.3"), "/nix/store/abc-1.2.3");
+        assert_eq!(shell_escape("KEY=value_1"), "KEY=value_1");
+    }
+
+    #[test]
+    fn shell_escape_quotes_and_escapes_special_strings() {
+        assert_eq!(shell_escape("a b"), "'a b'");
+        assert_eq!(shell_escape("it's"), "'it'\"'\"'s'");
+        assert_eq!(shell_escape(""), "''");
+    }
+
+    #[test]
+    fn sanitize_for_filename_replaces_disallowed_chars() {
+        assert_eq!(sanitize_for_filename("a-b_c1"), "a-b_c1");
+        assert_eq!(sanitize_for_filename("unix:path=/run/bus"), "unix_path__run_bus");
+    }
+
+    // --- Tier 2: filesystem-touching helpers (tempdirs) ---
+
+    fn unique_temp_dir() -> String {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir()
+            .join(format!("nsr-test-{}-{}", std::process::id(), n))
+            .to_str()
+            .unwrap()
+            .to_string()
+    }
+
+    #[test]
+    fn ensure_mount_dirs_creates_dir_when_mkdir_set() {
+        let base = unique_temp_dir();
+        let target = format!("{base}/sub/dir");
+        let mut m = mount(&target, "rw", "dir", None);
+        m.mkdir = true;
+        ensure_mount_dirs(&[m], &env_map(), &optional_env_vars()).unwrap();
+        assert!(Path::new(&target).is_dir());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn ensure_mount_dirs_skips_when_mkdir_unset() {
+        let base = unique_temp_dir();
+        let target = format!("{base}/nope");
+        ensure_mount_dirs(&[mount(&target, "rw", "dir", None)], &env_map(), &optional_env_vars())
+            .unwrap();
+        assert!(!Path::new(&target).exists());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn resolve_restrict_path_finds_git_root() {
+        let base = unique_temp_dir();
+        let repo = format!("{base}/a/b");
+        let nested = format!("{repo}/c/d");
+        std::fs::create_dir_all(format!("{repo}/.git")).unwrap();
+        std::fs::create_dir_all(&nested).unwrap();
+        assert_eq!(resolve_restrict_path(Path::new(&nested)), repo);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn resolve_restrict_path_without_git_returns_input() {
+        let base = unique_temp_dir();
+        let leaf = format!("{base}/x/y");
+        std::fs::create_dir_all(&leaf).unwrap();
+        assert_eq!(resolve_restrict_path(Path::new(&leaf)), leaf);
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
