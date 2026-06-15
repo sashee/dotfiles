@@ -167,6 +167,7 @@ let
         ) dbusPaths;
       };
       restrict_to_git_root = restrict_to_current_folder;
+      optional_env_vars = consts.optionalEnvVars;
     };
 
   mkRunScript = { commandString, configFile ? null, extraBefore ? "" }:

@@ -121,7 +121,7 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
         .args
         .iter()
         .map(|arg| expand_value(arg, &host_env))
-        .collect();
+        .collect::<Result<Vec<_>, _>>()?;
 
     for arg in &mut bwrap_args {
         *arg = replace_runtime_tokens(arg);
@@ -149,9 +149,9 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
     let mut mounts = config.mounts.clone();
     mounts.extend(dev_allowlist_block_mounts(&config)?);
 
-    ensure_mount_dirs(&mounts, &host_env)?;
+    ensure_mount_dirs(&mounts, &host_env, &config.optional_env_vars)?;
 
-    append_mount_args(&mut bwrap_args, &mounts, &host_env)?;
+    append_mount_args(&mut bwrap_args, &mounts, &host_env, &config.optional_env_vars)?;
 
     for proxy in proxies.iter() {
         bwrap_args.push("--bind".to_string());
@@ -164,16 +164,18 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
         bwrap_args.push(SECCOMP_FD.to_string());
     }
 
+    let command_bin = expand_value(&config.command.bin, &host_env)?;
+    let command_args = config
+        .command
+        .args
+        .iter()
+        .map(|arg| expand_value(arg, &host_env))
+        .collect::<Result<Vec<_>, _>>()?;
+
     let mut cmd = Command::new(&config.bwrap.bin);
     cmd.args(&bwrap_args);
-    cmd.arg(expand_value(&config.command.bin, &host_env));
-    cmd.args(
-        config
-            .command
-            .args
-            .iter()
-            .map(|arg| expand_value(arg, &host_env)),
-    );
+    cmd.arg(command_bin);
+    cmd.args(command_args);
     cmd.args(passthrough_args);
 
     if config.debug_bwrap {
@@ -547,9 +549,10 @@ fn append_mount_args(
     args: &mut Vec<String>,
     mounts: &[MountRule],
     host_env: &HashMap<String, String>,
+    optional_env_vars: &[String],
 ) -> Result<(), RunnerError> {
     for mount in mounts {
-        if references_missing_optional_env_var(&mount.path, host_env) {
+        if references_missing_optional_env_var(&mount.path, host_env, optional_env_vars) {
             continue;
         }
 
@@ -601,13 +604,14 @@ fn append_mount_args(
 fn ensure_mount_dirs(
     mounts: &[MountRule],
     host_env: &HashMap<String, String>,
+    optional_env_vars: &[String],
 ) -> Result<(), RunnerError> {
     for mount in mounts {
         if !mount.mkdir || mount.source.is_some() || mount.r#type != "dir" {
             continue;
         }
 
-        if references_missing_optional_env_var(&mount.path, host_env) {
+        if references_missing_optional_env_var(&mount.path, host_env, optional_env_vars) {
             continue;
         }
 
@@ -625,13 +629,7 @@ fn expand_path_value(
     input: &str,
     env_map: &HashMap<String, String>,
 ) -> Result<String, RunnerError> {
-    if references_env_var(input, "XDG_RUNTIME_DIR") && !env_map.contains_key("XDG_RUNTIME_DIR") {
-        return Err(RunnerError::InvalidConfig(
-            "path references $XDG_RUNTIME_DIR, but XDG_RUNTIME_DIR is not set".to_string(),
-        ));
-    }
-
-    Ok(expand_value(input, env_map))
+    expand_value(input, env_map)
 }
 
 fn references_env_var(input: &str, name: &str) -> bool {
@@ -640,13 +638,37 @@ fn references_env_var(input: &str, name: &str) -> bool {
         .any(|needle| input.contains(needle))
 }
 
-fn references_missing_optional_env_var(input: &str, env_map: &HashMap<String, String>) -> bool {
-    ["WAYLAND_DISPLAY"]
+/// Variables that are allowed to be unset: a mount referencing one of these is
+/// skipped entirely rather than erroring (headless session has no
+/// `WAYLAND_DISPLAY`, a session with no ssh-agent has no `SSH_AUTH_SOCK`).
+/// The list comes from `optionalEnvVars` in `consts.nix`. Every other referenced
+/// variable must be defined; see `expand_value`.
+fn references_missing_optional_env_var(
+    input: &str,
+    env_map: &HashMap<String, String>,
+    optional_env_vars: &[String],
+) -> bool {
+    optional_env_vars
         .iter()
-        .any(|name| references_env_var(input, name) && !env_map.contains_key(*name))
+        .any(|name| references_env_var(input, name) && !env_map.contains_key(name.as_str()))
 }
 
-fn expand_value(input: &str, env_map: &HashMap<String, String>) -> String {
+fn lookup_var<'a>(
+    name: &str,
+    env_map: &'a HashMap<String, String>,
+) -> Result<&'a str, RunnerError> {
+    env_map
+        .get(name)
+        .map(String::as_str)
+        .ok_or_else(|| RunnerError::UndefinedVariable {
+            name: name.to_string(),
+        })
+}
+
+/// Substitutes `$VAR` / `${VAR}` from `env_map`. A reference to an undefined
+/// variable is a hard error (fail-closed) rather than an empty string. `$$`
+/// escapes a literal `$`.
+fn expand_value(input: &str, env_map: &HashMap<String, String>) -> Result<String, RunnerError> {
     let mut out = String::new();
     let chars: Vec<char> = input.chars().collect();
     let mut i = 0usize;
@@ -664,6 +686,13 @@ fn expand_value(input: &str, env_map: &HashMap<String, String>) -> String {
             continue;
         }
 
+        // `$$` escapes a literal `$`.
+        if chars[i + 1] == '$' {
+            out.push('$');
+            i += 2;
+            continue;
+        }
+
         if chars[i + 1] == '{' {
             let mut j = i + 2;
             while j < chars.len() && chars[j] != '}' {
@@ -675,7 +704,7 @@ fn expand_value(input: &str, env_map: &HashMap<String, String>) -> String {
                 continue;
             }
             let key: String = chars[(i + 2)..j].iter().collect();
-            out.push_str(env_map.get(&key).map(String::as_str).unwrap_or(""));
+            out.push_str(lookup_var(&key, env_map)?);
             i = j + 1;
             continue;
         }
@@ -692,11 +721,11 @@ fn expand_value(input: &str, env_map: &HashMap<String, String>) -> String {
         }
 
         let key: String = chars[(i + 1)..j].iter().collect();
-        out.push_str(env_map.get(&key).map(String::as_str).unwrap_or(""));
+        out.push_str(lookup_var(&key, env_map)?);
         i = j;
     }
 
-    out
+    Ok(out)
 }
 
 fn replace_runtime_tokens(input: &str) -> String {
@@ -842,6 +871,10 @@ mod tests {
         ])
     }
 
+    fn optional_env_vars() -> Vec<String> {
+        vec!["WAYLAND_DISPLAY".to_string(), "SSH_AUTH_SOCK".to_string()]
+    }
+
     #[test]
     fn expands_xdg_runtime_dir_path() {
         assert_eq!(
@@ -878,15 +911,59 @@ mod tests {
     fn detects_missing_optional_wayland_display_path() {
         assert!(references_missing_optional_env_var(
             "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY",
-            &env_map()
+            &env_map(),
+            &optional_env_vars()
         ));
+    }
+
+    #[test]
+    fn detects_missing_optional_ssh_auth_sock_path() {
+        let mut env = env_map();
+        env.remove("SSH_AUTH_SOCK");
+        assert!(references_missing_optional_env_var(
+            "$SSH_AUTH_SOCK",
+            &env,
+            &optional_env_vars()
+        ));
+        // Present means not "missing optional" -> caller proceeds to expand it.
+        assert!(!references_missing_optional_env_var(
+            "$SSH_AUTH_SOCK",
+            &env_map(),
+            &optional_env_vars()
+        ));
+    }
+
+    #[test]
+    fn var_not_in_optional_list_is_not_treated_as_optional() {
+        let mut env = env_map();
+        env.remove("SSH_AUTH_SOCK");
+        // With an empty optional list, a missing var is required (not skipped).
+        assert!(!references_missing_optional_env_var(
+            "$SSH_AUTH_SOCK",
+            &env,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn errors_when_referenced_variable_is_undefined() {
+        let err = expand_path_value("$NOPE/bus", &env_map()).unwrap_err();
+        assert!(matches!(err, RunnerError::UndefinedVariable { name } if name == "NOPE"));
     }
 
     #[test]
     fn errors_when_xdg_runtime_dir_is_missing() {
         let err = expand_path_value("$XDG_RUNTIME_DIR/bus", &HashMap::new()).unwrap_err();
         assert!(
-            matches!(err, RunnerError::InvalidConfig(message) if message.contains("XDG_RUNTIME_DIR"))
+            matches!(err, RunnerError::UndefinedVariable { name } if name == "XDG_RUNTIME_DIR")
+        );
+    }
+
+    #[test]
+    fn double_dollar_escapes_literal_dollar() {
+        assert_eq!(
+            expand_value("$$HOME/$HOME", &env_map()).unwrap(),
+            "$HOME//home/test"
         );
     }
 }

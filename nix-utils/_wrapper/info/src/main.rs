@@ -68,6 +68,8 @@ struct InfoConfig {
     program_name: String,
     share: ShareConfig,
     protected_paths: Vec<ProtectedPathConfig>,
+    #[serde(default)]
+    optional_env_vars: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -244,7 +246,9 @@ fn collect_info(
 
     let mut protected_paths = Map::new();
     for pp in &config.protected_paths {
-        if references_missing_optional_env_var(&pp.path, |name| env::var(name).ok()) {
+        if references_missing_optional_env_var(&pp.path, &config.optional_env_vars, |name| {
+            env::var(name).ok()
+        }) {
             protected_paths.insert(pp.path.clone(), Value::Bool(false));
             continue;
         }
@@ -575,11 +579,15 @@ fn references_env_var(input: &str, name: &str) -> bool {
         .any(|needle| input.contains(needle))
 }
 
-fn references_missing_optional_env_var<F>(path: &str, env_lookup: F) -> bool
+fn references_missing_optional_env_var<F>(
+    path: &str,
+    optional_env_vars: &[String],
+    env_lookup: F,
+) -> bool
 where
     F: Fn(&str) -> Option<String>,
 {
-    ["WAYLAND_DISPLAY"]
+    optional_env_vars
         .iter()
         .any(|name| references_env_var(path, name) && env_lookup(name).is_none())
 }
@@ -667,14 +675,37 @@ mod tests {
         ));
     }
 
+    fn optional_env_vars() -> Vec<String> {
+        vec!["WAYLAND_DISPLAY".to_string(), "SSH_AUTH_SOCK".to_string()]
+    }
+
     #[test]
     fn detects_missing_optional_wayland_display_path() {
         assert!(references_missing_optional_env_var(
             "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY",
+            &optional_env_vars(),
             |name| match name {
                 "XDG_RUNTIME_DIR" => Some("/run/user/123".to_string()),
                 _ => None,
             }
+        ));
+    }
+
+    #[test]
+    fn detects_missing_optional_ssh_auth_sock_path() {
+        assert!(references_missing_optional_env_var(
+            "$SSH_AUTH_SOCK",
+            &optional_env_vars(),
+            |_| None
+        ));
+    }
+
+    #[test]
+    fn var_not_in_optional_list_is_not_optional() {
+        assert!(!references_missing_optional_env_var(
+            "$SSH_AUTH_SOCK",
+            &[],
+            |_| None
         ));
     }
 }

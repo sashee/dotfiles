@@ -1,6 +1,11 @@
 {
 	SKIP_SANDBOX_ENV_VAR_NAME = "__NIX_UTILS_SKIP_SANDBOX";
 	RESTRICT_TO_ENV_VAR_NAME = "__NIX_UTILS_RESTRICT_TO";
+	# Env vars allowed to be unset: a mount path referencing one of these is
+	# skipped when the var is missing (headless = no WAYLAND_DISPLAY, no
+	# ssh-agent = no SSH_AUTH_SOCK). Every other referenced var is required and
+	# errors if unset.
+	optionalEnvVars = [ "WAYLAND_DISPLAY" "SSH_AUTH_SOCK" ];
 	protectedPaths = [
 		# User data directories
 		# Block all of ~/.config by default; tools opt back in to specific

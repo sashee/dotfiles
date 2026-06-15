@@ -16,6 +16,7 @@ let
       path = pp.path;
       type = pp.type;
     }) consts.protectedPaths;
+    optional_env_vars = consts.optionalEnvVars;
   });
 
   infoWrapper = pkgs.writeScriptBin "${name}-info" (makeWrapper {

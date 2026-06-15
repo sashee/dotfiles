@@ -1,6 +1,9 @@
 { pkgs }:
 let
   skipSandboxEnvVar = "__NIX_UTILS_SKIP_SANDBOX";
+  # Escape a string for a bash double-quoted context, neutralising \ ` " but
+  # deliberately leaving $ so $VAR/${VAR} still expand at launch.
+  escapeDq = builtins.replaceStrings [ "\\" "`" "\"" ] [ "\\\\" "\\`" "\\\"" ];
   mkLauncher = launcherArgs@{
     name,
     target,
@@ -33,7 +36,10 @@ fi
 ''}
 
 ${pkgs.lib.concatMapStringsSep "\n" (k:
-  "env_args+=(${pkgs.lib.escapeShellArg "${k}=${effectiveSetEnv.${k}}"})"
+  # Double-quoted so bash expands $VAR/${VAR} in the value. `set -euo pipefail`
+  # makes a reference to an unset variable abort (fail-closed). setEnv values
+  # are author-controlled.
+  "env_args+=(\"${escapeDq k}=${escapeDq effectiveSetEnv.${k}}\")"
 ) (builtins.attrNames effectiveSetEnv)}
 
 exec ${pkgs.coreutils}/bin/env "''${env_args[@]}" ${pkgs.lib.escapeShellArg target} ${pkgs.lib.escapeShellArgs extraArgs} "$@"

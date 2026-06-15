@@ -22,6 +22,8 @@ pub struct RunnerConfig {
     pub dbus: DbusConfig,
     #[serde(default)]
     pub restrict_to_git_root: bool,
+    #[serde(default)]
+    pub optional_env_vars: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]

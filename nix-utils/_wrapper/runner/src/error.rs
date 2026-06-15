@@ -70,4 +70,7 @@ pub enum RunnerError {
 
     #[error("seccomp setup failed: {0}")]
     Seccomp(String),
+
+    #[error("references ${name}, but {name} is not set")]
+    UndefinedVariable { name: String },
 }
