@@ -27,6 +27,7 @@ let
 		(import ./lazysql/default.nix { inherit pkgs; })
 		(import ./magic-wormhole/default.nix { inherit pkgs; })
 		(import ./opencode/default.nix { inherit pkgs unstable; })
+		(import ./claude/default.nix { inherit pkgs unstable; })
 		(import ./vlc/default.nix { inherit pkgs; })
 		nvim
 		(import ./npm/default.nix { inherit pkgs; })
