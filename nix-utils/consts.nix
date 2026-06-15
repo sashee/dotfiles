@@ -3,10 +3,10 @@
 	RESTRICT_TO_ENV_VAR_NAME = "__NIX_UTILS_RESTRICT_TO";
 	protectedPaths = [
 		# User data directories
-		{ path = "$HOME/.config/chromium"; type = "dir"; }
-		{ path = "$HOME/.config/syncthing"; type = "dir"; }
+		# Block all of ~/.config by default; tools opt back in to specific
+		# subdirs via sandbox_restrictions.fs (allowlist, not denylist).
+		{ path = "$HOME/.config"; type = "dir"; }
 		{ path = "$HOME/.local/share/opencode"; type = "dir"; }
-		{ path = "$HOME/.config/claude"; type = "dir"; }
 		# X11 display socket
 		{ path = "/tmp/.X11-unix"; type = "dir"; }
 		# Wayland display socket
