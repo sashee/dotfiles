@@ -110,6 +110,8 @@ A useful refinement is to define exceptions explicitly:
 	# Claude Code has no single OPENCODE_CONFIG-style env var, so inject via flags.
 	# This thin entrypoint is what the launcher/sandbox wraps.
 	claudeEntry = pkgs.writeShellScriptBin "claude" ''
+		export CLAUDE_CONFIG_DIR="$HOME/.config/claude"
+		export DISABLE_AUTOUPDATER="1"
 		exec ${unstable.claude-code}/bin/claude \
 			--settings ${settingsJson} \
 			--mcp-config ${mcpJson} \
@@ -130,11 +132,8 @@ A useful refinement is to define exceptions explicitly:
 	bin = launcher.mkLauncher {
 		name = "claude";
 		target = "${claudeEntry}/bin/claude";
-		keepEnv = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "LANG" "TERM" "ANTHROPIC_API_KEY" "CLAUDE_CONFIG_DIR"];
-		setEnv = {
-			DISABLE_AUTOUPDATER = "1";
-			CLAUDE_CONFIG_DIR = "$HOME/.config/claude";
-		};
+		keepEnv = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "LANG" "TERM"];
+		setEnv = {};
 	};
 	wrapper = import ../_wrapper/default.nix {
 		name = "claude";
