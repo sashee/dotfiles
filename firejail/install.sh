@@ -12,5 +12,3 @@ rm -f ~/.config/firejail/globals.local
 ln -s $PWD/firejail/globals.local ~/.config/firejail/globals.local
 rm -f ~/.config/firejail/keepassxc.local
 ln -s $PWD/firejail/keepassxc.local ~/.config/firejail/keepassxc.local
-
-sudo firecfg
