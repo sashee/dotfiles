@@ -134,7 +134,7 @@ export default [
 		fs = {
 			"$HOME/.local/state/nvim" = { perm = "rw"; mkdir = true; };
 			"$HOME/.local/share/nvim" = { perm = "rw"; };
-			"$HOME/.cache" = { perm = "rw"; mkdir = true; };
+			"$HOME/.cache/nvim" = { perm = "rw"; mkdir = true; };
 			"$HOME/.cargo" = { perm = "rw"; mkdir = true; };
 			"$HOME/.gitconfig" = { perm = "ro"; };
 		};

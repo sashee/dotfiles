@@ -1,3 +1,9 @@
+[general]
+# Do not create the Alacritty IPC socket. It lives in $XDG_RUNTIME_DIR and is
+# reachable from inside the bwrap sandboxes; `alacritty msg create-window -e ...`
+# would run arbitrary commands in the host (unsandboxed) Alacritty process.
+ipc_socket = false
+
 [env]
 TERM = "xterm-256color"
 

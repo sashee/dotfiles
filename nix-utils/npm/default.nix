@@ -7,7 +7,12 @@ let
 		fs = {
 			"$HOME/.npm" = { perm = "rw"; };
 			"$HOME/.npmrc" = { perm = "rw"; };
-			"$HOME/.cache" = { perm = "rw"; };
+			# Scoped to the cache subdirs node tooling actually uses, instead of
+			# all of ~/.cache, so untrusted package scripts can't poison other
+			# tools' caches (which non-sandboxed host processes later trust).
+			"$HOME/.cache/pnpm" = { perm = "rw"; mkdir = true; };
+			"$HOME/.cache/node" = { perm = "rw"; mkdir = true; };
+			"$HOME/.cache/node-gyp" = { perm = "rw"; mkdir = true; };
 			"$HOME/.local/share/pnpm" = { perm = "rw"; };
 		};
 		network = true;

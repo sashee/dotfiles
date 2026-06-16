@@ -20,6 +20,12 @@
 		{ path = "/run/docker.sock"; type = "file"; }
 		{ path = "$XDG_RUNTIME_DIR/gnupg"; type = "dir"; }
 		{ path = "$XDG_RUNTIME_DIR/bus"; type = "file"; }
+		# systemd --user manager control sockets (private + io.systemd.Manager
+		# varlink). These speak D-Bus/varlink as a direct peer, bypassing the
+		# session bus, so blocking `bus` above is not enough: a sandboxed process
+		# could StartTransientUnit and spawn outside the sandbox. Block the whole
+		# dir so all sockets under it (private, io.systemd.Manager, notify) go away.
+		{ path = "$XDG_RUNTIME_DIR/systemd"; type = "dir"; }
 		{ path = "/run/dbus/system_bus_socket"; type = "file"; }
 		{ path = "/etc/ssh/ssh_config.d"; type = "dir"; }
 		# Medium risk sockets
@@ -28,5 +34,10 @@
 		{ path = "$XDG_RUNTIME_DIR/pipewire-0-manager"; type = "file"; }
 		{ path = "$XDG_RUNTIME_DIR/pulse"; type = "dir"; }
 		{ path = "$XDG_RUNTIME_DIR/p11-kit"; type = "dir"; }
+		# LibreOffice's private D-Bus dir (its own UNO/soffice IPC socket, not the
+		# host bus). Blocked by default so another sandbox can't drive a running
+		# LibreOffice (which has broad $HOME access); LibreOffice opts back in via
+		# its own fs entry.
+		{ path = "$XDG_RUNTIME_DIR/libreoffice-dbus"; type = "dir"; }
 	];
 }
