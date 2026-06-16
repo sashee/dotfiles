@@ -39,5 +39,11 @@
 		# LibreOffice (which has broad $HOME access); LibreOffice opts back in via
 		# its own fs entry.
 		{ path = "$XDG_RUNTIME_DIR/libreoffice-dbus"; type = "dir"; }
+		# Systemd journal (persistent + volatile). Readable by uid 1000 via ACL and
+		# can hold logged secrets + the machine's full activity history. Blocked so
+		# networked sandboxed tools can't read/exfil it; zsh (-> tmux/zellij) and
+		# isd opt back in via their own fs entries.
+		{ path = "/var/log/journal"; type = "dir"; }
+		{ path = "/run/log/journal"; type = "dir"; }
 	];
 }

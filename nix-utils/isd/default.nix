@@ -11,6 +11,10 @@ let
 			"$HOME/.cache/isd_tui" = { perm = "rw"; mkdir = true; };
 			"$XDG_RUNTIME_DIR/bus" = { perm = "ro"; };
 			"/run/dbus/system_bus_socket" = { perm = "ro"; };
+			# isd shows unit logs via journalctl; opt back into the journal that
+			# consts.nix blocks by default.
+			"/var/log/journal" = { perm = "ro"; };
+			"/run/log/journal" = { perm = "ro"; };
 		};
 		network = false;
 	};
