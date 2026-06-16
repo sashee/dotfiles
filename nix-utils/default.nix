@@ -12,6 +12,7 @@
 let
 
 	nvim = import ./nvim/default.nix { inherit pkgs; };
+	git = import ./git/default.nix { inherit pkgs; };
 
 	# Programs to pass to zsh for dynamic requirements merging
 	zsh_programs = [
@@ -21,9 +22,10 @@ let
 		(import ./sqlite3/default.nix { inherit pkgs; })
 		(import ./flameshot/default.nix { inherit pkgs; })
 		(import ./fx/default.nix { inherit pkgs; })
+		git
 		(import ./isd/default.nix { inherit pkgs nvim; })
 		(import ./k2pdfopt/default.nix { inherit pkgs; })
-		(import ./lazygit/default.nix { inherit pkgs; })
+		(import ./lazygit/default.nix { inherit pkgs git; })
 		(import ./lazysql/default.nix { inherit pkgs; })
 		(import ./magic-wormhole/default.nix { inherit pkgs; })
 		(import ./opencode/default.nix { inherit pkgs unstable; })

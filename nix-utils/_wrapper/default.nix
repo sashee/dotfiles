@@ -1,4 +1,4 @@
-{ pkgs, name, sandbox_restrictions, bin, generate_unsafe ? true, restrict_to_current_folder ? true }:
+{ pkgs, name, sandbox_restrictions, bin, generate_unsafe ? true, restrict_to_current_folder ? true, quiet ? false }:
 let
   debugLogDir = "/tmp/nix-utils-debug";
   consts = import ../consts.nix;
@@ -167,6 +167,7 @@ let
         ) dbusPaths;
       };
       restrict_to_git_root = restrict_to_current_folder;
+      quiet = quiet;
       optional_env_vars = consts.optionalEnvVars;
     };
 
@@ -176,9 +177,9 @@ let
 set -eo pipefail
 
 if [ "$(${pkgs.coreutils}/bin/printenv ${consts.SKIP_SANDBOX_ENV_VAR_NAME} 2>/dev/null || true)" = "true" ]; then
-  echo "[${name}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME}=true" >&2
+  ${pkgs.lib.optionalString (!quiet) "echo \"[${name}] Skipping sandbox as ${consts.SKIP_SANDBOX_ENV_VAR_NAME}=true\" >&2"}
   ${extraBefore}
-  __nix_utils_cmd=$(cat <<'__NIX_UTILS_CMD__'
+  __nix_utils_cmd=$(${pkgs.coreutils}/bin/cat <<'__NIX_UTILS_CMD__'
 ${commandString}
 __NIX_UTILS_CMD__
 )
@@ -187,7 +188,7 @@ else
   ${pkgs.coreutils}/bin/mkdir -p ${debugLogDir}
   ${extraBefore}
   ${if configFile == null then
-    ''__nix_utils_cmd=$(cat <<'__NIX_UTILS_CMD__'
+    ''__nix_utils_cmd=$(${pkgs.coreutils}/bin/cat <<'__NIX_UTILS_CMD__'
 ${commandString}
 __NIX_UTILS_CMD__
 )

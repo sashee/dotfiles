@@ -6,7 +6,6 @@ let
 	base_sandbox_restrictions = {
 		fs = {
 			"$HOME/.npm" = { perm = "rw"; };
-			"$HOME/.npmrc" = { perm = "rw"; };
 			# Scoped to the cache subdirs node tooling actually uses, instead of
 			# all of ~/.cache, so untrusted package scripts can't poison other
 			# tools' caches (which non-sandboxed host processes later trust).

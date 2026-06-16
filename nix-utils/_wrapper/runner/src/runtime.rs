@@ -137,10 +137,12 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
 
     if config.restrict_to_git_root {
         let restrict_path = find_git_root_or_cwd();
-        eprintln!(
-            "[{}] Restricting to folder: {}",
-            config.program_name, restrict_path
-        );
+        if !config.quiet {
+            eprintln!(
+                "[{}] Restricting to folder: {}",
+                config.program_name, restrict_path
+            );
+        }
         bwrap_args.push("--bind".to_string());
         bwrap_args.push(restrict_path.clone());
         bwrap_args.push(restrict_path);

@@ -1,17 +1,19 @@
 {
 	pkgs,
+	git,
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	sandbox_restrictions = {
-		fs = {
-			"$HOME/.ssh/known_hosts" = { perm = "ro"; };
-			"$HOME/.gitconfig" = { perm = "ro"; };
+	# The sandboxed, hardened `git` tool (its launcher applies the git-exec
+	# hardening; lazygit's own sandbox contains anything git triggers).
+	gitBin = builtins.elemAt git.scripts 0;
+	# Extend git's restrictions (gitconfig/ssh/network) with lazygit's own dirs,
+	# the same way zsh merges its programs' restrictions.
+	sandbox_restrictions = git.sandbox_restrictions // {
+		fs = (git.sandbox_restrictions.fs or {}) // {
 			"$HOME/.config/lazygit" = { perm = "rw"; mkdir = true; };
 			"$HOME/.local/state/lazygit" = { perm = "rw"; };
-			"$SSH_AUTH_SOCK" = { perm = "rw"; };
 		};
-		network = true;
 	};
 	bin = launcher.mkLauncher {
 		name = "lazygit";
@@ -19,7 +21,7 @@ let
 		keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"];
 		setEnv = {
 			PATH = pkgs.lib.makeBinPath [
-				pkgs.git
+				gitBin
 				pkgs.openssh
 				pkgs.tree
 			];
