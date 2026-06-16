@@ -13,7 +13,7 @@ if [[ "$1" == "inc" ]]; then
 	if (( $(echo "$XRANDR_BRIGHTNESS < 1"|bc -l) )); then
 		xrandr --output eDP --brightness "$(echo "res=$XRANDR_BRIGHTNESS + 0.1;if(res>1)1 else res" | bc -l)" --gamma "$XRANDR_GAMMA_R:$XRANDR_GAMMA_G:$XRANDR_GAMMA_B"
 	else
-		xbacklight -inc 1
+		brightnessctl set 1%+
 	fi
 fi
 
@@ -21,7 +21,7 @@ if [[ "$1" == "dec" ]]; then
 	if (( $(echo "$SYS_BRIGHTNESS == 0"|bc -l) )); then
 		xrandr --output eDP --brightness "$(echo "res=$XRANDR_BRIGHTNESS - 0.1;if(res<0)0 else res" | bc -l)" --gamma "$XRANDR_GAMMA_R:$XRANDR_GAMMA_G:$XRANDR_GAMMA_B"
 	else
-		xbacklight -dec 1
+		brightnessctl set 1%-
 	fi
 fi
 
