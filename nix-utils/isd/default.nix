@@ -17,6 +17,10 @@ let
 			"/run/log/journal" = { perm = "ro"; };
 		};
 		network = false;
+		# isd shells out to journalctl, which locates logs at
+		# /var/log/journal/<machine-id>/ -> it needs the real machine-id, not the
+		# random one other sandboxes get. zsh/tmux/zellij inherit this via the merge.
+		real_machine_id = true;
 	};
 	bin = launcher.mkLauncher {
 		name = "isd";

@@ -168,6 +168,7 @@ let
       };
       restrict_to_git_root = restrict_to_current_folder;
       quiet = quiet;
+      real_machine_id = sandbox_restrictions.real_machine_id or false;
       optional_env_vars = consts.optionalEnvVars;
     };
 

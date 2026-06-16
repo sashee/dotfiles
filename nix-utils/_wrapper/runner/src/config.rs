@@ -25,6 +25,8 @@ pub struct RunnerConfig {
     #[serde(default)]
     pub quiet: bool,
     #[serde(default)]
+    pub real_machine_id: bool,
+    #[serde(default)]
     pub optional_env_vars: Vec<String>,
 }
 
@@ -323,5 +325,22 @@ mod tests {
             r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
                "seccomp":{"blocked_socket_families":[-1]}}"#
         )));
+    }
+
+    #[test]
+    fn quiet_and_real_machine_id_default_false() {
+        let c = parse(VALID);
+        assert!(!c.quiet);
+        assert!(!c.real_machine_id);
+    }
+
+    #[test]
+    fn parses_quiet_and_real_machine_id_true() {
+        let c = parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "quiet":true,"real_machine_id":true}"#,
+        );
+        assert!(c.quiet);
+        assert!(c.real_machine_id);
     }
 }

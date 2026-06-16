@@ -3,7 +3,7 @@ use std::ffi::CString;
 use std::ffi::OsString;
 use std::fs;
 use std::fs::OpenOptions;
-use std::io::{Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::process::CommandExt;
 use std::os::unix::process::ExitStatusExt;
@@ -29,6 +29,7 @@ use crate::error::RunnerError;
 
 static NEXT_PROXY_ID: AtomicU64 = AtomicU64::new(0);
 const SECCOMP_FD: i32 = 3;
+const MACHINE_ID_FD: i32 = 4;
 const DEBUG_LOG_DIR: &str = "/tmp/nix-utils-debug";
 
 struct ProxyHandle {
@@ -166,6 +167,19 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
         bwrap_args.push(SECCOMP_FD.to_string());
     }
 
+    // Unless the tool opts into the real machine-id, give it a fresh random one
+    // bound over /etc/machine-id (a deeper path than the base `--ro-bind / /`,
+    // so it wins). Data is fed via an inherited fd, like the seccomp filter.
+    let machine_id_file = if config.real_machine_id {
+        None
+    } else {
+        let file = create_machine_id_fd()?;
+        bwrap_args.push("--ro-bind-data".to_string());
+        bwrap_args.push(MACHINE_ID_FD.to_string());
+        bwrap_args.push("/etc/machine-id".to_string());
+        Some(file)
+    };
+
     let command_bin = expand_value(&config.command.bin, &host_env)?;
     let command_args = config
         .command
@@ -225,6 +239,32 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
         None
     };
 
+    if let Some(file) = &machine_id_file {
+        let target_fd = MACHINE_ID_FD;
+        let source_fd = file.as_raw_fd();
+        unsafe {
+            cmd.pre_exec(move || {
+                let rc = nix::libc::dup2(source_fd, target_fd);
+                if rc == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                let flags = nix::libc::fcntl(target_fd, nix::libc::F_GETFD);
+                if flags == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                let clear_rc = nix::libc::fcntl(
+                    target_fd,
+                    nix::libc::F_SETFD,
+                    flags & !nix::libc::FD_CLOEXEC,
+                );
+                if clear_rc == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+    }
+
     let signal_thread = install_signal_forwarders(proxy_pids.clone())?;
 
     let mut child = cmd.spawn().map_err(|source| RunnerError::SpawnProcess {
@@ -237,6 +277,7 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
     }
 
     drop(seccomp_file);
+    drop(machine_id_file);
 
     let status = child.wait().map_err(|source| RunnerError::WaitProcess {
         program: config.bwrap.bin.clone(),
@@ -428,6 +469,52 @@ fn create_seccomp_memfd() -> Result<fs::File, RunnerError> {
     }
 
     let file = unsafe { fs::File::from_raw_fd(fd) };
+    Ok(file)
+}
+
+/// Generates a fresh random systemd machine-id (32 lowercase hex chars +
+/// newline, the format systemd/D-Bus require) and returns a sealed memfd
+/// holding it, rewound to the start, for bwrap's `--ro-bind-data`.
+fn create_machine_id_fd() -> Result<fs::File, RunnerError> {
+    let mut bytes = [0u8; 16];
+    let mut urandom = fs::File::open("/dev/urandom").map_err(|source| RunnerError::OpenFile {
+        path: "/dev/urandom".into(),
+        source,
+    })?;
+    urandom
+        .read_exact(&mut bytes)
+        .map_err(|source| RunnerError::OpenFile {
+            path: "/dev/urandom".into(),
+            source,
+        })?;
+
+    let mut contents = String::with_capacity(33);
+    for b in bytes {
+        contents.push_str(&format!("{b:02x}"));
+    }
+    contents.push('\n');
+
+    let name = CString::new("nix-sandbox-machineid")
+        .map_err(|source| RunnerError::Seccomp(format!("invalid memfd name: {source}")))?;
+    let fd = unsafe { nix::libc::memfd_create(name.as_ptr(), nix::libc::MFD_CLOEXEC) };
+    if fd < 0 {
+        return Err(RunnerError::Seccomp(format!(
+            "memfd_create failed: {}",
+            std::io::Error::last_os_error()
+        )));
+    }
+
+    let mut file = unsafe { fs::File::from_raw_fd(fd) };
+    file.write_all(contents.as_bytes())
+        .map_err(|source| RunnerError::OpenFile {
+            path: "machine-id memfd".into(),
+            source,
+        })?;
+    file.seek(SeekFrom::Start(0))
+        .map_err(|source| RunnerError::OpenFile {
+            path: "machine-id memfd".into(),
+            source,
+        })?;
     Ok(file)
 }
 
@@ -1163,5 +1250,35 @@ mod tests {
         std::fs::create_dir_all(&leaf).unwrap();
         assert_eq!(resolve_restrict_path(Path::new(&leaf)), leaf);
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // --- machine-id generation ---
+
+    fn read_machine_id_fd() -> String {
+        use std::io::Read;
+        let mut file = create_machine_id_fd().unwrap();
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).unwrap();
+        contents
+    }
+
+    #[test]
+    fn machine_id_fd_has_valid_systemd_format() {
+        let contents = read_machine_id_fd();
+        // systemd machine-id: 32 lowercase hex chars + trailing newline.
+        assert_eq!(contents.len(), 33, "expected 32 hex chars + newline");
+        assert!(contents.ends_with('\n'));
+        let id = contents.trim_end();
+        assert_eq!(id.len(), 32);
+        assert!(
+            id.chars()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()),
+            "machine-id must be 32 lowercase hex chars, got {id}"
+        );
+    }
+
+    #[test]
+    fn machine_id_fd_is_random_each_call() {
+        assert_ne!(read_machine_id_fd(), read_machine_id_fd());
     }
 }

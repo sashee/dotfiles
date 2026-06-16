@@ -31,10 +31,14 @@ let
 		{
 		fs = acc.fs // (prg_restrictions.fs or {});
 		files = acc.files // (prg_restrictions.files or {});
+		# Carry real_machine_id through the merge so journal-readers (isd) make
+		# the shells keep the real machine-id (journalctl needs it).
+		real_machine_id = acc.real_machine_id || (prg_restrictions.real_machine_id or false);
 		}
 	) {
 		fs = base_fs;
 		files = {};
+		real_machine_id = false;
 	} filtered_prgs;
 
 	config = pkgs.writeTextDir ".zshrc" ''
