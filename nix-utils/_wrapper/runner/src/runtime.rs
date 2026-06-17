@@ -170,7 +170,10 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
     // Unless the tool opts into the real machine-id, give it a fresh random one
     // bound over /etc/machine-id (a deeper path than the base `--ro-bind / /`,
     // so it wins). Data is fed via an inherited fd, like the seccomp filter.
-    let machine_id_file = if config.real_machine_id {
+    // Skip it when an ancestor sandbox already bound /etc/machine-id (it's then a
+    // separate mount): re-binding over a bwrap bind-data mount fails with ENOENT,
+    // and the ancestor's random id is already inherited via `--ro-bind / /`.
+    let machine_id_file = if config.real_machine_id || machine_id_already_mounted() {
         None
     } else {
         let file = create_machine_id_fd()?;
@@ -516,6 +519,18 @@ fn create_machine_id_fd() -> Result<fs::File, RunnerError> {
             source,
         })?;
     Ok(file)
+}
+
+/// True if `/etc/machine-id` is already a separate mount (different device than
+/// its parent `/etc`) — i.e. an ancestor sandbox already randomized it. Re-binding
+/// over a bwrap bind-data mount fails, and the ancestor's id is already visible
+/// via `--ro-bind / /`, so a nested sandbox should inherit rather than re-mask.
+fn machine_id_already_mounted() -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (fs::metadata("/etc/machine-id"), fs::metadata("/etc")) {
+        (Ok(machine_id), Ok(etc)) => machine_id.dev() != etc.dev(),
+        _ => false,
+    }
 }
 
 fn start_dbus_proxy(

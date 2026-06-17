@@ -45,5 +45,10 @@
 		# isd opt back in via their own fs entries.
 		{ path = "/var/log/journal"; type = "dir"; }
 		{ path = "/run/log/journal"; type = "dir"; }
+		# zellij's session control socket lives in the shared runtime dir; any
+		# sandbox that can reach it can drive the running session (zellij run /
+		# action / write) to execute commands in zellij's (broad) sandbox. Block
+		# it by default; zellij opts back in via its own fs entry.
+		{ path = "$XDG_RUNTIME_DIR/zellij"; type = "dir"; }
 	];
 }

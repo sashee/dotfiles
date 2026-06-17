@@ -63,6 +63,9 @@ keybinds {
 		fs = (zsh.sandbox_restrictions.fs or {}) // {
 			"$XDG_RUNTIME_DIR" = { perm = "rw"; };
 			"$XDG_RUNTIME_DIR/bus" = { perm = "ro"; };
+			# Opt back into its own control-socket dir (blocked in consts.nix for
+			# everyone else) so other sandboxes can't reach this session.
+			"$XDG_RUNTIME_DIR/zellij" = { perm = "rw"; mkdir = true; };
 			"$HOME/.cache/zellij" = { perm = "rw"; mkdir = true; };
 		};
 	};
