@@ -60,6 +60,10 @@ let
   # Build one VM test on the base machine plus any extra per-test modules.
   mkTest = { name, testScript, extraModules ? [ ] }: pkgs.testers.runNixOSTest {
     inherit name;
+    # Don't pin nixpkgs.* read-only on the nodes, so a consumer's machineModules
+    # may set nixpkgs.config (e.g. allowUnfree) / overlays without a types.unique
+    # collision. Small eval-time cost; our own tester sets no nixpkgs.* options.
+    node.pkgsReadOnly = false;
     nodes.machine = { imports = machineModules ++ extraModules ++ [ (ensureLinger user) ]; };
     testScript = (preamble user) + testScript;
   };
