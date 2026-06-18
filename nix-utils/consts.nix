@@ -24,6 +24,13 @@
 		"/run/nscd/socket"
 		"/run/dhcpcd/unpriv.sock"
 	];
+	# Abstract-namespace unix sockets a sandboxed tool is permitted to reach. These
+	# have NO filesystem path, so protectedPaths can't block them; they're isolated
+	# only by the network namespace, so network=false tools (--unshare-net) can't see
+	# them, but network=true tools share the host netns and can. tests/cases/
+	# abstract-sockets.nix fails if a sandboxed tool can reach a *listening* abstract
+	# socket not on this list (e.g. an X server's @/tmp/.X11-unix/X0). Empty so far.
+	allowedAbstractSockets = [ ];
 	protectedPaths = [
 		# User data directories
 		# Block all of ~/.config by default; tools opt back in to specific

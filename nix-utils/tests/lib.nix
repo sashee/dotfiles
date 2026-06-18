@@ -76,6 +76,7 @@ let
     dev-baseline = import ./cases/dev-baseline.nix { inherit pkgs; };
     sandbox-nesting = import ./cases/sandbox-nesting.nix { inherit pkgs; };
     uds-connectable = import ./cases/uds-connectable.nix { inherit pkgs; };
+    abstract-sockets = import ./cases/abstract-sockets.nix { inherit pkgs; };
     protected-paths = import ./cases/protected-paths.nix { inherit pkgs; };
     network-isolation = import ./cases/network-isolation.nix { inherit pkgs; };
     machine-id = import ./cases/machine-id.nix { inherit pkgs; };

@@ -70,6 +70,41 @@
     execFileSync(process.argv[2], process.argv.slice(3), { stdio: "inherit" });
   '';
 
+  # Listen on an abstract-namespace unix socket named "\0<argv[2]>". Runs until
+  # killed. (In Node a leading NUL in the path = the Linux abstract namespace.)
+  abstractServer = pkgs.writeText "abstractServer.js" ''
+    const net = require("net");
+    const name = "\0" + process.argv[2];
+    const srv = net.createServer((c) => c.end("ok\n"));
+    srv.on("error", (e) => { console.error("SRVERR", e.code); process.exit(1); });
+    srv.listen(name, () => console.error("LISTENING"));
+  '';
+
+  # Connect to the abstract socket "\0<argv[2]>". Exit 0 on connect, 1 on error.
+  abstractConnect = pkgs.writeText "abstractConnect.js" ''
+    const net = require("net");
+    const name = "\0" + process.argv[2];
+    const s = net.connect(name, () => { process.stdout.write("connected\n"); s.end(); process.exit(0); });
+    s.on("error", (e) => { console.error("ERR", e.code); process.exit(1); });
+    s.setTimeout(3000, () => { console.error("TIMEOUT"); process.exit(2); });
+  '';
+
+  # Print (one per line) the abstract-namespace sockets in this netns that are
+  # stream/seqpacket *listeners* (SO_ACCEPTON = flags & 0x10000) — i.e. connectable
+  # services. /proc/net/unix shows the network namespace's sockets.
+  auditAbstractListeners = pkgs.writeText "auditAbstractListeners.js" ''
+    const fs = require("fs");
+    const out = [];
+    for (const line of fs.readFileSync("/proc/net/unix", "utf8").split("\n").slice(1)) {
+      const f = line.trim().split(/\s+/);
+      if (f.length < 8) continue;
+      const flags = parseInt(f[3], 16);
+      const p = f[7];
+      if (p && p.startsWith("@") && (flags & 0x10000)) out.push(p);
+    }
+    process.stdout.write([...new Set(out)].sort().join("\n"));
+  '';
+
   # Walk the argv roots for unix-domain sockets and print (one per line) only the
   # ones this uid can actually connect() to — i.e. connect doesn't fail with EACCES
   # (CONNECTED / ECONNREFUSED / EPROTOTYPE all mean "reachable"). Visible-but-
