@@ -14,6 +14,11 @@ pub struct RunnerConfig {
     pub debug_bwrap: bool,
     #[serde(default)]
     pub dev: DevConfig,
+    /// The /dev nodes `bwrap --dev` creates, supplied from consts.nix. Used to
+    /// keep those nodes when block-mounting non-allowlisted real devices, instead
+    /// of probing bwrap on every launch.
+    #[serde(default)]
+    pub fake_dev_entries: Vec<String>,
     #[serde(default)]
     pub mounts: Vec<MountRule>,
     #[serde(default)]
@@ -153,6 +158,13 @@ impl RunnerConfig {
                             "dev allowlist entries must start with /dev/, got {pattern}",
                         )));
                     }
+                }
+                // Fail closed: without the bwrap-created baseline we'd block
+                // essential nodes (e.g. /dev/null) when applying the allowlist.
+                if self.fake_dev_entries.is_empty() {
+                    return Err(RunnerError::InvalidConfig(
+                        "fake_dev_entries must be non-empty when dev is an allowlist".to_string(),
+                    ));
                 }
             }
         }
@@ -302,10 +314,18 @@ mod tests {
     fn accepts_dev_pattern_with_dev_prefix() {
         assert!(parse(
             r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
-               "dev":["/dev/ttyUSB*"]}"#
+               "dev":["/dev/ttyUSB*"],"fake_dev_entries":["null","zero"]}"#
         )
         .validate()
         .is_ok());
+    }
+
+    #[test]
+    fn rejects_dev_allowlist_without_fake_dev_entries() {
+        assert!(is_invalid(&parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "dev":["/dev/ttyUSB*"]}"#
+        )));
     }
 
     #[test]

@@ -6,6 +6,14 @@
 	# ssh-agent = no SSH_AUTH_SOCK). Every other referenced var is required and
 	# errors if unset.
 	optionalEnvVars = [ "WAYLAND_DISPLAY" "SSH_AUTH_SOCK" ];
+	# The /dev nodes `bwrap --dev /dev` creates (fixed per bubblewrap version). For
+	# dev-allowlist tools the runner keeps these (never block-mounts them) while
+	# blocking other real devices. Kept as a constant instead of probing bwrap on
+	# every launch; tests/cases/dev-baseline.nix guards it against bwrap drift.
+	fakeDevEntries = [
+		"core" "fd" "full" "null" "ptmx" "pts" "random" "shm"
+		"stderr" "stdin" "stdout" "tty" "urandom" "zero"
+	];
 	protectedPaths = [
 		# User data directories
 		# Block all of ~/.config by default; tools opt back in to specific

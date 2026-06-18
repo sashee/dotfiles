@@ -73,6 +73,7 @@ let
   # independent of the machine.
   cases = {
     node-sibling-isolation = import ./cases/node-sibling-isolation.nix { inherit pkgs; };
+    dev-baseline = import ./cases/dev-baseline.nix { inherit pkgs; };
     protected-paths = import ./cases/protected-paths.nix { inherit pkgs; };
     network-isolation = import ./cases/network-isolation.nix { inherit pkgs; };
     machine-id = import ./cases/machine-id.nix { inherit pkgs; };

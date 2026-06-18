@@ -150,6 +150,7 @@ let
       };
       debug_bwrap = debugBwrap;
       dev = devConfig;
+      fake_dev_entries = consts.fakeDevEntries;
       dbus = {
         proxy_bin = "${pkgs.xdg-dbus-proxy}/bin/xdg-dbus-proxy";
         proxies = map (busPath:

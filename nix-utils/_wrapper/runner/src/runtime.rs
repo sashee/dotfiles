@@ -376,7 +376,8 @@ fn dev_allowlist_block_mounts(config: &RunnerConfig) -> Result<Vec<MountRule>, R
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let fake_dev_entries = fake_dev_entry_names(config)?;
+    let fake_dev_entries: std::collections::HashSet<&str> =
+        config.fake_dev_entries.iter().map(String::as_str).collect();
     let mut block_mounts = Vec::new();
     let read_dir = fs::read_dir("/dev").map_err(|source| RunnerError::OpenFile {
         path: "/dev".into(),
@@ -426,38 +427,6 @@ fn dev_allowlist_block_mounts(config: &RunnerConfig) -> Result<Vec<MountRule>, R
     }
 
     Ok(block_mounts)
-}
-
-fn fake_dev_entry_names(
-    config: &RunnerConfig,
-) -> Result<std::collections::HashSet<String>, RunnerError> {
-    let output = Command::new(&config.bwrap.bin)
-        .args(["--ro-bind", "/", "/", "--dev", "/dev", &config.command.bin])
-        .args([
-            "--noprofile",
-            "--norc",
-            "-c",
-            "for p in /dev/*; do printf '%s\n' \"${p##*/}\"; done",
-        ])
-        .output()
-        .map_err(|source| RunnerError::SpawnProcess {
-            program: config.bwrap.bin.clone(),
-            source,
-        })?;
-
-    if !output.status.success() {
-        return Err(RunnerError::InvalidConfig(format!(
-            "failed to probe fake /dev baseline: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(ToOwned::to_owned)
-        .collect())
 }
 
 fn create_seccomp_memfd() -> Result<fs::File, RunnerError> {
