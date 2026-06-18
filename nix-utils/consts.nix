@@ -14,6 +14,16 @@
 		"core" "fd" "full" "null" "ptmx" "pts" "random" "shm"
 		"stderr" "stdin" "stdout" "tty" "urandom" "zero"
 	];
+	# Unix sockets a sandboxed tool is permitted to connect to. Everything else
+	# under the runtime dirs must be blocked (protectedPaths) or permission-denied;
+	# tests/cases/uds-connectable.nix fails if a sandboxed tool can connect() to a
+	# socket that isn't on this list (→ block it, or add it here after deciding it's
+	# safe to expose). Both current entries are benign: nscd's name-service cache and
+	# dhcpcd's unprivileged query socket.
+	allowedSockets = [
+		"/run/nscd/socket"
+		"/run/dhcpcd/unpriv.sock"
+	];
 	protectedPaths = [
 		# User data directories
 		# Block all of ~/.config by default; tools opt back in to specific
@@ -35,6 +45,16 @@
 		# dir so all sockets under it (private, io.systemd.Manager, notify) go away.
 		{ path = "$XDG_RUNTIME_DIR/systemd"; type = "dir"; }
 		{ path = "/run/dbus/system_bus_socket"; type = "file"; }
+		# systemd *system* manager runtime dir. Its io.systemd.* varlink sockets
+		# (incl. io.systemd.Manager), journald-ingestion, notify and AskPassword are
+		# mode 0666 and reachable by a sandboxed uid (recon: connectable on both a
+		# minimal NixOS box and a desktop). The actual escape socket
+		# (/run/systemd/private) is root-only and the system bus is blocked above, so
+		# this is defense-in-depth (recon / info-disclosure surface). Nothing here is
+		# needed by sandboxed tools (they reach systemd via the system bus, opted in
+		# per tool). Requires no systemd-resolved (DNS via dnscrypt-proxy), so the
+		# whole dir can go. Guarded by tests/cases/uds-connectable.nix.
+		{ path = "/run/systemd"; type = "dir"; }
 		{ path = "/etc/ssh/ssh_config.d"; type = "dir"; }
 		# Medium risk sockets
 		{ path = "/run/libvirt"; type = "dir"; }

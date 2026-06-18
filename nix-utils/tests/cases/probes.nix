@@ -70,6 +70,42 @@
     execFileSync(process.argv[2], process.argv.slice(3), { stdio: "inherit" });
   '';
 
+  # Walk the argv roots for unix-domain sockets and print (one per line) only the
+  # ones this uid can actually connect() to — i.e. connect doesn't fail with EACCES
+  # (CONNECTED / ECONNREFUSED / EPROTOTYPE all mean "reachable"). Visible-but-
+  # permission-blocked sockets are excluded. connect+close is harmless (no method
+  # is sent). Used to audit the reachable socket surface against a baseline.
+  auditConnectable = pkgs.writeText "auditConnectable.js" ''
+    const net = require("net"), fs = require("fs"), path = require("path");
+    const socks = [];
+    function walk(d) {
+      let ents; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { return; }
+      for (const x of ents) {
+        const p = path.join(d, x.name);
+        let st; try { st = fs.lstatSync(p); } catch (e) { continue; }
+        if (st.isSocket()) socks.push(p);
+        else if (st.isDirectory() && !st.isSymbolicLink()) walk(p);
+      }
+    }
+    for (const r of process.argv.slice(2)) walk(r);
+    socks.sort();
+    function probe(p) {
+      return new Promise((res) => {
+        const s = net.connect(p);
+        let done = false;
+        const fin = (reachable) => { if (done) return; done = true; try { s.destroy(); } catch (e) {} res(reachable ? p : null); };
+        s.on("connect", () => fin(true));
+        s.on("error", (e) => fin(e.code !== "EACCES"));
+        setTimeout(() => fin(true), 1500); // timed out = reachable enough to worry about
+      });
+    }
+    (async () => {
+      const out = [];
+      for (const p of socks) { const r = await probe(p); if (r) out.push(r); }
+      process.stdout.write(out.join("\n"));
+    })();
+  '';
+
   # Print the comm (process name) of every visible PID, one per line.
   procComms = pkgs.writeText "procComms.js" ''
     const fs = require("fs");
