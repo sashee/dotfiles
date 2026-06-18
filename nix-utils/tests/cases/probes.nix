@@ -70,6 +70,17 @@
     execFileSync(process.argv[2], process.argv.slice(3), { stdio: "inherit" });
   '';
 
+  # Report privilege state: /proc/self/status Uid/CapEff/NoNewPrivs and whether
+  # setuid(0) is permitted. JSON to stdout.
+  privCheck = pkgs.writeText "privCheck.js" ''
+    const fs = require("fs");
+    const lines = fs.readFileSync("/proc/self/status", "utf8").split("\n");
+    const get = (k) => { const l = lines.find((x) => x.startsWith(k + ":")); return l ? l.slice(k.length + 1).trim() : ""; };
+    let setuid;
+    try { process.setuid(0); setuid = "ESCALATED"; } catch (e) { setuid = "denied:" + e.code; }
+    process.stdout.write(JSON.stringify({ uid: get("Uid"), capeff: get("CapEff"), nnp: get("NoNewPrivs"), setuid }));
+  '';
+
   # Listen on an abstract-namespace unix socket named "\0<argv[2]>". Runs until
   # killed. (In Node a leading NUL in the path = the Linux abstract namespace.)
   abstractServer = pkgs.writeText "abstractServer.js" ''

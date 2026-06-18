@@ -18,6 +18,9 @@ let
   # `{ pkgs }:` doesn't choke while opencode/claude get `unstable`.
   callTool = pkgs.lib.callPackageWith { inherit pkgs unstable; };
 
+  # isd needs nvim (its $VISUAL); build it explicitly since callTool doesn't supply nvim.
+  nvim = import ../nvim/default.nix { inherit pkgs; };
+
   user = "tester";
 
   # Minimal machine: the user the cases run as, plus the sandboxed tools they need
@@ -31,10 +34,12 @@ let
       (pkgs.buildEnv {
         name = "nix-utils-test-tools";
         # node / node-nonet / npm come from npm; git for the git-sandbox case;
-        # zsh for the sandbox-nesting case (a shell that re-sandboxes its children).
+        # zsh for the sandbox-nesting case (a shell that re-sandboxes its children);
+        # isd (its -debug = a bash in isd's sandbox) for the real-machine-id case.
         paths = (callTool ../npm { }).scripts
           ++ (callTool ../git { }).scripts
-          ++ (callTool ../zsh { }).scripts;
+          ++ (callTool ../zsh { }).scripts
+          ++ (import ../isd/default.nix { inherit pkgs nvim; }).scripts;
       })
     ];
     system.stateVersion = stateVersion;

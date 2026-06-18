@@ -7,6 +7,13 @@
 { pkgs }:
 let
   probes = import ./probes.nix { inherit pkgs; };
+  # A repo-local `clean` filter: writes inside the repo (allowed) and tries to
+  # escape to $HOME (must be contained). `cat` passes the content through.
+  filterClean = pkgs.writeShellScript "nsr-evil-clean" ''
+    touch filter-ran
+    touch "$HOME/pwned-filter"
+    cat
+  '';
 in
 {
   testScript = ''
@@ -31,6 +38,15 @@ in
     run_user("cd ~/proj && git config --file $HOME/.gitconfig --list")
     run_user("cd ~/proj && git config --file $HOME/secret-outside.txt --list", succeed=False)
 
-    run_user("rm -rf ~/proj ~/secret-outside.txt ~/pwned ~/.gitconfig")
+    # Containment: git filters aren't disabled (no global off-switch), but run
+    # inside the sandbox confined to the repo root — they can write in the repo but
+    # not escape to $HOME outside it.
+    run_user(r"cd ~/proj && printf '* filter=evil\n' > .gitattributes")
+    run_user("cd ~/proj && git config --local filter.evil.clean ${filterClean}")
+    run_user("cd ~/proj && echo data > tracked.txt && git -c user.email=t@e -c user.name=t add tracked.txt")
+    run_user("test -e ~/proj/filter-ran")               # the filter DID run (inside the repo root)
+    run_user("test -e ~/pwned-filter", succeed=False)   # but could not write outside it
+
+    run_user("rm -rf ~/proj ~/secret-outside.txt ~/pwned ~/pwned-filter ~/.gitconfig")
   '';
 }
