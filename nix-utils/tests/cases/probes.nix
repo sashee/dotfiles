@@ -58,6 +58,18 @@
     process.stdout.write(require("fs").readFileSync("/etc/machine-id", "utf8"));
   '';
 
+  # Print the value of __NIX_UTILS_SKIP_SANDBOX in this process's environment.
+  printSkip = pkgs.writeText "printSkip.js" ''
+    process.stdout.write(process.env.__NIX_UTILS_SKIP_SANDBOX || "<unset>");
+  '';
+
+  # Exec argv[2] with argv[3..] as a child (inheriting env), forwarding its exit
+  # status — used to run a nested tool from inside a sandboxed tool.
+  reuseProbe = pkgs.writeText "reuseProbe.js" ''
+    const { execFileSync } = require("child_process");
+    execFileSync(process.argv[2], process.argv.slice(3), { stdio: "inherit" });
+  '';
+
   # Print the comm (process name) of every visible PID, one per line.
   procComms = pkgs.writeText "procComms.js" ''
     const fs = require("fs");

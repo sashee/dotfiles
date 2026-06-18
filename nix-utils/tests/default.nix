@@ -30,8 +30,11 @@ let
     environment.systemPackages = [
       (pkgs.buildEnv {
         name = "nix-utils-test-tools";
-        # node / node-nonet / npm come from npm; git for the git-sandbox case.
-        paths = (callTool ../npm { }).scripts ++ (callTool ../git { }).scripts;
+        # node / node-nonet / npm come from npm; git for the git-sandbox case;
+        # zsh for the sandbox-nesting case (a shell that re-sandboxes its children).
+        paths = (callTool ../npm { }).scripts
+          ++ (callTool ../git { }).scripts
+          ++ (callTool ../zsh { }).scripts;
       })
     ];
     system.stateVersion = stateVersion;
