@@ -27,6 +27,9 @@ let
       uid = 1000;
     };
     environment.systemPackages = [ fullEnv ];
+    # A session bus for the dbus-proxy-filter case: with the lingering tester user,
+    # systemd --user registers org.freedesktop.systemd1 on /run/user/1000/bus.
+    services.dbus.enable = true;
     system.stateVersion = stateVersion;
   };
 in
