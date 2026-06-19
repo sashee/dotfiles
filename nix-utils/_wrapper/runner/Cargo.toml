@@ -1,7 +1,8 @@
 [package]
 name = "nix-sandbox-runner"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.85"
 
 [dependencies]
 glob = "0.3"
@@ -9,7 +10,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 nix = { version = "0.31.1", features = ["signal", "process", "user", "fs"] }
-signal-hook = "0.3"
+signal-hook = "0.4"
 seccompiler = "0.5"
 
 [lints.rust]
