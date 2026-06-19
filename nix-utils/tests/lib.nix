@@ -83,6 +83,7 @@ let
   cases = {
     node-sibling-isolation = import ./cases/node-sibling-isolation.nix { inherit pkgs; };
     dev-baseline = import ./cases/dev-baseline.nix { inherit pkgs; };
+    dev-allowlist = import ./cases/dev-allowlist.nix { inherit pkgs; };
     sandbox-nesting = import ./cases/sandbox-nesting.nix { inherit pkgs; };
     uds-connectable = import ./cases/uds-connectable.nix { inherit pkgs; };
     abstract-sockets = import ./cases/abstract-sockets.nix { inherit pkgs; };
