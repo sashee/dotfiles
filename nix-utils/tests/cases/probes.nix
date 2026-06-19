@@ -58,6 +58,27 @@
     process.stdout.write(require("fs").readFileSync("/etc/machine-id", "utf8"));
   '';
 
+  # Try to create a socket of the family named by argv[2] (udp4 / udp6 / unix) and
+  # print "OK" if created, else "ERR:<code>" — then exit 0. The seccomp filter fails
+  # socket(family) with EACCES for blocked families, so "ERR:EACCES" means the family
+  # was blocked by seccomp (vs a later addressing/connect failure, which has another
+  # code). Used to probe a tool's seccomp filter via `<tool>-debug -c 'node ...'`.
+  socketFamily = pkgs.writeText "socketFamily.js" ''
+    const fam = process.argv[2];
+    const done = (s) => { process.stdout.write(s); process.exit(0); };
+    if (fam === "unix") {
+      const net = require("net");
+      const srv = net.createServer();
+      srv.on("error", (e) => done("ERR:" + e.code));
+      srv.listen("\0nsr-seccomp-probe", () => { srv.close(); done("OK"); });
+    } else {
+      const dgram = require("dgram");
+      const sock = dgram.createSocket(fam === "udp6" ? "udp6" : "udp4");
+      sock.on("error", (e) => done("ERR:" + e.code));
+      sock.bind(0, fam === "udp6" ? "::1" : "127.0.0.1", () => { sock.close(); done("OK"); });
+    }
+  '';
+
   # Print the value of __NIX_UTILS_SKIP_SANDBOX in this process's environment.
   printSkip = pkgs.writeText "printSkip.js" ''
     process.stdout.write(process.env.__NIX_UTILS_SKIP_SANDBOX || "<unset>");

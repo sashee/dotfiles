@@ -98,6 +98,7 @@ let
     read-only-root = import ./cases/read-only-root.nix { inherit pkgs; };
     pid-namespace = import ./cases/pid-namespace.nix { inherit pkgs; };
     dbus-proxy-filter = import ./cases/dbus-proxy-filter.nix { inherit pkgs; };
+    seccomp = import ./cases/seccomp.nix { inherit pkgs; };
   };
 
   isolated = lib.filterAttrs (_: c: c.isolate or false) cases;
