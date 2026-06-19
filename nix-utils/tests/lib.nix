@@ -80,6 +80,7 @@ let
     tmp-isolation = import ./cases/tmp-isolation.nix { inherit pkgs; };
     no-privileges = import ./cases/no-privileges.nix { inherit pkgs; };
     real-machine-id = import ./cases/real-machine-id.nix { inherit pkgs; };
+    tools-smoke = import ./cases/tools-smoke.nix { inherit pkgs; };
     protected-paths = import ./cases/protected-paths.nix { inherit pkgs; };
     network-isolation = import ./cases/network-isolation.nix { inherit pkgs; };
     machine-id = import ./cases/machine-id.nix { inherit pkgs; };

@@ -17,7 +17,9 @@ let
   nixgl = import (fetchTarball "https://github.com/nix-community/nixGL/archive/main.tar.gz") { inherit pkgs; };
 
   scriptsEnv = import ./lib.nix { inherit pkgs unstable nixgl; };
-  tests = import ./tests { inherit pkgs unstable; };
+  # Pass the already-built full env so the tools-smoke test can launch every tool
+  # without rebuilding it (and with the same nixgl as the real env).
+  tests = import ./tests { inherit pkgs unstable; fullEnv = scriptsEnv; };
 in
   pkgs.symlinkJoin {
     name = "scripts-env";
