@@ -101,6 +101,10 @@ let
     dbus-proxy-filter = import ./cases/dbus-proxy-filter.nix { inherit pkgs; };
     seccomp = import ./cases/seccomp.nix { inherit pkgs; };
     mcp-bridge = import ./cases/mcp-bridge.nix { inherit pkgs; };
+    env-scrubbing = import ./cases/env-scrubbing.nix { inherit pkgs; };
+    ipc-isolation = import ./cases/ipc-isolation.nix { inherit pkgs; };
+    fs-perms = import ./cases/fs-perms.nix { inherit pkgs; };
+    dbus-own = import ./cases/dbus-own.nix { inherit pkgs; };
   };
 
   isolated = lib.filterAttrs (_: c: c.isolate or false) cases;
