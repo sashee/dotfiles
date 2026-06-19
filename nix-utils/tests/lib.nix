@@ -99,6 +99,7 @@ let
     pid-namespace = import ./cases/pid-namespace.nix { inherit pkgs; };
     dbus-proxy-filter = import ./cases/dbus-proxy-filter.nix { inherit pkgs; };
     seccomp = import ./cases/seccomp.nix { inherit pkgs; };
+    mcp-bridge = import ./cases/mcp-bridge.nix { inherit pkgs; };
   };
 
   isolated = lib.filterAttrs (_: c: c.isolate or false) cases;
