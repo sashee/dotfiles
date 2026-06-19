@@ -307,6 +307,9 @@ async fn run_piped_command(
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // `pre_exec` is unsafe by std contract (the closure runs in the forked child);
+    // the body uses only async-signal-safe calls. Irreducible.
+    #[allow(unsafe_code)]
     unsafe {
         command.pre_exec(|| {
             setpgid(Pid::from_raw(0), Pid::from_raw(0)).map_err(io::Error::other)?;
@@ -366,6 +369,9 @@ async fn run_pty_command(
         .stdin(Stdio::from(slave_stdin))
         .stdout(Stdio::from(slave_stdout))
         .stderr(Stdio::from(slave));
+    // `pre_exec` is unsafe by std contract (the closure runs in the forked child);
+    // the body uses only async-signal-safe calls. Irreducible.
+    #[allow(unsafe_code)]
     unsafe {
         command.pre_exec(|| {
             setpgid(Pid::from_raw(0), Pid::from_raw(0)).map_err(io::Error::other)?;

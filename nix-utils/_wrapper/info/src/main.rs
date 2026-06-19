@@ -3,7 +3,6 @@ use std::env;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
-use std::os::fd::RawFd;
 use std::os::unix::fs::FileTypeExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
@@ -468,15 +467,14 @@ fn socket_blocked(devnull_writable: bool, family: i32, ty: i32, proto: i32) -> b
         return true;
     }
 
-    let fd: RawFd = unsafe { libc::socket(family, ty, proto) };
-    if fd < 0 {
-        true
-    } else {
-        unsafe {
-            libc::close(fd);
-        }
-        false
-    }
+    // socket2's Socket performs socket(2) and closes the fd on drop (RAII). A blocked
+    // family (seccomp EACCES, or EAFNOSUPPORT for an unknown family) surfaces as Err.
+    socket2::Socket::new(
+        socket2::Domain::from(family),
+        socket2::Type::from(ty),
+        Some(socket2::Protocol::from(proto)),
+    )
+    .is_err()
 }
 
 fn is_devnull_writable() -> bool {
@@ -595,6 +593,19 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn socket_blocked_short_circuits_without_devnull() {
+        // No writable /dev/null -> reported blocked without attempting a socket() syscall.
+        assert!(socket_blocked(false, libc::AF_INET, libc::SOCK_STREAM, 0));
+    }
+
+    #[test]
+    fn socket_blocked_reports_error_as_blocked() {
+        // An unknown address family makes socket(2) fail with EAFNOSUPPORT, which the probe
+        // must report as blocked. Deterministic regardless of the sandbox's network policy.
+        assert!(socket_blocked(true, 0x7FFF, libc::SOCK_STREAM, 0));
+    }
 
     fn lookup(name: &str) -> Option<String> {
         match name {

@@ -216,6 +216,9 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
         let seccomp_file = build_seccomp_filter_fd(&blocked_socket_families)?;
         let target_fd = SECCOMP_FD;
         let source_fd = seccomp_file.as_raw_fd();
+        // `pre_exec` is unsafe by std contract (the closure runs in the forked child);
+        // the body uses only async-signal-safe syscalls. Irreducible.
+        #[allow(unsafe_code)]
         unsafe {
             cmd.pre_exec(move || {
                 let rc = nix::libc::dup2(source_fd, target_fd);
@@ -249,6 +252,9 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
     if let Some(file) = &machine_id_file {
         let target_fd = MACHINE_ID_FD;
         let source_fd = file.as_raw_fd();
+        // `pre_exec` is unsafe by std contract (the closure runs in the forked child);
+        // the body uses only async-signal-safe syscalls. Irreducible.
+        #[allow(unsafe_code)]
         unsafe {
             cmd.pre_exec(move || {
                 let rc = nix::libc::dup2(source_fd, target_fd);

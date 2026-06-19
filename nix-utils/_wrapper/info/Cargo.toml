@@ -9,3 +9,7 @@ serde_json = "1"
 thiserror = "2"
 walkdir = "2"
 libc = "0.2"
+socket2 = "0.5"
+
+[lints.rust]
+unsafe_code = "forbid"

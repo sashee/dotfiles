@@ -11,3 +11,6 @@ thiserror = "2"
 nix = { version = "0.31.1", features = ["signal", "process", "user", "fs"] }
 signal-hook = "0.3"
 seccompiler = "0.5"
+
+[lints.rust]
+unsafe_code = "deny"
