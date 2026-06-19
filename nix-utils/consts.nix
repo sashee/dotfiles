@@ -53,6 +53,11 @@
 		# PolicyKit — the authorization boundary (agent-helper socket). Nothing
 		# sandboxed should be able to reach it.
 		{ path = "/run/polkit"; type = "dir"; }
+		# AT-SPI accessibility bus (at-spi2 registry). Exposes the accessibility tree
+		# of every app on the bus — other windows' text — and can synthesize input;
+		# same risk class as the session bus. Block the whole dir (bus_0 + siblings);
+		# a GUI tool needing a11y would opt back in via its own fs entry.
+		{ path = "$XDG_RUNTIME_DIR/at-spi"; type = "dir"; }
 		# systemd --user manager control sockets (private + io.systemd.Manager
 		# varlink). These speak D-Bus/varlink as a direct peer, bypassing the
 		# session bus, so blocking `bus` above is not enough: a sandboxed process
