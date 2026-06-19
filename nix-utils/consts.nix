@@ -45,6 +45,14 @@
 		{ path = "/run/docker.sock"; type = "file"; }
 		{ path = "$XDG_RUNTIME_DIR/gnupg"; type = "dir"; }
 		{ path = "$XDG_RUNTIME_DIR/bus"; type = "file"; }
+		# CUPS daemon — a local privesc/RCE surface (a connected client can add a
+		# printer whose PPD/filter runs an arbitrary command). Blocked by default;
+		# printing tools opt back in per tool (libreoffice, chromium). Whole dir so
+		# every socket under it (cups.sock + any others) goes away.
+		{ path = "/run/cups"; type = "dir"; }
+		# PolicyKit — the authorization boundary (agent-helper socket). Nothing
+		# sandboxed should be able to reach it.
+		{ path = "/run/polkit"; type = "dir"; }
 		# systemd --user manager control sockets (private + io.systemd.Manager
 		# varlink). These speak D-Bus/varlink as a direct peer, bypassing the
 		# session bus, so blocking `bus` above is not enough: a sandboxed process
@@ -69,6 +77,12 @@
 		{ path = "$XDG_RUNTIME_DIR/pipewire-0-manager"; type = "file"; }
 		{ path = "$XDG_RUNTIME_DIR/pulse"; type = "dir"; }
 		{ path = "$XDG_RUNTIME_DIR/p11-kit"; type = "dir"; }
+		# KDE crash handler (DrKonqi). Its launcher socket can spawn processes and
+		# expose coredump memory (potential secrets); nothing sandboxed needs it.
+		{ path = "$XDG_RUNTIME_DIR/drkonqi-coredump-launcher"; type = "file"; }
+		# speech-dispatcher (accessibility daemon). An unneeded side channel for
+		# sandboxed tools; block the whole dir (speechd.sock + any others).
+		{ path = "$XDG_RUNTIME_DIR/speech-dispatcher"; type = "dir"; }
 		# LibreOffice's private D-Bus dir (its own UNO/soffice IPC socket, not the
 		# host bus). Blocked by default so another sandbox can't drive a running
 		# LibreOffice (which has broad $HOME access); LibreOffice opts back in via

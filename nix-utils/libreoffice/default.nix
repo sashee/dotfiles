@@ -12,6 +12,9 @@ let
 			"$HOME/.Xauthority" = { perm = "ro"; };
 			"$HOME/.config/libreoffice" = { perm = "rw"; mkdir = true; };
 			"$XDG_RUNTIME_DIR/libreoffice-dbus" = { perm = "rw"; mkdir = true;};
+			# Opt back into CUPS (blocked in consts.nix for everyone else) so printing
+			# works. ro is enough — connect() to the socket needs no fs write.
+			"/run/cups" = { perm = "ro"; };
 			"$HOME" = {perm = "rw";};
 		};
 		network = false;

@@ -50,8 +50,17 @@ let
 
     def run_user(cmd, succeed=True):
         # Run as the test user in a login shell (so /run/current-system/sw/bin is
-        # on PATH) with XDG_RUNTIME_DIR set, then assert the exit status.
-        wrapped = "export XDG_RUNTIME_DIR=" + xdg + "; " + cmd
+        # on PATH). A bare `su -` login does NOT inherit the graphical session's
+        # variables (WAYLAND_DISPLAY, DISPLAY, DBUS_SESSION_BUS_ADDRESS, ...) — those
+        # live in the user's systemd manager / dbus activation env. Set
+        # XDG_RUNTIME_DIR first (so `systemctl --user` can reach the user bus), then
+        # import that whole session env, so the sandbox sees exactly what a real
+        # logged-in user's launch would (no-op on a headless VM with no session env).
+        wrapped = (
+            "export XDG_RUNTIME_DIR=" + xdg + "; "
+            'set -a; eval "$(systemctl --user show-environment 2>/dev/null)"; set +a; '
+            + cmd
+        )
         full = "su - " + USER + " -c " + shlex.quote(wrapped)
         return (machine.succeed if succeed else machine.fail)(full)
 

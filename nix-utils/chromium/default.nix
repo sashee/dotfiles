@@ -24,6 +24,9 @@ let
 			"$XDG_RUNTIME_DIR/pipewire-0" = { perm = "ro"; };
 			"$XDG_RUNTIME_DIR/pipewire-0-manager" = { perm = "ro"; };
 			"$XDG_RUNTIME_DIR/pulse" = { perm = "ro"; };
+			# Opt back into CUPS (blocked in consts.nix for everyone else) so printing
+			# works. ro is enough — connect() to the socket needs no fs write.
+			"/run/cups" = { perm = "ro"; };
 			"/tmp" = { perm = "rw"; };
 		};
 		network = true;
