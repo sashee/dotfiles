@@ -1,10 +1,10 @@
+use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::ffi::CString;
 use std::ffi::OsString;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::fd::AsRawFd;
 use std::os::unix::process::CommandExt;
 use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
@@ -23,6 +23,10 @@ use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook::iterator::{Handle as SignalHandle, Signals};
 
 use glob::Pattern;
+use seccompiler::{
+    BpfProgram, SeccompAction, SeccompCmpArgLen, SeccompCmpOp, SeccompCondition, SeccompFilter,
+    SeccompRule,
+};
 
 use crate::config::{DbusProxyConfig, DevConfig, MountRule, RunnerConfig};
 use crate::error::RunnerError;
@@ -301,62 +305,76 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
     }
 }
 
+/// Compiles a seccomp filter that returns `EACCES` from `socket(family, ..)` for each
+/// blocked family and allows everything else. Pure (no fds, no syscalls) so the filter
+/// logic and byte layout are unit-testable on their own.
+fn compile_socket_filter(blocked_socket_families: &[i32]) -> Result<BpfProgram, RunnerError> {
+    let rules = blocked_socket_families
+        .iter()
+        .map(|family| {
+            // socket()'s first argument is the address family (a 32-bit int).
+            let cond = SeccompCondition::new(
+                0,
+                SeccompCmpArgLen::Dword,
+                SeccompCmpOp::Eq,
+                *family as u64,
+            )
+            .map_err(|e| RunnerError::Seccomp(format!("seccomp condition: {e}")))?;
+            SeccompRule::new(vec![cond])
+                .map_err(|e| RunnerError::Seccomp(format!("seccomp rule: {e}")))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut rule_map: BTreeMap<i64, Vec<SeccompRule>> = BTreeMap::new();
+    rule_map.insert(nix::libc::SYS_socket, rules);
+
+    let arch = std::env::consts::ARCH
+        .try_into()
+        .map_err(|e| RunnerError::Seccomp(format!("unsupported seccomp arch: {e}")))?;
+
+    let filter = SeccompFilter::new(
+        rule_map,
+        SeccompAction::Allow,                           // syscalls with no matching rule
+        SeccompAction::Errno(nix::libc::EACCES as u32), // a blocked socket(family)
+        arch,
+    )
+    .map_err(|e| RunnerError::Seccomp(format!("seccomp filter: {e}")))?;
+
+    BpfProgram::try_from(filter)
+        .map_err(|e| RunnerError::Seccomp(format!("seccomp compile: {e}")))
+}
+
+/// Serializes a compiled cBPF program to the raw `struct sock_filter` byte layout the
+/// kernel (and bwrap's `--seccomp`) expect: 8 bytes per instruction — `code` (u16),
+/// `jt` (u8), `jf` (u8), `k` (u32), native-endian. Byte-identical to what libseccomp's
+/// `seccomp_export_bpf` wrote.
+fn serialize_bpf(program: &BpfProgram) -> Vec<u8> {
+    program
+        .iter()
+        .flat_map(|insn| {
+            let mut bytes = Vec::with_capacity(8);
+            bytes.extend_from_slice(&insn.code.to_ne_bytes());
+            bytes.push(insn.jt);
+            bytes.push(insn.jf);
+            bytes.extend_from_slice(&insn.k.to_ne_bytes());
+            bytes
+        })
+        .collect()
+}
+
 fn build_seccomp_filter_fd(blocked_socket_families: &[i32]) -> Result<fs::File, RunnerError> {
-    let action_errno_eacces = libseccomp_sys::SCMP_ACT_ERRNO(nix::libc::EACCES as u16);
-    let mut filter_file = create_seccomp_memfd()?;
+    let program = compile_socket_filter(blocked_socket_families)?;
+    let bytes = serialize_bpf(&program);
 
-    let ctx = unsafe { libseccomp_sys::seccomp_init(libseccomp_sys::SCMP_ACT_ALLOW) };
-    if ctx.is_null() {
-        return Err(RunnerError::Seccomp("seccomp_init failed".to_string()));
-    }
+    let mut filter_file = create_memfd("nix-sandbox-seccomp")?;
+    filter_file.write_all(&bytes).map_err(|source| {
+        RunnerError::Seccomp(format!("failed to write seccomp filter: {source}"))
+    })?;
+    filter_file.seek(SeekFrom::Start(0)).map_err(|source| {
+        RunnerError::Seccomp(format!("failed to rewind seccomp filter file: {source}"))
+    })?;
 
-    let result = (|| {
-        for family in blocked_socket_families {
-            let cmp = libseccomp_sys::scmp_arg_cmp {
-                arg: 0,
-                op: libseccomp_sys::scmp_compare::SCMP_CMP_EQ,
-                datum_a: *family as u64,
-                datum_b: 0,
-            };
-
-            let rc = unsafe {
-                libseccomp_sys::seccomp_rule_add_array(
-                    ctx,
-                    action_errno_eacces,
-                    nix::libc::SYS_socket as i32,
-                    1,
-                    &cmp,
-                )
-            };
-
-            if rc < 0 {
-                return Err(RunnerError::Seccomp(format!(
-                    "failed to add seccomp rule for socket family {family}: errno {}",
-                    -rc
-                )));
-            }
-        }
-
-        let export_rc = unsafe { libseccomp_sys::seccomp_export_bpf(ctx, filter_file.as_raw_fd()) };
-        if export_rc < 0 {
-            return Err(RunnerError::Seccomp(format!(
-                "seccomp_export_bpf failed: errno {}",
-                -export_rc
-            )));
-        }
-
-        filter_file.seek(SeekFrom::Start(0)).map_err(|source| {
-            RunnerError::Seccomp(format!("failed to rewind seccomp filter file: {source}"))
-        })?;
-
-        Ok(())
-    })();
-
-    unsafe {
-        libseccomp_sys::seccomp_release(ctx);
-    }
-
-    result.map(|_| filter_file)
+    Ok(filter_file)
 }
 
 fn dev_allowlist_block_mounts(config: &RunnerConfig) -> Result<Vec<MountRule>, RunnerError> {
@@ -429,19 +447,13 @@ fn dev_allowlist_block_mounts(config: &RunnerConfig) -> Result<Vec<MountRule>, R
     Ok(block_mounts)
 }
 
-fn create_seccomp_memfd() -> Result<fs::File, RunnerError> {
-    let name = CString::new("nix-sandbox-seccomp")
-        .map_err(|source| RunnerError::Seccomp(format!("invalid memfd name: {source}")))?;
-    let fd = unsafe { nix::libc::memfd_create(name.as_ptr(), nix::libc::MFD_CLOEXEC) };
-    if fd < 0 {
-        return Err(RunnerError::Seccomp(format!(
-            "memfd_create failed: {}",
-            std::io::Error::last_os_error()
-        )));
-    }
-
-    let file = unsafe { fs::File::from_raw_fd(fd) };
-    Ok(file)
+/// Creates a `MFD_CLOEXEC` anonymous in-memory file and hands back a `File`. The nix
+/// wrapper returns an `OwnedFd`, so the fd is tracked safely and closed on drop — no
+/// raw `memfd_create`/`from_raw_fd` needed.
+fn create_memfd(name: &str) -> Result<fs::File, RunnerError> {
+    let fd = nix::sys::memfd::memfd_create(name, nix::sys::memfd::MFdFlags::MFD_CLOEXEC)
+        .map_err(|source| RunnerError::Seccomp(format!("memfd_create failed: {source}")))?;
+    Ok(fs::File::from(fd))
 }
 
 /// Generates a fresh random systemd machine-id (32 lowercase hex chars +
@@ -466,17 +478,7 @@ fn create_machine_id_fd() -> Result<fs::File, RunnerError> {
     }
     contents.push('\n');
 
-    let name = CString::new("nix-sandbox-machineid")
-        .map_err(|source| RunnerError::Seccomp(format!("invalid memfd name: {source}")))?;
-    let fd = unsafe { nix::libc::memfd_create(name.as_ptr(), nix::libc::MFD_CLOEXEC) };
-    if fd < 0 {
-        return Err(RunnerError::Seccomp(format!(
-            "memfd_create failed: {}",
-            std::io::Error::last_os_error()
-        )));
-    }
-
-    let mut file = unsafe { fs::File::from_raw_fd(fd) };
+    let mut file = create_memfd("nix-sandbox-machineid")?;
     file.write_all(contents.as_bytes())
         .map_err(|source| RunnerError::OpenFile {
             path: "machine-id memfd".into(),
@@ -938,6 +940,60 @@ mod tests {
     use crate::error::RunnerError;
 
     use super::*;
+
+    // Each cBPF instruction is exactly one `struct sock_filter` = 8 bytes.
+    const SOCK_FILTER_LEN: usize = 8;
+
+    #[test]
+    fn compiles_filter_for_blocked_families() {
+        let program = compile_socket_filter(&[nix::libc::AF_INET, nix::libc::AF_INET6])
+            .expect("filter should compile");
+        assert!(
+            !program.is_empty(),
+            "blocking families must yield a non-empty program"
+        );
+    }
+
+    #[test]
+    fn compiles_allow_only_filter_for_empty_families() {
+        // No blocked families: still a valid (allow-everything) program. Guards the edge
+        // case so an empty list never panics or produces garbage.
+        let program = compile_socket_filter(&[]).expect("empty filter should compile");
+        let bytes = serialize_bpf(&program);
+        assert_eq!(bytes.len() % SOCK_FILTER_LEN, 0);
+    }
+
+    #[test]
+    fn serialized_filter_is_a_valid_sock_filter_array() {
+        let program =
+            compile_socket_filter(&[nix::libc::AF_INET]).expect("filter should compile");
+        let bytes = serialize_bpf(&program);
+        assert!(!bytes.is_empty(), "filter bytes must be non-empty");
+        assert_eq!(
+            bytes.len() % SOCK_FILTER_LEN,
+            0,
+            "filter bytes must be a whole number of sock_filter records"
+        );
+        assert_eq!(
+            bytes.len() / SOCK_FILTER_LEN,
+            program.len(),
+            "one 8-byte record per instruction"
+        );
+    }
+
+    #[test]
+    fn serialize_preserves_instruction_fields() {
+        let program =
+            compile_socket_filter(&[nix::libc::AF_INET]).expect("filter should compile");
+        let bytes = serialize_bpf(&program);
+        // Re-read the first record and confirm the round-trip packing matches the source
+        // instruction (code/jt/jf/k), i.e. the layout bwrap reads back.
+        let first = &program[0];
+        assert_eq!(&bytes[0..2], &first.code.to_ne_bytes());
+        assert_eq!(bytes[2], first.jt);
+        assert_eq!(bytes[3], first.jf);
+        assert_eq!(&bytes[4..8], &first.k.to_ne_bytes());
+    }
 
     fn env_map() -> HashMap<String, String> {
         HashMap::from([

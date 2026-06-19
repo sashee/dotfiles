@@ -12,7 +12,4 @@ pkgs.rustPlatform.buildRustPackage {
   cargoLock = {
     lockFile = ./Cargo.lock;
   };
-
-  nativeBuildInputs = [ pkgs.pkg-config ];
-  buildInputs = [ pkgs.libseccomp ];
 }
