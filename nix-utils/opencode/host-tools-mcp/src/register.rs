@@ -25,8 +25,8 @@ use tokio::task::JoinSet;
 use tokio::time::{timeout, Duration};
 
 use crate::{
-    debug_log, discover_live_servers, log_root, progress_message, ExecutionMode, LiveServer,
-    ProgressUpdate, ProviderToServer, RegisteredCommand, ServerToProvider,
+    debug_log, discover_live_servers, log_root, progress_message, servers_from_env, ExecutionMode,
+    LiveServer, ProgressUpdate, ProviderToServer, RegisteredCommand, ServerToProvider, SOCKETS_ENV,
 };
 
 pub async fn run_register(mode: RegisteredCommand) -> Result<()> {
@@ -34,13 +34,27 @@ pub async fn run_register(mode: RegisteredCommand) -> Result<()> {
         "starting registration for tool {}",
         mode.tool_name()
     ));
-    let servers = discover_live_servers().context("failed to discover host-tools-mcp servers")?;
-    if servers.is_empty() {
-        bail!(
-            "no live host-tools-mcp servers found in {}",
-            log_root().display()
-        );
-    }
+    let servers = match servers_from_env() {
+        Some(servers) => {
+            debug_log(format!(
+                "using {} explicit socket(s) from {}",
+                servers.len(),
+                SOCKETS_ENV
+            ));
+            servers
+        }
+        None => {
+            let discovered =
+                discover_live_servers().context("failed to discover host-tools-mcp servers")?;
+            if discovered.is_empty() {
+                bail!(
+                    "no live host-tools-mcp servers found in {}",
+                    log_root().display()
+                );
+            }
+            discovered
+        }
+    };
 
     for server in &servers {
         debug_log(format!("will connect to {}", server.socket_path.display()));

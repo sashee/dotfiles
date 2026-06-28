@@ -733,11 +733,11 @@ async fn provider_connection_task(
     writer_handle.abort();
 }
 
-async fn run_provider_listener(state: Arc<SharedState>, log_dir: PathBuf) -> io::Result<()> {
-    let socket_path = log_dir.join(SOCKET_NAME);
-    let _ = fs::remove_file(&socket_path);
-    let listener = UnixListener::bind(&socket_path)?;
-
+async fn run_accept_loop(
+    state: Arc<SharedState>,
+    listener: UnixListener,
+    log_dir: PathBuf,
+) -> io::Result<()> {
     loop {
         let (stream, _) = listener.accept().await?;
         let provider_id = state.allocate_provider_id();
@@ -763,7 +763,21 @@ async fn main() -> Result<()> {
     let stdout = LoggingWriter::new(tokio::io::stdout(), stdio_logger);
 
     let state = Arc::new(SharedState::new());
-    let listener_handle = tokio::spawn(run_provider_listener(state.clone(), log_dir.clone()));
+
+    // Bind synchronously here (rather than inside the spawned task) so a failure
+    // propagates to the process exit and is printed to stderr. A common, easily
+    // missed failure: the socket path exceeds sun_path's 108-byte limit when
+    // TMPDIR is deep (e.g. inside a Nix build sandbox), so include the length.
+    let socket_path = log_dir.join(SOCKET_NAME);
+    let _ = fs::remove_file(&socket_path);
+    let listener = UnixListener::bind(&socket_path).map_err(|error| {
+        anyhow::anyhow!(
+            "failed to bind registry socket {} ({} bytes; sun_path limit is 108): {error}",
+            socket_path.display(),
+            socket_path.as_os_str().len()
+        )
+    })?;
+    let listener_handle = tokio::spawn(run_accept_loop(state.clone(), listener, log_dir.clone()));
 
     let server = HostToolsMcp { state }.serve((stdin, stdout)).await?;
     let wait_result = server.waiting().await;

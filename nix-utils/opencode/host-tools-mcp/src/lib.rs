@@ -314,6 +314,51 @@ pub fn discover_live_servers() -> io::Result<Vec<LiveServer>> {
     Ok(servers)
 }
 
+/// Env var carrying an explicit, colon-separated list of registry socket paths.
+/// When set, it overrides directory discovery in `servers_from_env` so a caller
+/// (e.g. an SSH-forwarded provider on a remote host) can register to exactly the
+/// sockets it was given instead of scanning `log_root`.
+pub const SOCKETS_ENV: &str = "HOST_TOOLS_MCP_SOCKETS";
+
+/// Split a colon-separated socket list (the value of [`SOCKETS_ENV`]) into
+/// individual paths, dropping empty segments. Pure: no IO, no env access.
+pub fn parse_socket_paths(value: &str) -> Vec<PathBuf> {
+    value
+        .split(':')
+        .filter(|segment| !segment.is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
+
+/// Build a server list from explicit socket paths, using each socket's parent
+/// directory as its `dir`. Pure: no connectivity check (the registration path
+/// surfaces connection failures per-socket).
+pub fn servers_from_paths(paths: Vec<PathBuf>) -> Vec<LiveServer> {
+    paths
+        .into_iter()
+        .map(|socket_path| {
+            let dir = socket_path
+                .parent()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| socket_path.clone());
+            LiveServer { dir, socket_path }
+        })
+        .collect()
+}
+
+/// If [`SOCKETS_ENV`] is set and yields at least one path, return the
+/// corresponding servers; otherwise `None` so callers fall back to
+/// [`discover_live_servers`].
+pub fn servers_from_env() -> Option<Vec<LiveServer>> {
+    let value = env::var(SOCKETS_ENV).ok()?;
+    let servers = servers_from_paths(parse_socket_paths(&value));
+    if servers.is_empty() {
+        None
+    } else {
+        Some(servers)
+    }
+}
+
 fn sanitize_tool_name(parts: &[String]) -> String {
     let mut name = parts
         .iter()
@@ -362,7 +407,31 @@ pub fn progress_message(line_index: usize, stream: &str, line: &str) -> Progress
 
 #[cfg(test)]
 mod tests {
-    use super::{RegisteredCommand, MAX_TOOL_NAME_LEN};
+    use super::{parse_socket_paths, servers_from_paths, RegisteredCommand, MAX_TOOL_NAME_LEN};
+    use std::path::PathBuf;
+
+    #[test]
+    fn parse_socket_paths_splits_and_drops_empties() {
+        assert_eq!(
+            parse_socket_paths("/tmp/a.sock:/tmp/b.sock"),
+            vec![PathBuf::from("/tmp/a.sock"), PathBuf::from("/tmp/b.sock")]
+        );
+        // leading/trailing/double colons produce empty segments that are dropped
+        assert_eq!(
+            parse_socket_paths(":/tmp/a.sock::/tmp/b.sock:"),
+            vec![PathBuf::from("/tmp/a.sock"), PathBuf::from("/tmp/b.sock")]
+        );
+        assert!(parse_socket_paths("").is_empty());
+        assert!(parse_socket_paths(":::").is_empty());
+    }
+
+    #[test]
+    fn servers_from_paths_uses_parent_dir() {
+        let servers = servers_from_paths(vec![PathBuf::from("/tmp/cr-1-0.sock")]);
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0].socket_path, PathBuf::from("/tmp/cr-1-0.sock"));
+        assert_eq!(servers[0].dir, PathBuf::from("/tmp"));
+    }
 
     #[test]
     fn tool_name_is_capped() {

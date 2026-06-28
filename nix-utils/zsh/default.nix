@@ -88,6 +88,51 @@ bindkey '^P' fzf-history-widget
 autoload -U +X bashcompinit && bashcompinit
 
 export PROMPT="$PROMPT_PREF$PROMPT"
+
+# Expose the laptop's host-tools-mcp registry socket(s) on a remote box over a
+# single ssh connection (one agent ack, no ControlMaster). The remote login
+# shell inherits HOST_TOOLS_MCP_SOCKETS, so running `mcp-register-prefix sh -c`
+# there registers a shell tool back to every local MCP client (Claude/OpenCode).
+claude-remote() {
+  emulate -L zsh
+  setopt local_options pipefail err_return
+  local target="$1"
+  [[ -n "$target" ]] || { print -u2 "usage: claude-remote <user@host>"; return 2; }
+
+  # Snapshot connectable laptop sockets (point-in-time, like a local
+  # mcp-register run). (N=) => nullglob + sockets only.
+  local root="''${TMPDIR:-/tmp}/host-tools-mcp"
+  local -a socks; local s
+  for s in "$root"/*/registry.sock(N=); do
+    if command -v socat >/dev/null 2>&1; then
+      if socat -T1 -u OPEN:/dev/null UNIX-CONNECT:"$s" >/dev/null 2>&1; then
+        socks+=("$s")
+      fi
+    else
+      socks+=("$s")
+    fi
+  done
+  (( ''${#socks} )) || { print -u2 "claude-remote: no live host-tools-mcp servers; start Claude/OpenCode first"; return 1; }
+
+  # One reverse forward per laptop socket -> a flat remote path (parent /tmp
+  # exists, so no pre-mkdir / master needed); build the remote env value.
+  local sid="cr-$$-$RANDOM"
+  local -a rflags; local remote_env="" i=0 rp
+  for s in "''${socks[@]}"; do
+    rp="/tmp/$sid-$i.sock"
+    rflags+=(-R "$rp:$s")
+    remote_env="''${remote_env:+$remote_env:}$rp"
+    i=$(( i + 1 ))
+  done
+
+  print -u2 "claude-remote: forwarding ''${#socks} socket(s); run 'mcp-register-prefix sh -c' on the remote when ready"
+  ssh -t \
+    -o StreamLocalBindUnlink=yes \
+    -o ExitOnForwardFailure=yes \
+    "''${rflags[@]}" \
+    "$target" \
+    "export HOST_TOOLS_MCP_SOCKETS='$remote_env'; exec \$SHELL -l"
+}
 	'';
 
 	bin = launcher.mkLauncher {
