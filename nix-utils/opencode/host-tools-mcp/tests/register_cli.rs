@@ -48,8 +48,7 @@ fn test_log_root(test_id: &str) -> PathBuf {
 /// `registry.sock` under the test TMPDIR and symlink the broker path to it.
 /// No-op when there's no live server (e.g. the "no broker" test).
 fn link_test_server(test_id: &str) {
-    let tmp = test_tmpdir(test_id);
-    let link = tmp.join("host-tools-mcp.sock"); // == broker_socket_path() with TMPDIR=tmp
+    let link = test_log_root(test_id).join("broker.sock"); // == broker_socket_path() with TMPDIR=tmp
     let Ok(entries) = fs::read_dir(test_log_root(test_id)) else {
         return;
     };
@@ -1363,7 +1362,7 @@ fn broker_bridges_register_cli_to_server() {
     initialize_client(&mut server);
 
     let _broker = BrokerProc::spawn(&test_id);
-    let broker_sock = test_tmpdir(&test_id).join("host-tools-mcp.sock");
+    let broker_sock = test_log_root(&test_id).join("broker.sock");
     wait_for_file(&broker_sock);
 
     let _cli = RegisterCli::spawn(

@@ -23,7 +23,7 @@ let
 		name = "host-tools-mcp-broker";
 		target = "${hostToolsMcp}/bin/host-tools-mcp-broker";
 		# Pass TMPDIR through (don't pin it): the in-sandbox broker must derive the
-		# same ${TMPDIR:-/tmp}/host-tools-mcp.sock as host-side mcp-register.
+		# same ${TMPDIR:-/tmp}/host-tools-mcp/broker.sock as host-side mcp-register.
 		keepEnv = [ "HOME" "PATH" "TMPDIR" ];
 		setEnv = {};
 	};
@@ -32,12 +32,14 @@ let
 		inherit pkgs;
 		bin = brokerBin;
 		sandbox_restrictions = {
-			# Bind the broker socket dir rw. Both entries cover `${TMPDIR:-/tmp}`:
-			# TMPDIR unset -> "$TMPDIR" mount is skipped and "/tmp" applies; TMPDIR
-			# set -> "$TMPDIR" binds the real dir (overriding add_tmpdir_tmpfs).
+			# Bind the host-tools-mcp dir rw (where the broker socket and the per-
+			# server registry socks live) — same dir the clients bind, so the broker
+			# socket is visible to every sandboxed consumer. Both entries cover
+			# `${TMPDIR:-/tmp}/host-tools-mcp`: TMPDIR unset -> "$TMPDIR/..." is skipped
+			# and "/tmp/..." applies; TMPDIR set -> "$TMPDIR/..." binds the real dir.
 			fs = {
-				"/tmp" = { perm = "rw"; };
-				"$TMPDIR" = { perm = "rw"; };
+				"/tmp/host-tools-mcp" = { perm = "rw"; mkdir = true; };
+				"$TMPDIR/host-tools-mcp" = { perm = "rw"; mkdir = true; };
 			};
 			network = false;
 			dont_die_with_parent = true;

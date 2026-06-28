@@ -58,8 +58,8 @@ fn spawn_broker(tmp: &Path, extra_env: &[(&str, &str)]) -> BrokerChild {
 }
 
 fn broker_sock(tmp: &Path) -> PathBuf {
-    // Flat sibling of the host-tools-mcp/ dir (matches broker_socket_path()).
-    tmp.join("host-tools-mcp.sock")
+    // Inside the host-tools-mcp/ dir (matches broker_socket_path()).
+    tmp.join("host-tools-mcp").join("broker.sock")
 }
 
 async fn send<W: AsyncWriteExt + Unpin, T: serde::Serialize>(writer: &mut W, message: &T) {

@@ -7,8 +7,9 @@
 #
 # Single-host caveat: the broker and the forwarded socket can't share one path on
 # the same machine, so the "remote" mcp-register uses TMPDIR=/tmp/rem (its
-# broker_socket_path becomes /tmp/rem/host-tools-mcp.sock = the forward). On two
-# real machines both use the default /tmp and need no TMPDIR.
+# broker_socket_path becomes /tmp/rem/host-tools-mcp/broker.sock = the forward). On
+# two real machines both use the default /tmp and need no TMPDIR. The socket is
+# nested in host-tools-mcp/, so the remote dir must exist before `ssh -R` binds it.
 #
 # We reuse the mcp-bridge harness: an MCP client (mcpClient.js) runs INSIDE
 # opencode's sandbox via `opencode-debug -c`, spawning the real server; it polls
@@ -46,10 +47,10 @@ in
     # preLaunchHostCmd runs host-side (before the sandbox) -> `host-tools-mcp-broker
     # --ensure` detached, so the broker starts regardless of `opencode --version`.
     run_user("timeout 60 opencode --version >/dev/null 2>&1 || true")
-    machine.wait_until_succeeds("test -S /tmp/host-tools-mcp.sock")
+    machine.wait_until_succeeds("test -S /tmp/host-tools-mcp/broker.sock")
     # Reset so this idle broker doesn't interfere with the manual flow below.
     # The `[-]` keeps the pattern from matching this very kill command's own shell.
-    run_user("pkill -f 'host-tools-mcp[-]broker' 2>/dev/null; rm -f /tmp/host-tools-mcp.sock; true")
+    run_user("pkill -f 'host-tools-mcp[-]broker' 2>/dev/null; rm -f /tmp/host-tools-mcp/broker.sock; true")
 
     # --- passwordless ssh to localhost as the test user ---
     run_user("mkdir -p ~/.ssh && chmod 700 ~/.ssh")
@@ -72,13 +73,14 @@ in
       "nohup host-tools-mcp-broker >/tmp/host-tools-mcp/broker.out 2>&1 "
       "& echo $! >/tmp/host-tools-mcp/broker.pid"
     )
-    machine.wait_until_succeeds("test -S /tmp/host-tools-mcp.sock")
+    machine.wait_until_succeeds("test -S /tmp/host-tools-mcp/broker.sock")
 
     # 3. One ssh connection reverse-forwarding the broker socket to the "remote"
     #    path; mcp-register (TMPDIR=/tmp/rem) finds the broker there — NO env var.
-    run_user("mkdir -p /tmp/rem")
+    #    The socket is nested, so the remote dir must exist before `ssh -R` binds.
+    run_user("mkdir -p /tmp/rem/host-tools-mcp")
     run_user(
-      "nohup ssh ${sshOpts} -R /tmp/rem/host-tools-mcp.sock:/tmp/host-tools-mcp.sock localhost "
+      "nohup ssh ${sshOpts} -R /tmp/rem/host-tools-mcp/broker.sock:/tmp/host-tools-mcp/broker.sock localhost "
       "'TMPDIR=/tmp/rem ${regBin} sh -c' "
       ">/tmp/host-tools-mcp/prov.out 2>&1 & echo $! >/tmp/host-tools-mcp/prov.pid"
     )

@@ -30,18 +30,17 @@ pub fn log_root() -> PathBuf {
         .join("host-tools-mcp")
 }
 
-/// Filename of the broker's front socket — a flat sibling of [`log_root`], so an
-/// `ssh -R` forward can bind it to the same path on a remote without first
-/// creating the `host-tools-mcp/` dir (whose parent might not exist).
-pub const BROKER_SOCKET_NAME: &str = "host-tools-mcp.sock";
+/// Filename of the broker's front socket — placed INSIDE [`log_root`] (alongside
+/// the per-server registry dirs), not as a flat sibling: each consumer runs in a
+/// bwrap sandbox whose `/tmp` is a private tmpfs with only the `host-tools-mcp/`
+/// dir bind-mounted, so a flat sibling would be masked and unreachable. An
+/// `ssh -R` forward maps this path; the remote must have the dir (one-time mkdir).
+pub const BROKER_SOCKET_NAME: &str = "broker.sock";
 
 /// Path the broker listens on. `mcp-register` connects here (the broker fans out
 /// to the individual registries); an `ssh -R` forward maps this exact path.
 pub fn broker_socket_path() -> PathBuf {
-    env::var("TMPDIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| env::temp_dir())
-        .join(BROKER_SOCKET_NAME)
+    log_root().join(BROKER_SOCKET_NAME)
 }
 
 pub fn create_server_dir() -> io::Result<PathBuf> {

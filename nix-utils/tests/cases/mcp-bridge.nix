@@ -49,9 +49,9 @@ in
         # The in-sandbox server's registry socket appears in the host-shared dir.
         machine.wait_until_succeeds("ls /tmp/host-tools-mcp/*/registry.sock 2>/dev/null")
         # mcp-register is broker-only and connects to broker_socket_path()
-        # (/tmp/host-tools-mcp.sock). No broker here, so symlink that path to the
-        # server's registry socket — mcp-register then registers straight to it.
-        run_user("ln -sf \"$(ls /tmp/host-tools-mcp/*/registry.sock | head -1)\" /tmp/host-tools-mcp.sock")
+        # (/tmp/host-tools-mcp/broker.sock). No broker here, so symlink that path to
+        # the server's registry socket — mcp-register then registers straight to it.
+        run_user("ln -sf \"$(ls /tmp/host-tools-mcp/*/registry.sock | head -1)\" /tmp/host-tools-mcp/broker.sock")
         # Start the host-side provider: registers a host command and serves calls.
         run_user(
             "nohup " + provider + " >/tmp/host-tools-mcp/prov.out 2>&1 "
