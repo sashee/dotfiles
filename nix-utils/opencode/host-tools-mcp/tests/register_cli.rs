@@ -19,14 +19,16 @@ const FILE_TIMEOUT: Duration = Duration::from_millis(1800);
 const EXTENDED_TIMEOUT: Duration = Duration::from_millis(3000);
 
 fn gen_test_id() -> String {
-    format!("{:032x}", random::<u128>())
+    format!("{:08x}", random::<u32>())
 }
 
 fn base_tmpdir() -> PathBuf {
+    // Nest per-test dirs directly under TMPDIR (no extra grouping subdir): the
+    // registry UDS path is bounded by sun_path (107 usable bytes), and inside a
+    // Nix build sandbox TMPDIR is already deep, so every component counts.
     std::env::var("TMPDIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir())
-        .join("ht-mcp")
 }
 
 fn test_tmpdir(test_id: &str) -> PathBuf {

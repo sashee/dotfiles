@@ -34,7 +34,7 @@ pub fn create_server_dir() -> io::Result<PathBuf> {
     fs::create_dir_all(&root)?;
 
     for attempt in 0..100u32 {
-        let timestamp = Local::now().format("%Y-%m-%d_%H-%M-%S%.3f%z");
+        let timestamp = Local::now().format("%Y-%m-%d_%H-%M-%S");
         let suffix = if attempt == 0 {
             String::new()
         } else {
