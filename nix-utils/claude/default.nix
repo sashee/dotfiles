@@ -4,28 +4,8 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	rustSrc = import ../rust-src.nix { inherit pkgs; };
-		hostToolsMcp = pkgs.rustPlatform.buildRustPackage {
-			pname = "host-tools-mcp";
-			version = "0.1.0";
-			src = rustSrc "opencode/host-tools-mcp";
-			sourceRoot = "nix-utils/opencode/host-tools-mcp";
-			cargoLock = {
-				lockFile = ../opencode/host-tools-mcp/Cargo.lock;
-			};
-			doCheck = true;
-		};
-	mcpRegisterBins = pkgs.runCommand "mcp-register-bins" {} ''
-		mkdir -p "$out/bin"
-		ln -s "${hostToolsMcp}/bin/mcp-register" "$out/bin/mcp-register"
-		ln -s "${hostToolsMcp}/bin/mcp-register-prefix" "$out/bin/mcp-register-prefix"
-		ln -s "${hostToolsMcp}/bin/host-tools-mcp-broker" "$out/bin/host-tools-mcp-broker"
-	'';
-
-	# Host-side (pre-sandbox) auto-start of the multiplexing broker: detached via
-	# setsid so it outlives this launch; `--ensure` is a fast no-op if one is
-	# already running. The broker idle-exits when no clients remain.
-	brokerEnsureCmd = "${pkgs.util-linux}/bin/setsid -f ${hostToolsMcp}/bin/host-tools-mcp-broker --ensure >/dev/null 2>&1 || true";
+	hostTools = import ../opencode/host-tools-mcp.nix { inherit pkgs; };
+	inherit (hostTools) hostToolsMcp mcpRegisterBins brokerEnsureCmd;
 
 	claudemd = pkgs.writeTextFile {
 		name = "CLAUDE.md";

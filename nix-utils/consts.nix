@@ -5,7 +5,10 @@
 	# skipped when the var is missing (headless = no WAYLAND_DISPLAY, no
 	# ssh-agent = no SSH_AUTH_SOCK). Every other referenced var is required and
 	# errors if unset.
-	optionalEnvVars = [ "WAYLAND_DISPLAY" "SSH_AUTH_SOCK" ];
+	# TMPDIR is optional so the broker wrapper can mount both "/tmp" and "$TMPDIR"
+	# to cover `${TMPDIR:-/tmp}` (the broker socket dir): when TMPDIR is unset the
+	# "$TMPDIR" mount is skipped and "/tmp" covers it; when set, "$TMPDIR" binds it.
+	optionalEnvVars = [ "WAYLAND_DISPLAY" "SSH_AUTH_SOCK" "TMPDIR" ];
 	# The /dev nodes `bwrap --dev /dev` creates (fixed per bubblewrap version). For
 	# dev-allowlist tools the runner keeps these (never block-mounts them) while
 	# blocking other real devices. Kept as a constant instead of probing bwrap on
