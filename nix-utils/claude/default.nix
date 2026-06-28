@@ -19,7 +19,13 @@ let
 		mkdir -p "$out/bin"
 		ln -s "${hostToolsMcp}/bin/mcp-register" "$out/bin/mcp-register"
 		ln -s "${hostToolsMcp}/bin/mcp-register-prefix" "$out/bin/mcp-register-prefix"
+		ln -s "${hostToolsMcp}/bin/host-tools-mcp-broker" "$out/bin/host-tools-mcp-broker"
 	'';
+
+	# Host-side (pre-sandbox) auto-start of the multiplexing broker: detached via
+	# setsid so it outlives this launch; `--ensure` is a fast no-op if one is
+	# already running. The broker idle-exits when no clients remain.
+	brokerEnsureCmd = "${pkgs.util-linux}/bin/setsid -f ${hostToolsMcp}/bin/host-tools-mcp-broker --ensure >/dev/null 2>&1 || true";
 
 	claudemd = pkgs.writeTextFile {
 		name = "CLAUDE.md";
@@ -138,6 +144,7 @@ A useful refinement is to define exceptions explicitly:
 	wrapper = import ../_wrapper/default.nix {
 		name = "claude";
 		inherit pkgs bin sandbox_restrictions;
+		preLaunchHostCmd = brokerEnsureCmd;
 	};
 in
 {

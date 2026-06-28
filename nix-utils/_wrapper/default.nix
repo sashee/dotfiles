@@ -1,4 +1,4 @@
-{ pkgs, name, sandbox_restrictions, bin, generate_unsafe ? true, restrict_to_current_folder ? true, quiet ? false }:
+{ pkgs, name, sandbox_restrictions, bin, generate_unsafe ? true, restrict_to_current_folder ? true, quiet ? false, preLaunchHostCmd ? "" }:
 let
   debugLogDir = "/tmp/nix-utils-debug";
   consts = import ../consts.nix;
@@ -244,6 +244,7 @@ ${pkgs.jq}/bin/jq . ${configFile} >&2
     (mkWrappedScript {
       scriptName = name;
       commandString = binPath;
+      extraBefore = preLaunchHostCmd;
     })
     (mkWrappedScript {
       scriptName = "${name}-strace";
@@ -277,6 +278,7 @@ ${pkgs.jq}/bin/jq . ${sandboxRestrictionsFile} >&2
     if generate_unsafe then [
       (pkgs.writeScriptBin "${name}-unsafe" (mkRunScript {
         commandString = binPath;
+        extraBefore = preLaunchHostCmd;
       }))
     ] else []
   );

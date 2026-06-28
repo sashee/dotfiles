@@ -11,6 +11,7 @@ use rmcp::model::{CallToolResult, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
+pub mod broker;
 pub mod register;
 
 pub const SOCKET_NAME: &str = "registry.sock";

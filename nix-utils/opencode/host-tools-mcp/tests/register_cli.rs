@@ -165,8 +165,19 @@ struct RegisterCli {
 
 impl RegisterCli {
     fn spawn(binary: &str, args: &[String], test_id: &str) -> Self {
-        let mut child = Command::new(binary)
-            .env("TMPDIR", test_tmpdir(test_id))
+        Self::spawn_full(binary, args, &test_tmpdir(test_id), &[])
+    }
+
+    /// Spawn with an explicit TMPDIR and extra env vars (e.g.
+    /// `HOST_TOOLS_MCP_SOCKETS`), so tests can point the CLI at a specific
+    /// socket instead of relying on directory discovery.
+    fn spawn_full(binary: &str, args: &[String], tmpdir: &Path, envs: &[(&str, &str)]) -> Self {
+        let mut command = Command::new(binary);
+        command.env("TMPDIR", tmpdir);
+        for (key, value) in envs {
+            command.env(key, value);
+        }
+        let mut child = command
             .args(args)
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -1355,6 +1366,91 @@ fn register_cli_ignores_stale_server_dirs_and_registers_with_live_server() {
     call_tool(&mut server, 2, "stale_ok_sh", json!({}));
     let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
     assert_eq!(response["result"]["content"][0]["text"], json!("stale ok"));
+}
+
+/// A running `host-tools-mcp-broker`, scoped to a test's TMPDIR, killed on drop.
+struct BrokerProc {
+    child: Child,
+}
+
+impl BrokerProc {
+    fn spawn(test_id: &str) -> Self {
+        let child = Command::new(env!("CARGO_BIN_EXE_host-tools-mcp-broker"))
+            .env("TMPDIR", test_tmpdir(test_id))
+            .env("HOST_TOOLS_MCP_BROKER_RECONCILE_MS", "100")
+            .spawn()
+            .expect("failed to spawn broker");
+        Self { child }
+    }
+}
+
+impl Drop for BrokerProc {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+#[test]
+fn register_cli_honors_explicit_socket_env() {
+    // With discovery pointed at an EMPTY dir, registration can only succeed if
+    // HOST_TOOLS_MCP_SOCKETS is honored.
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let empty_tmp = test_tmpdir(&test_id).join("empty-discovery");
+    fs::create_dir_all(&empty_tmp).expect("failed to create empty discovery dir");
+    let script = write_script(
+        &test_id,
+        "envsock.sh",
+        "#!/bin/sh\nset -eu\nprintf 'env-sock-ok\\n'\n",
+    );
+    let socket = server.socket_path();
+    let _cli = RegisterCli::spawn_full(
+        env!("CARGO_BIN_EXE_mcp-register"),
+        &[script.to_string_lossy().to_string()],
+        &empty_tmp,
+        &[("HOST_TOOLS_MCP_SOCKETS", socket.to_str().unwrap())],
+    );
+
+    wait_for_tools(&mut server, &["envsock_sh"]);
+    call_tool(&mut server, 2, "envsock_sh", json!({}));
+    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    assert_eq!(response["result"]["content"][0]["text"], json!("env-sock-ok"));
+}
+
+#[test]
+fn broker_bridges_register_cli_to_server() {
+    // Full production-shape path: real server + real broker + real
+    // mcp-register-prefix (pointed at the broker via env). A tools/call on the
+    // server must run the command through the broker and round-trip the output.
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let _broker = BrokerProc::spawn(&test_id);
+    let broker_sock = test_log_root(&test_id).join("broker.sock");
+    wait_for_file(&broker_sock);
+
+    let _cli = RegisterCli::spawn_full(
+        env!("CARGO_BIN_EXE_mcp-register-prefix"),
+        &["sh".to_string(), "-c".to_string()],
+        &test_tmpdir(&test_id),
+        &[("HOST_TOOLS_MCP_SOCKETS", broker_sock.to_str().unwrap())],
+    );
+
+    wait_for_tools(&mut server, &["sh_c"]);
+    call_tool(&mut server, 2, "sh_c", json!({ "args": ["echo hello-broker"] }));
+    let response = server.recv_matching(EXTENDED_TIMEOUT, |message| message["id"] == json!(2));
+    let text = response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(text.contains("hello-broker"), "expected command output, got {text:?}");
 }
 
 fn initialize_client(server: &mut ChildHarness) {

@@ -19,7 +19,11 @@ let
 		mkdir -p "$out/bin"
 		ln -s "${hostToolsMcp}/bin/mcp-register" "$out/bin/mcp-register"
 		ln -s "${hostToolsMcp}/bin/mcp-register-prefix" "$out/bin/mcp-register-prefix"
+		ln -s "${hostToolsMcp}/bin/host-tools-mcp-broker" "$out/bin/host-tools-mcp-broker"
 	'';
+
+	# Host-side (pre-sandbox) auto-start of the multiplexing broker (see claude/default.nix).
+	brokerEnsureCmd = "${pkgs.util-linux}/bin/setsid -f ${hostToolsMcp}/bin/host-tools-mcp-broker --ensure >/dev/null 2>&1 || true";
 
 	agentsmd = pkgs.writeTextFile {
 		name = "AGENTS.md";
@@ -121,6 +125,7 @@ A useful refinement is to define exceptions explicitly:
 	wrapper = import ../_wrapper/default.nix {
 		name = "opencode";
 		inherit pkgs bin sandbox_restrictions;
+		preLaunchHostCmd = brokerEnsureCmd;
 	};
 in
 {
