@@ -25,8 +25,8 @@ use tokio::task::JoinSet;
 use tokio::time::{timeout, Duration};
 
 use crate::{
-    debug_log, discover_live_servers, log_root, progress_message, servers_from_env, ExecutionMode,
-    LiveServer, ProgressUpdate, ProviderToServer, RegisteredCommand, ServerToProvider, SOCKETS_ENV,
+    broker_socket_path, debug_log, live_broker_server, progress_message, ExecutionMode,
+    LiveServer, ProgressUpdate, ProviderToServer, RegisteredCommand, ServerToProvider,
 };
 
 pub async fn run_register(mode: RegisteredCommand) -> Result<()> {
@@ -34,26 +34,21 @@ pub async fn run_register(mode: RegisteredCommand) -> Result<()> {
         "starting registration for tool {}",
         mode.tool_name()
     ));
-    let servers = match servers_from_env() {
-        Some(servers) => {
+    // mcp-register only ever talks to the broker (the broker fans out to every
+    // registry). Locally that's the auto-started broker; over an ssh -R forward
+    // it's the remote-side broker socket — same known path either way.
+    let servers = match live_broker_server() {
+        Some(broker) => {
             debug_log(format!(
-                "using {} explicit socket(s) from {}",
-                servers.len(),
-                SOCKETS_ENV
+                "registering via broker at {}",
+                broker.socket_path.display()
             ));
-            servers
+            vec![broker]
         }
-        None => {
-            let discovered =
-                discover_live_servers().context("failed to discover host-tools-mcp servers")?;
-            if discovered.is_empty() {
-                bail!(
-                    "no live host-tools-mcp servers found in {}",
-                    log_root().display()
-                );
-            }
-            discovered
-        }
+        None => bail!(
+            "no broker at {} — is a host-tools-mcp client running, or the socket forwarded?",
+            broker_socket_path().display()
+        ),
     };
 
     for server in &servers {

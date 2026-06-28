@@ -3,7 +3,7 @@ use std::env;
 use std::fs;
 use std::io;
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::Local;
@@ -28,6 +28,20 @@ pub fn log_root() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|_| env::temp_dir())
         .join("host-tools-mcp")
+}
+
+/// Filename of the broker's front socket — a flat sibling of [`log_root`], so an
+/// `ssh -R` forward can bind it to the same path on a remote without first
+/// creating the `host-tools-mcp/` dir (whose parent might not exist).
+pub const BROKER_SOCKET_NAME: &str = "host-tools-mcp.sock";
+
+/// Path the broker listens on. `mcp-register` connects here (the broker fans out
+/// to the individual registries); an `ssh -R` forward maps this exact path.
+pub fn broker_socket_path() -> PathBuf {
+    env::var("TMPDIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| env::temp_dir())
+        .join(BROKER_SOCKET_NAME)
 }
 
 pub fn create_server_dir() -> io::Result<PathBuf> {
@@ -259,8 +273,13 @@ impl RegisteredCommand {
     }
 }
 
+/// Scan `log_root()` for live registry servers. Used by the **broker** to find
+/// and fan out to the registries (`mcp-register` itself only talks to the broker).
 pub fn discover_live_servers() -> io::Result<Vec<LiveServer>> {
-    let root = log_root();
+    discover_in(&log_root())
+}
+
+fn discover_in(root: &Path) -> io::Result<Vec<LiveServer>> {
     if !root.exists() {
         debug_log(format!("discovery root {} does not exist", root.display()));
         return Ok(Vec::new());
@@ -315,48 +334,36 @@ pub fn discover_live_servers() -> io::Result<Vec<LiveServer>> {
     Ok(servers)
 }
 
-/// Env var carrying an explicit, colon-separated list of registry socket paths.
-/// When set, it overrides directory discovery in `servers_from_env` so a caller
-/// (e.g. an SSH-forwarded provider on a remote host) can register to exactly the
-/// sockets it was given instead of scanning `log_root`.
-pub const SOCKETS_ENV: &str = "HOST_TOOLS_MCP_SOCKETS";
-
-/// Split a colon-separated socket list (the value of [`SOCKETS_ENV`]) into
-/// individual paths, dropping empty segments. Pure: no IO, no env access.
-pub fn parse_socket_paths(value: &str) -> Vec<PathBuf> {
-    value
-        .split(':')
-        .filter(|segment| !segment.is_empty())
-        .map(PathBuf::from)
-        .collect()
+/// The broker at [`broker_socket_path`], if it is live. `mcp-register` connects
+/// only here — the broker fans out to the individual registries. `None` when no
+/// broker is listening (then `mcp-register` errors).
+pub fn live_broker_server() -> Option<LiveServer> {
+    broker_at(broker_socket_path())
 }
 
-/// Build a server list from explicit socket paths, using each socket's parent
-/// directory as its `dir`. Pure: no connectivity check (the registration path
-/// surfaces connection failures per-socket).
-pub fn servers_from_paths(paths: Vec<PathBuf>) -> Vec<LiveServer> {
-    paths
-        .into_iter()
-        .map(|socket_path| {
+/// `Some(server)` if `socket_path` is a connectable socket; `None` if it's
+/// missing or not connectable (e.g. a stale regular file). Split out from
+/// [`live_broker_server`] so it can be unit-tested with an arbitrary path.
+fn broker_at(socket_path: PathBuf) -> Option<LiveServer> {
+    if !socket_path.exists() {
+        return None;
+    }
+    match UnixStream::connect(&socket_path) {
+        Ok(stream) => {
+            let _ = stream.shutdown(std::net::Shutdown::Both);
             let dir = socket_path
                 .parent()
                 .map(PathBuf::from)
                 .unwrap_or_else(|| socket_path.clone());
-            LiveServer { dir, socket_path }
-        })
-        .collect()
-}
-
-/// If [`SOCKETS_ENV`] is set and yields at least one path, return the
-/// corresponding servers; otherwise `None` so callers fall back to
-/// [`discover_live_servers`].
-pub fn servers_from_env() -> Option<Vec<LiveServer>> {
-    let value = env::var(SOCKETS_ENV).ok()?;
-    let servers = servers_from_paths(parse_socket_paths(&value));
-    if servers.is_empty() {
-        None
-    } else {
-        Some(servers)
+            Some(LiveServer { dir, socket_path })
+        }
+        Err(error) => {
+            debug_log(format!(
+                "broker socket {} not connectable: {error}",
+                socket_path.display()
+            ));
+            None
+        }
     }
 }
 
@@ -408,30 +415,57 @@ pub fn progress_message(line_index: usize, stream: &str, line: &str) -> Progress
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_socket_paths, servers_from_paths, RegisteredCommand, MAX_TOOL_NAME_LEN};
-    use std::path::PathBuf;
+    use super::{broker_at, discover_in, RegisteredCommand, MAX_TOOL_NAME_LEN, SOCKET_NAME};
+    use std::os::unix::net::UnixListener;
 
     #[test]
-    fn parse_socket_paths_splits_and_drops_empties() {
-        assert_eq!(
-            parse_socket_paths("/tmp/a.sock:/tmp/b.sock"),
-            vec![PathBuf::from("/tmp/a.sock"), PathBuf::from("/tmp/b.sock")]
-        );
-        // leading/trailing/double colons produce empty segments that are dropped
-        assert_eq!(
-            parse_socket_paths(":/tmp/a.sock::/tmp/b.sock:"),
-            vec![PathBuf::from("/tmp/a.sock"), PathBuf::from("/tmp/b.sock")]
-        );
-        assert!(parse_socket_paths("").is_empty());
-        assert!(parse_socket_paths(":::").is_empty());
+    fn broker_at_requires_a_live_socket() {
+        let base = std::env::temp_dir().join(format!("htm-broker-at-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+
+        // missing -> None
+        assert!(broker_at(base.join("absent.sock")).is_none());
+
+        // stale regular file -> None
+        let stale = base.join("stale.sock");
+        std::fs::write(&stale, b"not-a-socket").unwrap();
+        assert!(broker_at(stale).is_none());
+
+        // live listener -> Some
+        let live = base.join("live.sock");
+        let _listener = UnixListener::bind(&live).unwrap();
+        let server = broker_at(live.clone()).expect("live socket should be Some");
+        assert_eq!(server.socket_path, live);
+        assert_eq!(server.dir, base);
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
-    fn servers_from_paths_uses_parent_dir() {
-        let servers = servers_from_paths(vec![PathBuf::from("/tmp/cr-1-0.sock")]);
-        assert_eq!(servers.len(), 1);
-        assert_eq!(servers[0].socket_path, PathBuf::from("/tmp/cr-1-0.sock"));
-        assert_eq!(servers[0].dir, PathBuf::from("/tmp"));
+    fn discover_in_skips_non_sockets_and_returns_live_servers() {
+        let base = std::env::temp_dir().join(format!("htm-discover-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+
+        // live: a real listening socket
+        let live = base.join("live");
+        std::fs::create_dir_all(&live).unwrap();
+        let _listener = UnixListener::bind(live.join(SOCKET_NAME)).unwrap();
+
+        // stale: a regular file where the socket should be (not connectable)
+        let stale = base.join("stale");
+        std::fs::create_dir_all(&stale).unwrap();
+        std::fs::write(stale.join(SOCKET_NAME), b"not-a-socket").unwrap();
+
+        // a top-level file (not a directory) must be ignored
+        std::fs::write(base.join("loose.sock"), b"x").unwrap();
+
+        let found = discover_in(&base).unwrap();
+        assert_eq!(found.len(), 1, "only the live server is returned: {found:?}");
+        assert_eq!(found[0].socket_path, live.join(SOCKET_NAME));
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

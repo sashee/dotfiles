@@ -31,20 +31,15 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::mpsc;
 
 use crate::{
-    debug_log, discover_live_servers, log_root, ProviderToServer, ServerToProvider, LiveServer,
+    debug_log, discover_live_servers, ProviderToServer, ServerToProvider, LiveServer,
 };
+// `broker_socket_path` lives in the crate root (shared with mcp-register).
+pub use crate::broker_socket_path;
 
-/// Stable filename of the broker's front socket, under [`log_root`].
-pub const BROKER_SOCKET_NAME: &str = "broker.sock";
 /// How often the broker re-discovers live registries.
 const DEFAULT_RECONCILE: Duration = Duration::from_secs(1);
 /// Exit after this long with zero live registries (= no clients running).
 const DEFAULT_IDLE_GRACE: Duration = Duration::from_secs(30);
-
-/// The stable path the front socket is bound at. SSH forwards exactly this.
-pub fn broker_socket_path() -> PathBuf {
-    log_root().join(BROKER_SOCKET_NAME)
-}
 
 /// Read a millisecond duration from `var`, falling back to `default`. Lets tests
 /// shrink the reconcile/idle timings without waiting real seconds.

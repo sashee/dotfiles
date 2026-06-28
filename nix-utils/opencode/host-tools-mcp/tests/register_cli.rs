@@ -43,6 +43,26 @@ fn test_log_root(test_id: &str) -> PathBuf {
     )
 }
 
+/// Make the test's running host-tools-mcp server reachable at the broker socket
+/// path `mcp-register` connects to (it's broker-only): find the connectable
+/// `registry.sock` under the test TMPDIR and symlink the broker path to it.
+/// No-op when there's no live server (e.g. the "no broker" test).
+fn link_test_server(test_id: &str) {
+    let tmp = test_tmpdir(test_id);
+    let link = tmp.join("host-tools-mcp.sock"); // == broker_socket_path() with TMPDIR=tmp
+    let Ok(entries) = fs::read_dir(test_log_root(test_id)) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let sock = entry.path().join("registry.sock");
+        if sock.exists() && std::os::unix::net::UnixStream::connect(&sock).is_ok() {
+            let _ = fs::remove_file(&link);
+            std::os::unix::fs::symlink(&sock, &link).expect("symlink test server to broker path");
+            return;
+        }
+    }
+}
+
 struct TestDir {
     tmpdir: PathBuf,
 }
@@ -165,19 +185,8 @@ struct RegisterCli {
 
 impl RegisterCli {
     fn spawn(binary: &str, args: &[String], test_id: &str) -> Self {
-        Self::spawn_full(binary, args, &test_tmpdir(test_id), &[])
-    }
-
-    /// Spawn with an explicit TMPDIR and extra env vars (e.g.
-    /// `HOST_TOOLS_MCP_SOCKETS`), so tests can point the CLI at a specific
-    /// socket instead of relying on directory discovery.
-    fn spawn_full(binary: &str, args: &[String], tmpdir: &Path, envs: &[(&str, &str)]) -> Self {
-        let mut command = Command::new(binary);
-        command.env("TMPDIR", tmpdir);
-        for (key, value) in envs {
-            command.env(key, value);
-        }
-        let mut child = command
+        let mut child = Command::new(binary)
+            .env("TMPDIR", test_tmpdir(test_id))
             .args(args)
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -207,11 +216,16 @@ impl RegisterCli {
         }
     }
 
+    // mcp-register is broker-only, so point it at the test's server by symlinking
+    // the server's registry.sock to the broker path mcp-register looks up. No-op
+    // when there's no live server (the "no broker" test).
     fn exact(args: &[String], test_id: &str) -> Self {
+        link_test_server(test_id);
         Self::spawn(env!("CARGO_BIN_EXE_mcp-register"), args, test_id)
     }
 
     fn prefix(args: &[String], test_id: &str) -> Self {
+        link_test_server(test_id);
         Self::spawn(env!("CARGO_BIN_EXE_mcp-register-prefix"), args, test_id)
     }
 
@@ -1181,38 +1195,6 @@ fn exact_cli_reports_non_zero_exit_in_structured_result_and_logs_status() {
 }
 
 #[test]
-fn register_cli_discovers_multiple_servers_and_survives_one_shutdown() {
-    let test_id = gen_test_id();
-    let _test_dir = test_dir(&test_id);
-    let mut server_a = ChildHarness::host_tools_mcp(&test_id);
-    let mut server_b = ChildHarness::host_tools_mcp(&test_id);
-    wait_for_file(&server_a.socket_path());
-    wait_for_file(&server_b.socket_path());
-    initialize_client(&mut server_a);
-    initialize_client(&mut server_b);
-
-    let script = write_script(
-        &test_id,
-        "multi-server.sh",
-        "#!/bin/sh\nset -eu\nprintf 'multi ok\\n'\n",
-    );
-    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
-
-    wait_for_tools(&mut server_a, &["multi_server_sh"]);
-    wait_for_tools(&mut server_b, &["multi_server_sh"]);
-
-    call_tool(&mut server_a, 2, "multi_server_sh", json!({}));
-    let response = server_a.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
-    assert_eq!(response["result"]["content"][0]["text"], json!("multi ok"));
-
-    drop(server_a);
-    wait_for_tools(&mut server_b, &["multi_server_sh"]);
-    call_tool(&mut server_b, 3, "multi_server_sh", json!({}));
-    let response = server_b.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(3));
-    assert_eq!(response["result"]["content"][0]["text"], json!("multi ok"));
-}
-
-#[test]
 #[ignore = "requires setpgid for ctrl-c cancellation"]
 fn ctrl_c_in_register_cli_disconnects_and_cancels_calls() {
     let test_id = gen_test_id();
@@ -1326,7 +1308,7 @@ fn server_shutdown_cancels_active_register_cli_processes() {
 }
 
 #[test]
-fn register_cli_fails_cleanly_when_no_live_servers_exist() {
+fn register_cli_fails_cleanly_when_no_broker_is_running() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let script = write_script(
@@ -1334,38 +1316,13 @@ fn register_cli_fails_cleanly_when_no_live_servers_exist() {
         "no-server.sh",
         "#!/bin/sh\nset -eu\nprintf 'unused\\n'\n",
     );
+    // No server (so link_test_server is a no-op) and no broker -> mcp-register bails.
     let mut cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
 
     let status = cli.wait();
     assert!(!status.success());
     let stderr = cli.collect_stderr().join("\n");
-    assert!(stderr.contains("no live host-tools-mcp servers found"));
-}
-
-#[test]
-fn register_cli_ignores_stale_server_dirs_and_registers_with_live_server() {
-    let test_id = gen_test_id();
-    let _test_dir = test_dir(&test_id);
-    let mut server = ChildHarness::host_tools_mcp(&test_id);
-    wait_for_file(&server.socket_path());
-    initialize_client(&mut server);
-
-    let stale_dir = test_log_root(&test_id).join("stale-server");
-    fs::create_dir_all(&stale_dir).expect("failed to create stale server dir");
-    fs::write(stale_dir.join("registry.sock"), b"not-a-socket")
-        .expect("failed to create stale socket file");
-
-    let script = write_script(
-        &test_id,
-        "stale-ok.sh",
-        "#!/bin/sh\nset -eu\nprintf 'stale ok\\n'\n",
-    );
-    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
-
-    wait_for_tools(&mut server, &["stale_ok_sh"]);
-    call_tool(&mut server, 2, "stale_ok_sh", json!({}));
-    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
-    assert_eq!(response["result"]["content"][0]["text"], json!("stale ok"));
+    assert!(stderr.contains("no broker"), "expected a no-broker error, got {stderr:?}");
 }
 
 /// A running `host-tools-mcp-broker`, scoped to a test's TMPDIR, killed on drop.
@@ -1392,41 +1349,13 @@ impl Drop for BrokerProc {
 }
 
 #[test]
-fn register_cli_honors_explicit_socket_env() {
-    // With discovery pointed at an EMPTY dir, registration can only succeed if
-    // HOST_TOOLS_MCP_SOCKETS is honored.
-    let test_id = gen_test_id();
-    let _test_dir = test_dir(&test_id);
-    let mut server = ChildHarness::host_tools_mcp(&test_id);
-    wait_for_file(&server.socket_path());
-    initialize_client(&mut server);
-
-    let empty_tmp = test_tmpdir(&test_id).join("empty-discovery");
-    fs::create_dir_all(&empty_tmp).expect("failed to create empty discovery dir");
-    let script = write_script(
-        &test_id,
-        "envsock.sh",
-        "#!/bin/sh\nset -eu\nprintf 'env-sock-ok\\n'\n",
-    );
-    let socket = server.socket_path();
-    let _cli = RegisterCli::spawn_full(
-        env!("CARGO_BIN_EXE_mcp-register"),
-        &[script.to_string_lossy().to_string()],
-        &empty_tmp,
-        &[("HOST_TOOLS_MCP_SOCKETS", socket.to_str().unwrap())],
-    );
-
-    wait_for_tools(&mut server, &["envsock_sh"]);
-    call_tool(&mut server, 2, "envsock_sh", json!({}));
-    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
-    assert_eq!(response["result"]["content"][0]["text"], json!("env-sock-ok"));
-}
-
-#[test]
 fn broker_bridges_register_cli_to_server() {
     // Full production-shape path: real server + real broker + real
-    // mcp-register-prefix (pointed at the broker via env). A tools/call on the
-    // server must run the command through the broker and round-trip the output.
+    // mcp-register-prefix. mcp-register finds the broker at its known socket path
+    // (broker_socket_path under the shared TMPDIR); the broker fans out to the
+    // server. A tools/call on the server must run the command through the broker
+    // and round-trip the output. Uses the raw `spawn` (not exact/prefix) so the
+    // server is NOT symlinked over the broker's socket.
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -1434,14 +1363,13 @@ fn broker_bridges_register_cli_to_server() {
     initialize_client(&mut server);
 
     let _broker = BrokerProc::spawn(&test_id);
-    let broker_sock = test_log_root(&test_id).join("broker.sock");
+    let broker_sock = test_tmpdir(&test_id).join("host-tools-mcp.sock");
     wait_for_file(&broker_sock);
 
-    let _cli = RegisterCli::spawn_full(
+    let _cli = RegisterCli::spawn(
         env!("CARGO_BIN_EXE_mcp-register-prefix"),
         &["sh".to_string(), "-c".to_string()],
-        &test_tmpdir(&test_id),
-        &[("HOST_TOOLS_MCP_SOCKETS", broker_sock.to_str().unwrap())],
+        &test_id,
     );
 
     wait_for_tools(&mut server, &["sh_c"]);

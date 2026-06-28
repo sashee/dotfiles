@@ -1,9 +1,14 @@
 # Case: the host-tools-mcp broker reached over a real SSH reverse forward.
 #
 # This is the end-to-end of the "remote shell" design: a single ssh connection
-# reverse-forwards the broker's stable socket; a remote `mcp-register` (here,
-# localhost) registers to it via HOST_TOOLS_MCP_SOCKETS; the broker fans that
-# registration to the live host-tools-mcp server(s) and routes a tool call back.
+# reverse-forwards the broker socket; a remote `mcp-register` finds the broker at
+# its known socket path (NO env var); the broker fans that registration to the
+# live host-tools-mcp server(s) and routes a tool call back.
+#
+# Single-host caveat: the broker and the forwarded socket can't share one path on
+# the same machine, so the "remote" mcp-register uses TMPDIR=/tmp/rem (its
+# broker_socket_path becomes /tmp/rem/host-tools-mcp.sock = the forward). On two
+# real machines both use the default /tmp and need no TMPDIR.
 #
 # We reuse the mcp-bridge harness: an MCP client (mcpClient.js) runs INSIDE
 # opencode's sandbox via `opencode-debug -c`, spawning the real server; it polls
@@ -37,6 +42,15 @@ in
     run_user("grep -q host-tools-mcp-broker $(command -v opencode)")
     run_user("grep -q host-tools-mcp-broker $(command -v claude)")
 
+    # --- auto-start runtime: launching a client actually brings the broker up ---
+    # preLaunchHostCmd runs host-side (before the sandbox) -> `host-tools-mcp-broker
+    # --ensure` detached, so the broker starts regardless of `opencode --version`.
+    run_user("timeout 60 opencode --version >/dev/null 2>&1 || true")
+    machine.wait_until_succeeds("test -S /tmp/host-tools-mcp.sock")
+    # Reset so this idle broker doesn't interfere with the manual flow below.
+    # The `[-]` keeps the pattern from matching this very kill command's own shell.
+    run_user("pkill -f 'host-tools-mcp[-]broker' 2>/dev/null; rm -f /tmp/host-tools-mcp.sock; true")
+
     # --- passwordless ssh to localhost as the test user ---
     run_user("mkdir -p ~/.ssh && chmod 700 ~/.ssh")
     run_user("ssh-keygen -t ed25519 -N ''' -f ~/.ssh/id_ed25519 -q")
@@ -53,18 +67,19 @@ in
     )
     machine.wait_until_succeeds("ls /tmp/host-tools-mcp/*/registry.sock 2>/dev/null")
 
-    # 2. Broker on the host: discovers the server, listens on the stable socket.
+    # 2. Broker on the host: discovers the server, listens on its known socket.
     run_user(
       "nohup host-tools-mcp-broker >/tmp/host-tools-mcp/broker.out 2>&1 "
       "& echo $! >/tmp/host-tools-mcp/broker.pid"
     )
-    machine.wait_until_succeeds("test -S /tmp/host-tools-mcp/broker.sock")
+    machine.wait_until_succeeds("test -S /tmp/host-tools-mcp.sock")
 
-    # 3. One ssh connection, reverse-forwarding the broker socket; the remote
-    #    mcp-register-prefix registers to it via HOST_TOOLS_MCP_SOCKETS.
+    # 3. One ssh connection reverse-forwarding the broker socket to the "remote"
+    #    path; mcp-register (TMPDIR=/tmp/rem) finds the broker there — NO env var.
+    run_user("mkdir -p /tmp/rem")
     run_user(
-      "nohup ssh ${sshOpts} -R /tmp/htm.sock:/tmp/host-tools-mcp/broker.sock localhost "
-      "'HOST_TOOLS_MCP_SOCKETS=/tmp/htm.sock ${regBin} sh -c' "
+      "nohup ssh ${sshOpts} -R /tmp/rem/host-tools-mcp.sock:/tmp/host-tools-mcp.sock localhost "
+      "'TMPDIR=/tmp/rem ${regBin} sh -c' "
       ">/tmp/host-tools-mcp/prov.out 2>&1 & echo $! >/tmp/host-tools-mcp/prov.pid"
     )
 
