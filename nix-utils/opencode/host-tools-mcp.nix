@@ -52,11 +52,17 @@ let
 	# forwards "$@", so `host-tools-mcp-broker --ensure` reaches the binary.
 	brokerBinPath = "${builtins.head brokerWrapper.scripts}/bin/host-tools-mcp-broker";
 
+	# Connect helper: ssh to the rpi with the broker socket forwarded, creating the
+	# nested socket dynamically (see ssh-rpi.sh). Plain on-PATH script, unsandboxed
+	# like mcp-register (it needs the real ssh-agent, network, TTY and ~/.ssh).
+	sshRpi = pkgs.writeShellScriptBin "ssh-rpi" (builtins.readFile ./ssh-rpi.sh);
+
 	mcpRegisterBins = pkgs.runCommand "mcp-register-bins" {} ''
 		mkdir -p "$out/bin"
 		ln -s "${hostToolsMcp}/bin/mcp-register" "$out/bin/mcp-register"
 		ln -s "${hostToolsMcp}/bin/mcp-register-prefix" "$out/bin/mcp-register-prefix"
 		ln -s "${brokerBinPath}" "$out/bin/host-tools-mcp-broker"
+		ln -s "${sshRpi}/bin/ssh-rpi" "$out/bin/ssh-rpi"
 	'';
 
 	# Host-side (pre-sandbox) auto-start of the sandboxed multiplexing broker:
