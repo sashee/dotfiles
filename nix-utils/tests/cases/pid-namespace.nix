@@ -7,7 +7,7 @@ let
 in
 {
   testScript = ''
-    host = machine.succeed("cat /proc/*/comm").split()
+    host = machine.succeed("cat /proc/*/comm 2>/dev/null || true").split()
     assert "systemd" in host, "sanity: the host should be running systemd"
 
     inside = run_user("node ${probes.procComms}").split()
