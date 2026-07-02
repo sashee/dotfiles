@@ -12,7 +12,7 @@ let
 	sandbox_restrictions = git.sandbox_restrictions // {
 		fs = (git.sandbox_restrictions.fs or {}) // {
 			"$HOME/.config/lazygit" = { perm = "rw"; mkdir = true; };
-			"$HOME/.local/state/lazygit" = { perm = "rw"; };
+			"$HOME/.local/state/lazygit" = { perm = "rw"; mkdir = true; };
 		};
 	};
 	bin = launcher.mkLauncher {
