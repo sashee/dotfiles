@@ -3,10 +3,17 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
+	# Default identity baked into the store so `git commit` works on any machine
+	# without a hand-written ~/.gitconfig. Exposed via GIT_CONFIG_GLOBAL (below) at
+	# global-file precedence, so a repo-local `git config user.email` still wins.
+	gitconfig = pkgs.writeText "gitconfig" ''
+		[user]
+			name = sashee
+			email = tamas.sallai@advancedweb.hu
+	'';
 	sandbox_restrictions = {
 		fs = {
 			"$HOME/.ssh/known_hosts" = { perm = "ro"; };
-			"$HOME/.gitconfig" = { perm = "ro"; };
 			"$SSH_AUTH_SOCK" = { perm = "rw"; };
 		};
 		network = true;
@@ -20,6 +27,9 @@ let
 		# families have no global off-switch and are instead contained by the
 		# sandbox below.
 		setEnv = {
+			# Global config file replacing ~/.gitconfig (no host file needed);
+			# repo-local scope still overrides it.
+			GIT_CONFIG_GLOBAL = "${gitconfig}";
 			GIT_CONFIG_COUNT = "5";
 			GIT_CONFIG_KEY_0 = "core.hooksPath";            GIT_CONFIG_VALUE_0 = "/dev/null";
 			GIT_CONFIG_KEY_1 = "core.fsmonitor";            GIT_CONFIG_VALUE_1 = "false";

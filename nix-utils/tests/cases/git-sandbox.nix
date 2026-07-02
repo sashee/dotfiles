@@ -2,8 +2,10 @@
 #   - command-line config disables the attacker-reachable exec knobs (hooksPath,
 #     fsmonitor, …) — git/default.nix.
 #   - a malicious repo-local hook does not execute on the host.
-#   - git is confined to the git root: it reads opted-in ~/.gitconfig but not an
-#     arbitrary file outside the repo.
+#   - a default identity is baked in (GIT_CONFIG_GLOBAL), so a bare commit works
+#     with no ~/.gitconfig, yet a repo-local user.email still overrides it.
+#   - git is confined to the git root: files outside the repo (incl. ~/.gitconfig)
+#     are not readable.
 { pkgs }:
 let
   probes = import ./probes.nix { inherit pkgs; };
@@ -32,10 +34,22 @@ in
     run_user("cd ~/proj && git -c user.email=t@e -c user.name=t commit -q --allow-empty -m x")
     run_user("test -e ~/pwned", succeed=False)  # the hook did not fire on the host
 
-    # Confinement: opted-in ~/.gitconfig is readable, an outside file is not.
+    # Baked-in identity: a bare commit (no -c, no ~/.gitconfig) uses the default.
+    run_user("cd ~/proj && git commit -q --allow-empty -m baked")
+    ae = run_user("cd ~/proj && git log -1 --format=%ae")
+    assert ae.strip() == "tamas.sallai@advancedweb.hu", f"author email = {ae!r}"
+
+    # ...but a repo-local user.email still overrides the baked default.
+    run_user("cd ~/proj && git config --local user.email repo@local")
+    run_user("cd ~/proj && git commit -q --allow-empty -m override")
+    ae = run_user("cd ~/proj && git log -1 --format=%ae")
+    assert ae.strip() == "repo@local", f"author email = {ae!r}"
+    run_user("cd ~/proj && git config --local --unset user.email")
+
+    # Confinement: files outside the repo root are not readable, incl. ~/.gitconfig.
     run_user(r"printf '[user]\n\temail = t@e\n' > ~/.gitconfig")
     run_user(r"printf '[user]\n\temail = x@y\n' > ~/secret-outside.txt")
-    run_user("cd ~/proj && git config --file $HOME/.gitconfig --list")
+    run_user("cd ~/proj && git config --file $HOME/.gitconfig --list", succeed=False)
     run_user("cd ~/proj && git config --file $HOME/secret-outside.txt --list", succeed=False)
 
     # Containment: git filters aren't disabled (no global off-switch), but run
