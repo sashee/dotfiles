@@ -1303,7 +1303,10 @@ fn server_shutdown_cancels_active_register_cli_processes() {
 
     let _ = server.child.kill();
     let _ = server.child.wait();
-    wait_for_file(&marker);
+    // Waiting on the marker spans a multi-process teardown chain (server EOF ->
+    // register CLI SIGTERM -> shell TERM trap -> touch), which can exceed the tight
+    // FILE_TIMEOUT under CI load. Use the more generous EXTENDED_TIMEOUT.
+    wait_for_file_within(&marker, EXTENDED_TIMEOUT);
 }
 
 #[test]
@@ -1471,7 +1474,11 @@ fn call_tool(server: &mut ChildHarness, id: i64, tool: &str, extra_params: Value
 }
 
 fn wait_for_file(path: &Path) {
-    let deadline = Instant::now() + FILE_TIMEOUT;
+    wait_for_file_within(path, FILE_TIMEOUT);
+}
+
+fn wait_for_file_within(path: &Path, timeout: Duration) {
+    let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
         if path.exists() {
             return;
