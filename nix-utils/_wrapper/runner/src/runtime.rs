@@ -156,7 +156,7 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
     let mut mounts = config.mounts.clone();
     mounts.extend(dev_allowlist_block_mounts(&config)?);
 
-    ensure_mount_dirs(&mounts, &host_env, &config.optional_env_vars)?;
+    ensure_mount_targets(&mounts, &host_env, &config.optional_env_vars)?;
 
     append_mount_args(&mut bwrap_args, &mounts, &host_env, &config.optional_env_vars)?;
 
@@ -682,13 +682,13 @@ fn append_mount_args(
     Ok(())
 }
 
-fn ensure_mount_dirs(
+fn ensure_mount_targets(
     mounts: &[MountRule],
     host_env: &HashMap<String, String>,
     optional_env_vars: &[String],
 ) -> Result<(), RunnerError> {
     for mount in mounts {
-        if !mount.mkdir || mount.source.is_some() || mount.r#type != "dir" {
+        if !mount.mkdir || mount.source.is_some() {
             continue;
         }
 
@@ -697,10 +697,32 @@ fn ensure_mount_dirs(
         }
 
         let path = expand_path_value(&mount.path, host_env)?;
-        fs::create_dir_all(&path).map_err(|source| RunnerError::CreateDir {
-            path: path.into(),
-            source,
-        })?;
+        match mount.r#type.as_str() {
+            "dir" => {
+                fs::create_dir_all(&path).map_err(|source| RunnerError::CreateDir {
+                    path: path.into(),
+                    source,
+                })?;
+            }
+            "file" => {
+                if let Some(parent) = Path::new(&path).parent() {
+                    fs::create_dir_all(parent).map_err(|source| RunnerError::CreateDir {
+                        path: parent.into(),
+                        source,
+                    })?;
+                }
+                // touch: create if missing, never truncate an existing file
+                OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&path)
+                    .map_err(|source| RunnerError::OpenFile {
+                        path: path.into(),
+                        source,
+                    })?;
+            }
+            _ => {}
+        }
     }
 
     Ok(())
@@ -1258,21 +1280,48 @@ mod tests {
     }
 
     #[test]
-    fn ensure_mount_dirs_creates_dir_when_mkdir_set() {
+    fn ensure_mount_targets_creates_dir_when_mkdir_set() {
         let base = unique_temp_dir();
         let target = format!("{base}/sub/dir");
         let mut m = mount(&target, "rw", "dir", None);
         m.mkdir = true;
-        ensure_mount_dirs(&[m], &env_map(), &optional_env_vars()).unwrap();
+        ensure_mount_targets(&[m], &env_map(), &optional_env_vars()).unwrap();
         assert!(Path::new(&target).is_dir());
         let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
-    fn ensure_mount_dirs_skips_when_mkdir_unset() {
+    fn ensure_mount_targets_creates_file_and_parent_when_mkdir_set() {
+        let base = unique_temp_dir();
+        let target = format!("{base}/.ssh/known_hosts");
+        let mut m = mount(&target, "rw", "file", None);
+        m.mkdir = true;
+        ensure_mount_targets(&[m], &env_map(), &optional_env_vars()).unwrap();
+        assert!(Path::new(&target).is_file());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn ensure_mount_targets_does_not_truncate_existing_file() {
+        let base = unique_temp_dir();
+        let target = format!("{base}/known_hosts");
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::write(&target, b"github.com ssh-ed25519 AAAA\n").unwrap();
+        let mut m = mount(&target, "rw", "file", None);
+        m.mkdir = true;
+        ensure_mount_targets(&[m], &env_map(), &optional_env_vars()).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&target).unwrap(),
+            "github.com ssh-ed25519 AAAA\n"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn ensure_mount_targets_skips_when_mkdir_unset() {
         let base = unique_temp_dir();
         let target = format!("{base}/nope");
-        ensure_mount_dirs(&[mount(&target, "rw", "dir", None)], &env_map(), &optional_env_vars())
+        ensure_mount_targets(&[mount(&target, "rw", "dir", None)], &env_map(), &optional_env_vars())
             .unwrap();
         assert!(!Path::new(&target).exists());
         let _ = std::fs::remove_dir_all(&base);

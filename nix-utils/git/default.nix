@@ -13,7 +13,7 @@ let
 	'';
 	sandbox_restrictions = {
 		fs = {
-			"$HOME/.ssh/known_hosts" = { perm = "ro"; };
+			"$HOME/.ssh/known_hosts" = { perm = "rw"; type = "file"; mkdir = true; };
 			"$SSH_AUTH_SOCK" = { perm = "rw"; };
 		};
 		network = true;

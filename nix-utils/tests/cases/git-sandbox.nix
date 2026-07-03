@@ -6,6 +6,9 @@
 #     with no ~/.gitconfig, yet a repo-local user.email still overrides it.
 #   - git is confined to the git root: files outside the repo (incl. ~/.gitconfig)
 #     are not readable.
+#   - ~/.ssh/known_hosts is pre-created on the host (mkdir + type=file) and bound
+#     rw, so a first host-key acceptance persists instead of vanishing with the
+#     tmpfs /home each run.
 { pkgs }:
 let
   probes = import ./probes.nix { inherit pkgs; };
@@ -61,6 +64,19 @@ in
     run_user("test -e ~/proj/filter-ran")               # the filter DID run (inside the repo root)
     run_user("test -e ~/pwned-filter", succeed=False)   # but could not write outside it
 
-    run_user("rm -rf ~/proj ~/secret-outside.txt ~/pwned ~/pwned-filter ~/.gitconfig")
+    # SSH host-key persistence: on a fresh machine ~/.ssh/known_hosts doesn't exist,
+    # so the wrapper pre-creates it on the host (mkdir + type=file) — any git run
+    # triggers the host-side pre-create at runner startup.
+    run_user("rm -rf ~/.ssh")
+    run_user("cd ~/proj && git --version")
+    run_user("test -f ~/.ssh/known_hosts")              # pre-created on the host, as a file
+
+    # ...and it's bound rw, so an append from inside the sandbox persists on the host
+    # (this is what makes a first-time host-key acceptance stick).
+    run_user("cd ~/proj && git-debug -c 'echo example.com ssh-ed25519 AAAATESTKEY >> ~/.ssh/known_hosts'")
+    kh = run_user("cat ~/.ssh/known_hosts")
+    assert "AAAATESTKEY" in kh, f"a write to the rw-bound ~/.ssh/known_hosts must persist on the host; got {kh!r}"
+
+    run_user("rm -rf ~/proj ~/secret-outside.txt ~/pwned ~/pwned-filter ~/.gitconfig ~/.ssh")
   '';
 }

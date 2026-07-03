@@ -68,9 +68,9 @@ let
     in {
       path = p;
       perm = entry.perm;
-      type = let
+      type = entry.type or (let
         matching = builtins.filter (pp: pp.path == p) consts.protectedPaths;
-      in if matching == [] then "dir" else (builtins.head matching).type;
+      in if matching == [] then "dir" else (builtins.head matching).type);
       source = null;
       mkdir = entry.mkdir or false;
   }) explicitPaths;
