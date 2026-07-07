@@ -6,6 +6,7 @@ let
 	launcher = import ../launcher.nix { inherit pkgs; };
 	hostTools = import ../opencode/host-tools-mcp.nix { inherit pkgs; };
 	inherit (hostTools) hostToolsMcp mcpRegisterBins brokerEnsureCmd;
+	egressProxy = import ../egress-proxy/default.nix { inherit pkgs; };
 
 	claudemd = pkgs.writeTextFile {
 		name = "CLAUDE.md";
@@ -50,6 +51,7 @@ let
 	claudeEntry = pkgs.writeShellScriptBin "claude" ''
 		export CLAUDE_CONFIG_DIR="$HOME/.config/claude"
 		export DISABLE_AUTOUPDATER="1"
+		${egressProxy.mkRelayPrelude}
 		exec ${unstable.claude-code}/bin/claude \
 			--settings ${settingsJson} \
 			--mcp-config ${mcpJson} \
@@ -63,20 +65,22 @@ let
 			"/tmp/host-tools-mcp" = { perm = "rw"; mkdir = true; };
 			"$HOME/.config/claude" = { perm = "rw"; mkdir = true; };
 			"$HOME/.cache/claude" = { perm = "rw"; mkdir = true; };
-		};
-		network = true;
+		} // egressProxy.fsEntry // egressProxy.caFsEntry;
+		# Internet only via the HTTP egress proxy (see ../egress-proxy): isolated
+		# netns, loopback-only, all traffic through HTTP(S)_PROXY. Fail-closed.
+		network = "proxy";
 		dev = ["/dev/kvm"];
 	};
 	bin = launcher.mkLauncher {
 		name = "claude";
 		target = "${claudeEntry}/bin/claude";
-		keepEnv = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "LANG" "TERM"];
-		setEnv = {};
+		keepEnv = ["HOME" "PATH" "TMPDIR" "SSL_CERT_FILE" "LANG" "TERM"] ++ egressProxy.proxyEnvNames ++ egressProxy.certEnvNames;
+		setEnv = egressProxy.proxyEnv // egressProxy.certEnv;
 	};
 	wrapper = import ../_wrapper/default.nix {
 		name = "claude";
 		inherit pkgs bin sandbox_restrictions;
-		preLaunchHostCmd = brokerEnsureCmd;
+		preLaunchHostCmd = brokerEnsureCmd + "\n" + egressProxy.proxyEnsureCmd;
 	};
 in
 {

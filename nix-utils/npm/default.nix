@@ -3,6 +3,7 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
+	egressProxy = import ../egress-proxy/default.nix { inherit pkgs; };
 	base_sandbox_restrictions = {
 		fs = {
 			"$HOME/.npm" = { perm = "rw"; };
@@ -76,8 +77,33 @@ let
 		sandbox_restrictions = base_sandbox_restrictions // { network = true; };  # with network
 		generate_unsafe = false;
 	}).scripts;
+
+	# node-proxy: network="proxy" — isolated netns, egress only via the HTTP proxy
+	# (../egress-proxy). Exists so tests/cases/proxy-egress.nix can exercise proxy
+	# mode without launching the heavy claude/opencode. The entry starts the
+	# in-sandbox relay (like the real tools' entrypoints) then execs node.
+	nodeProxyEntry = pkgs.writeShellScriptBin "node" ''
+		${egressProxy.mkRelayPrelude}
+		exec ${pkgs.nodejs}/bin/node "$@"
+	'';
+	node_proxy_bin = node_tool_bin.override (_: {
+		name = "node-proxy";
+		target = "${nodeProxyEntry}/bin/node";
+		setEnv = certEnv // egressProxy.proxyEnv;
+	});
+	node_proxy_scripts = (import ../_wrapper/default.nix {
+		name = "node-proxy";
+		inherit pkgs;
+		bin = node_proxy_bin;
+		sandbox_restrictions = {
+			fs = egressProxy.fsEntry;
+			network = "proxy";
+		};
+		generate_unsafe = false;
+		preLaunchHostCmd = egressProxy.proxyEnsureCmd;
+	}).scripts;
 in
 {
-	scripts = npm_scripts ++ node_scripts ++ node_nonet_scripts ++ npx_scripts ++ npx_fullnet_scripts;
+	scripts = npm_scripts ++ node_scripts ++ node_nonet_scripts ++ npx_scripts ++ npx_fullnet_scripts ++ node_proxy_scripts;
 	sandbox_restrictions = base_sandbox_restrictions;
 }

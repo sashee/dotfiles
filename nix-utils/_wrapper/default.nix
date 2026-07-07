@@ -33,12 +33,26 @@ let
     AF_BLUETOOTH = 31;
   };
 
+  # `network` is tri-state: true (share host netns), false (unshare + block all
+  # IP socket families), or "proxy" (unshare the netns — so there are no external
+  # interfaces — but leave AF_INET usable so the tool can reach a loopback proxy
+  # relay; egress then flows only through that proxy over a bind-mounted UDS).
+  net = sandbox_restrictions.network or false;
+  hasNet = net == true;
+  isProxy = net == "proxy";
+
   baseSeccomp = sandbox_restrictions.seccomp or {};
-  autoBlock = if !(sandbox_restrictions.network or false) then {
-    AF_INET = true;
-    AF_INET6 = true;
-    AF_PACKET = true;
-  } else {};
+  autoBlock =
+    if hasNet then {}
+    else if isProxy then {
+      # loopback TCP (AF_INET) must work for the proxy relay; still no route off lo.
+      AF_INET6 = true;
+      AF_PACKET = true;
+    } else {
+      AF_INET = true;
+      AF_INET6 = true;
+      AF_PACKET = true;
+    };
   mergedSeccompBlock = (baseSeccomp.block or {}) // autoBlock;
   blockedSocketFamilies = builtins.map (name: afMap.${name}) (
     builtins.filter (name: mergedSeccompBlock.${name} or false) (builtins.attrNames afMap)
@@ -113,7 +127,7 @@ let
     ++ (pkgs.lib.optionals (!((sandbox_restrictions.share_cgroup or false))) [ "--unshare-cgroup-try" ])
     ++ (pkgs.lib.optionals (!((sandbox_restrictions.share_pid or false))) [ "--unshare-pid" ])
     ++ (pkgs.lib.optionals (!((sandbox_restrictions.share_ipc or false))) [ "--unshare-ipc" ])
-    ++ (pkgs.lib.optionals (!((sandbox_restrictions.network or false))) [ "--unshare-net" ])
+    ++ (pkgs.lib.optionals (!hasNet) [ "--unshare-net" ])
     ++ (pkgs.lib.optionals (!((sandbox_restrictions.dont_die_with_parent or false))) [ "--die-with-parent" ])
     ++ [
       "--ro-bind" "/" "/"

@@ -53,6 +53,38 @@
     s.setTimeout(5000, () => { console.error("TIMEOUT"); process.exit(2); });
   '';
 
+  # HTTP server: argv[2]=host, argv[3]=port. Answers every request with a fixed
+  # marker body. Runs until killed. Used as the proxy's upstream target.
+  httpServer = pkgs.writeText "httpServer.js" ''
+    const http = require("http");
+    const host = process.argv[2];
+    const port = parseInt(process.argv[3], 10);
+    const srv = http.createServer((req, res) => { res.end("PROXIED_OK\n"); });
+    srv.on("error", (e) => { console.error("SRVERR", e.code); process.exit(1); });
+    srv.listen(port, host, () => { console.error("LISTENING"); });
+  '';
+
+  # HTTP GET through the proxy named by $HTTP_PROXY (http://host:port): connect to
+  # the proxy and issue an absolute-URI GET for http://argv[2]:argv[3]/, printing
+  # the response. Proves egress works *via the proxy* (not a direct connection).
+  proxyGet = pkgs.writeText "proxyGet.js" ''
+    const net = require("net");
+    const proxy = new URL(process.env.HTTP_PROXY);
+    const targetHost = process.argv[2];
+    const targetPort = process.argv[3];
+    const s = net.connect(parseInt(proxy.port, 10), proxy.hostname, () => {
+      s.write(
+        "GET http://" + targetHost + ":" + targetPort + "/ HTTP/1.0\r\n" +
+        "Host: " + targetHost + "\r\nConnection: close\r\n\r\n"
+      );
+    });
+    let buf = "";
+    s.on("data", (d) => { buf += d; });
+    s.on("end", () => { process.stdout.write(buf); process.exit(0); });
+    s.on("error", (e) => { console.error("ERR", e.code); process.exit(1); });
+    s.setTimeout(5000, () => { console.error("TIMEOUT"); process.exit(2); });
+  '';
+
   # Print /etc/machine-id.
   printMachineId = pkgs.writeText "printMachineId.js" ''
     process.stdout.write(require("fs").readFileSync("/etc/machine-id", "utf8"));

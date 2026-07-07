@@ -93,6 +93,7 @@ let
     tools-smoke = import ./cases/tools-smoke.nix { inherit pkgs; };
     protected-paths = import ./cases/protected-paths.nix { inherit pkgs; };
     network-isolation = import ./cases/network-isolation.nix { inherit pkgs; };
+    proxy-egress = import ./cases/proxy-egress.nix { inherit pkgs; };
     machine-id = import ./cases/machine-id.nix { inherit pkgs; };
     git-sandbox = import ./cases/git-sandbox.nix { inherit pkgs; };
     npm-cache-scoping = import ./cases/npm-cache-scoping.nix { inherit pkgs; };
