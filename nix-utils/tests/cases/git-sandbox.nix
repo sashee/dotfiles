@@ -1,6 +1,8 @@
 # Case: the sandboxed `git` is hardened and confined.
 #   - command-line config disables the attacker-reachable exec knobs (hooksPath,
 #     fsmonitor, …) — git/default.nix.
+#   - diff.external is pinned to difftastic: a repo-local override does not run,
+#     and `git diff` still works.
 #   - a malicious repo-local hook does not execute on the host.
 #   - a default identity is baked in (GIT_CONFIG_GLOBAL), so a bare commit works
 #     with no ~/.gitconfig, yet a repo-local user.email still overrides it.
@@ -64,6 +66,16 @@ in
     run_user("test -e ~/proj/filter-ran")               # the filter DID run (inside the repo root)
     run_user("test -e ~/pwned-filter", succeed=False)   # but could not write outside it
 
+    # diff.external is pinned to difftastic at command-line precedence: a
+    # malicious repo-local diff.external does not run, and `git diff` works
+    # (an empty pin would make git exec "" and die).
+    run_user("cd ~/proj && git config --local diff.external 'touch $HOME/pwned-diff'")
+    run_user("cd ~/proj && echo changed >> tracked.txt")
+    out = run_user("cd ~/proj && git diff")
+    assert "tracked.txt" in out, f"git diff output = {out!r}"
+    run_user("test -e ~/pwned-diff", succeed=False)  # the repo-local override did not fire
+    run_user("cd ~/proj && git config --local --unset diff.external && git checkout -- tracked.txt")
+
     # SSH host-key persistence: on a fresh machine ~/.ssh/known_hosts doesn't exist,
     # so the wrapper pre-creates it on the host (mkdir + type=file) — any git run
     # triggers the host-side pre-create at runner startup.
@@ -77,6 +89,6 @@ in
     kh = run_user("cat ~/.ssh/known_hosts")
     assert "AAAATESTKEY" in kh, f"a write to the rw-bound ~/.ssh/known_hosts must persist on the host; got {kh!r}"
 
-    run_user("rm -rf ~/proj ~/secret-outside.txt ~/pwned ~/pwned-filter ~/.gitconfig ~/.ssh")
+    run_user("rm -rf ~/proj ~/secret-outside.txt ~/pwned ~/pwned-filter ~/pwned-diff ~/.gitconfig ~/.ssh")
   '';
 }

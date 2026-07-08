@@ -22,10 +22,12 @@ let
 		name = "git";
 		target = "${pkgs.git}/bin/git";
 		keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"];
-		# Disable git's fixed-name command-exec keys at command-line precedence
-		# (beats repo-local .git/config). The attacker-named filter/textconv/merge
-		# families have no global off-switch and are instead contained by the
-		# sandbox below.
+		# Pin git's fixed-name command-exec keys at command-line precedence
+		# (beats repo-local .git/config). diff.external is pinned to difftastic
+		# rather than emptied: git treats an empty value as "exec a program named
+		# ''", which breaks every `git diff`. The attacker-named
+		# filter/textconv/merge families have no global off-switch and are
+		# instead contained by the sandbox below.
 		setEnv = {
 			# Global config file replacing ~/.gitconfig (no host file needed);
 			# repo-local scope still overrides it.
@@ -34,7 +36,7 @@ let
 			GIT_CONFIG_KEY_0 = "core.hooksPath";            GIT_CONFIG_VALUE_0 = "/dev/null";
 			GIT_CONFIG_KEY_1 = "core.fsmonitor";            GIT_CONFIG_VALUE_1 = "false";
 			GIT_CONFIG_KEY_2 = "protocol.ext.allow";        GIT_CONFIG_VALUE_2 = "never";
-			GIT_CONFIG_KEY_3 = "diff.external";             GIT_CONFIG_VALUE_3 = "";
+			GIT_CONFIG_KEY_3 = "diff.external";             GIT_CONFIG_VALUE_3 = "${pkgs.difftastic}/bin/difft";
 			GIT_CONFIG_KEY_4 = "core.alternateRefsCommand"; GIT_CONFIG_VALUE_4 = "";
 		};
 	};
