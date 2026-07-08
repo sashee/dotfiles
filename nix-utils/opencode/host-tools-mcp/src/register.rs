@@ -9,6 +9,7 @@ use std::process::Stdio;
 use std::thread;
 
 use anyhow::{anyhow, bail, Context, Result};
+use nix::fcntl::{fcntl, FcntlArg, FdFlag};
 use nix::pty::openpty;
 use nix::sys::signal::{kill, signal, SigHandler, Signal};
 use nix::sys::wait::{waitpid, WaitStatus};
@@ -28,6 +29,12 @@ use crate::{
     broker_socket_path, debug_log, live_broker_server, progress_message, ExecutionMode,
     LiveServer, ProgressUpdate, ProviderToServer, RegisteredCommand, ServerToProvider,
 };
+
+/// Upper bound on how long a finished PTY command's output may keep flowing
+/// before the result is returned without waiting for EOF. Only reached when an
+/// orphaned grandchild keeps the PTY slave open past the child's exit; in the
+/// normal case EOF arrives immediately and the result returns right away.
+const PTY_EOF_FALLBACK: Duration = Duration::from_millis(2000);
 
 pub async fn run_register(mode: RegisteredCommand) -> Result<()> {
     debug_log(format!(
@@ -367,6 +374,13 @@ async fn run_pty_command(
     events_tx: &mpsc::UnboundedSender<RunnerEvent>,
 ) -> Result<CommandOutput> {
     let pty = openpty(None, None).context("failed to allocate PTY")?;
+    // Keep the PTY fds out of unrelated concurrently spawned children: a leaked
+    // slave fd would hold EOF back until that child exits. The intended child
+    // still receives the slave via dup2, which clears CLOEXEC on its stdio.
+    for fd in [&pty.master, &pty.slave] {
+        fcntl(fd, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
+            .context("failed to set CLOEXEC on PTY fd")?;
+    }
     let master = File::from(pty.master);
     let slave = File::from(pty.slave);
     let slave_stdout = slave.try_clone().context("failed to clone PTY slave")?;
@@ -392,6 +406,10 @@ async fn run_pty_command(
         .with_context(|| format!("failed to spawn {program}"))?;
     let process_group_id = child.id() as i32;
     let child_pid = Pid::from_raw(process_group_id);
+    // Close the parent's copies of the PTY slave (held by `command`'s Stdio
+    // handles): the master only reports EOF once every slave fd is closed, and
+    // EOF is what tells us the output has been fully drained.
+    drop(command);
     let (status_tx, mut status_rx) =
         mpsc::unbounded_channel::<io::Result<std::process::ExitStatus>>();
     let (output_tx, mut output_rx) = mpsc::unbounded_channel::<OutputEvent>();
@@ -404,22 +422,26 @@ async fn run_pty_command(
     let mut latest_stdout = String::new();
     let mut next_progress = 1usize;
     let mut exit_status = None;
+    let mut output_closed = false;
     let mut timed_out = false;
     let timeout_sleep =
         timeout_ms.map(|ms| Box::pin(tokio::time::sleep(Duration::from_millis(ms))));
     let mut timeout_sleep = timeout_sleep;
-    let mut drain_sleep = None;
+    // Armed when the child exits. EOF normally follows right after (the parent
+    // holds no slave fds), so this only fires when something else — an orphaned
+    // grandchild — still holds the PTY slave open after the child exited.
+    let mut eof_fallback = None;
 
-    loop {
+    while !(output_closed && exit_status.is_some()) {
         tokio::select! {
             maybe_status = status_rx.recv(), if exit_status.is_none() => {
                 let status = maybe_status
                     .ok_or_else(|| anyhow!("PTY child wait channel closed unexpectedly"))?
                     .context("failed to wait for PTY child")?;
                 exit_status = Some(status);
-                drain_sleep = Some(Box::pin(tokio::time::sleep(Duration::from_millis(50))));
+                eof_fallback = Some(Box::pin(tokio::time::sleep(PTY_EOF_FALLBACK)));
             }
-            maybe_output = output_rx.recv() => {
+            maybe_output = output_rx.recv(), if !output_closed => {
                 match maybe_output {
                     Some(OutputEvent::Line { kind: OutputKind::Stdout, line }) => {
                         println!("{line}");
@@ -429,32 +451,22 @@ async fn run_pty_command(
                             update: progress_message(next_progress, "stdout", &line),
                         });
                         next_progress += 1;
-                        if exit_status.is_some() {
-                            drain_sleep = Some(Box::pin(tokio::time::sleep(Duration::from_millis(50))));
-                        }
                     }
                     Some(OutputEvent::Snapshot { kind: OutputKind::Stdout, text }) => {
                         latest_stdout = text;
                     }
                     Some(OutputEvent::Line { kind: OutputKind::Stderr, .. }) => {}
                     Some(OutputEvent::Snapshot { kind: OutputKind::Stderr, .. }) => {}
-                    Some(OutputEvent::Closed) => {
-                        if exit_status.is_some() {
-                            break;
-                        }
-                    }
-                    None => {
-                        if exit_status.is_some() {
-                            break;
-                        }
+                    Some(OutputEvent::Closed) | None => {
+                        output_closed = true;
                     }
                 }
             }
             _ = async {
-                if let Some(sleep) = drain_sleep.as_mut() {
+                if let Some(sleep) = eof_fallback.as_mut() {
                     sleep.await;
                 }
-            }, if drain_sleep.is_some() => {
+            }, if eof_fallback.is_some() => {
                 break;
             }
             _ = &mut *cancel_rx => {
@@ -471,7 +483,7 @@ async fn run_pty_command(
                 timed_out = true;
                 exit_status = Some(terminate_process_group_and_wait(process_group_id, &mut status_rx).await?);
                 timeout_sleep = None;
-                drain_sleep = Some(Box::pin(tokio::time::sleep(Duration::from_millis(50))));
+                eof_fallback = Some(Box::pin(tokio::time::sleep(PTY_EOF_FALLBACK)));
             }
         }
     }
@@ -934,4 +946,74 @@ async fn terminate_child(child: &mut tokio::process::Child, process_group_id: i3
 
 fn kill_process_group(process_group_id: i32, signal: Signal) -> nix::Result<()> {
     kill(Pid::from_raw(-process_group_id), signal)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Instant;
+
+    async fn run_pty_script(script: &str) -> CommandOutput {
+        let (_cancel_tx, mut cancel_rx) = oneshot::channel();
+        let (events_tx, _events_rx) = mpsc::unbounded_channel();
+        run_pty_command(
+            "sh",
+            &["-c".to_string(), script.to_string()],
+            None,
+            "test-call",
+            &mut cancel_rx,
+            &events_tx,
+        )
+        .await
+        .expect("pty command should run")
+    }
+
+    // Regression for the mcp-bridge CI flake: output that reaches the PTY reader
+    // only after the child's exit status was processed must not be dropped. The
+    // backgrounded subshell outlives `sh` and writes 300ms after it exits — far
+    // beyond the old fixed 50ms drain window.
+    #[tokio::test]
+    async fn pty_output_arriving_after_child_exit_is_captured() {
+        let output = run_pty_script("(sleep 0.3; echo late-line) &").await;
+        assert!(output.status.success());
+        assert!(
+            output.stdout.contains("late-line"),
+            "output written after the child exited must be captured, got {:?}",
+            output.stdout
+        );
+    }
+
+    // The read loop must end via PTY EOF (all slave fds closed), not by burning
+    // the whole fallback: if the parent's slave fds leak again, EOF never comes
+    // and this takes PTY_EOF_FALLBACK.
+    #[tokio::test]
+    async fn pty_read_ends_via_eof_without_fallback_delay() {
+        let started = Instant::now();
+        let output = run_pty_script("echo hi").await;
+        assert!(output.stdout.contains("hi"));
+        assert!(
+            started.elapsed() < PTY_EOF_FALLBACK,
+            "a plain command must finish via EOF, not the fallback timer (took {:?})",
+            started.elapsed()
+        );
+    }
+
+    // A grandchild that keeps the PTY slave open must not stall the result
+    // forever: the fallback returns the output collected so far.
+    #[tokio::test]
+    async fn pty_fallback_bounds_a_held_open_pty() {
+        let started = Instant::now();
+        let output = run_pty_script("echo hi; sleep 10 &").await;
+        let elapsed = started.elapsed();
+        assert!(output.status.success());
+        assert!(output.stdout.contains("hi"));
+        assert!(
+            elapsed >= PTY_EOF_FALLBACK,
+            "EOF cannot arrive while the grandchild holds the PTY (took {elapsed:?})"
+        );
+        assert!(
+            elapsed < Duration::from_secs(8),
+            "the fallback must bound the wait (took {elapsed:?})"
+        );
+    }
 }

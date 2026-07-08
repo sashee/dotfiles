@@ -75,5 +75,9 @@ function fail(msg, code) { console.error(msg); done(code); }
   const resp = await recvMatching((m) => m.id === callId, 20000);
   const content = (resp.result && resp.result.content) || [];
   const text = content.map((c) => (c && c.text) || "").join("\n");
+  // An empty text must fail loudly: the tests assert on the output, and a silent
+  // empty success is indistinguishable from a still-running client for a harness
+  // that watches the output file.
+  if (!text.trim()) fail("tool call returned empty text: " + JSON.stringify(resp.result), 4);
   process.stdout.write(text, () => done(0));
 })().catch((e) => fail(String(e), 1));

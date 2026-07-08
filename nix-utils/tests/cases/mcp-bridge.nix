@@ -20,6 +20,13 @@ let
   # opencode-debug runs the node client inside opencode's sandbox; it spawns the MCP
   # server (from $OPENCODE_CONFIG) and prints the tool-call result to stdout.
   clientCmd = "opencode-debug -c '${node} ${mcpClient}'";
+  # Runs the client and records its exit code, so the test can distinguish a
+  # still-running client from one that failed (or printed nothing) and react
+  # instead of spinning against an output file until the harness timeout.
+  clientRun = pkgs.writeShellScript "mcp-client-run" ''
+    ${clientCmd} >/tmp/host-tools-mcp/out 2>/tmp/host-tools-mcp/err
+    echo $? >/tmp/host-tools-mcp/rc
+  '';
   # The client's request (which tool, which arguments), placed in the rw-shared dir so no
   # shell-quoting is needed. "cat" matches the sanitized tool name of both registrations.
   reqFixed = pkgs.writeText "mcp-req-fixed.json" (builtins.toJSON { substr = "cat"; arguments = { }; });
@@ -41,11 +48,9 @@ in
         run_user("rm -rf /tmp/host-tools-mcp; mkdir -p /tmp/host-tools-mcp")
         run_user("cp " + req + " /tmp/host-tools-mcp/req.json")
         # Start the MCP client INSIDE opencode's sandbox (it spawns host-tools-mcp).
-        # nohup + background so it survives the su session exiting; result -> host file.
-        run_user(
-            "nohup ${clientCmd} >/tmp/host-tools-mcp/out 2>/tmp/host-tools-mcp/err "
-            "& echo $! >/tmp/host-tools-mcp/cli.pid"
-        )
+        # nohup + background so it survives the su session exiting; the wrapper
+        # writes the result to out/err and the exit code to rc.
+        run_user("nohup ${clientRun} >/dev/null 2>&1 &")
         # The in-sandbox server's registry socket appears in the host-shared dir.
         machine.wait_until_succeeds("ls /tmp/host-tools-mcp/*/registry.sock 2>/dev/null")
         # mcp-register is broker-only and connects to broker_socket_path()
@@ -57,13 +62,19 @@ in
             "nohup " + provider + " >/tmp/host-tools-mcp/prov.out 2>&1 "
             "& echo $! >/tmp/host-tools-mcp/prov.pid"
         )
-        # The client lists + calls the tool, prints the result text, and exits.
-        machine.wait_until_succeeds("test -s /tmp/host-tools-mcp/out")
+        # The client lists + calls the tool, prints the result text, and exits;
+        # waiting on the exit code (not the output file) means a failed client
+        # aborts the test immediately with its stderr instead of timing out.
+        machine.wait_until_succeeds("test -s /tmp/host-tools-mcp/rc")
+        rc = run_user("cat /tmp/host-tools-mcp/rc").strip()
         out = run_user("cat /tmp/host-tools-mcp/out")
-        run_user(
-            "kill $(cat /tmp/host-tools-mcp/prov.pid) 2>/dev/null; "
-            "kill $(cat /tmp/host-tools-mcp/cli.pid) 2>/dev/null; true"
-        )
+        if rc != "0" or not out.strip():
+            err = run_user("cat /tmp/host-tools-mcp/err 2>/dev/null; true")
+            prov = run_user("cat /tmp/host-tools-mcp/prov.out 2>/dev/null; true")
+            raise Exception(
+                f"mcp client failed: rc={rc} out={out!r} err={err!r} prov={prov!r}"
+            )
+        run_user("kill $(cat /tmp/host-tools-mcp/prov.pid) 2>/dev/null; true")
         return out
 
     # 1) fixed-argv tool (mcp-register): runs the exact `cat /etc/machine-id` on the host.

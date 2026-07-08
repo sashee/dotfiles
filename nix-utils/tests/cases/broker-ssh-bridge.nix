@@ -24,6 +24,12 @@ let
   node = "/run/current-system/sw/bin/node";
   mcpClient = ./probes-mcp/mcpClient.js;
   clientCmd = "opencode-debug -c '${node} ${mcpClient}'";
+  # Runs the client and records its exit code, so the test can distinguish a
+  # still-running client from one that failed (or printed nothing).
+  clientRun = pkgs.writeShellScript "mcp-client-run" ''
+    ${clientCmd} >/tmp/host-tools-mcp/out 2>/tmp/host-tools-mcp/err
+    echo $? >/tmp/host-tools-mcp/rc
+  '';
   # Ask the client to call the sh_c tool with a shell command; its stdout proves
   # the call round-tripped through the broker + ssh + mcp-register.
   req = pkgs.writeText "broker-req.json" (builtins.toJSON {
@@ -61,11 +67,9 @@ in
     run_user("cp ${req} /tmp/host-tools-mcp/req.json")
 
     # 1. MCP client inside opencode's sandbox spawns the server; it will poll for
-    #    sh_c, call it, and print the result. Backgrounded so the su session ends.
-    run_user(
-      "nohup ${clientCmd} >/tmp/host-tools-mcp/out 2>/tmp/host-tools-mcp/err "
-      "& echo $! >/tmp/host-tools-mcp/cli.pid"
-    )
+    #    sh_c, call it, and print the result. Backgrounded so the su session ends;
+    #    the wrapper writes the result to out/err and the exit code to rc.
+    run_user("nohup ${clientRun} >/dev/null 2>&1 &")
     machine.wait_until_succeeds("ls /tmp/host-tools-mcp/*/registry.sock 2>/dev/null")
 
     # 2. Broker on the host: discovers the server, listens on its known socket.
@@ -86,16 +90,20 @@ in
     )
 
     # 4. The client sees sh_c (server <- broker <- ssh <- mcp-register), calls it,
-    #    and prints the command output.
-    machine.wait_until_succeeds("test -s /tmp/host-tools-mcp/out")
+    #    and prints the command output. Waiting on the exit code (not the output
+    #    file) means a failed client aborts immediately with its stderr instead of
+    #    timing out.
+    machine.wait_until_succeeds("test -s /tmp/host-tools-mcp/rc")
+    rc = run_user("cat /tmp/host-tools-mcp/rc").strip()
     out = run_user("cat /tmp/host-tools-mcp/out")
-    assert "BROKER_BRIDGE_OK" in out, (
+    assert rc == "0" and "BROKER_BRIDGE_OK" in out, (
         "tool call must round-trip through the broker + ssh forward; "
-        f"got out={out!r} prov={run_user('cat /tmp/host-tools-mcp/prov.out || true')!r}"
+        f"got rc={rc} out={out!r} "
+        f"err={run_user('cat /tmp/host-tools-mcp/err 2>/dev/null; true')!r} "
+        f"prov={run_user('cat /tmp/host-tools-mcp/prov.out 2>/dev/null; true')!r}"
     )
 
     run_user("kill $(cat /tmp/host-tools-mcp/prov.pid) 2>/dev/null; true")
     run_user("kill $(cat /tmp/host-tools-mcp/broker.pid) 2>/dev/null; true")
-    run_user("kill $(cat /tmp/host-tools-mcp/cli.pid) 2>/dev/null; true")
   '';
 }

@@ -8,7 +8,7 @@ publish = false
 [dependencies]
 anyhow = "1.0"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-nix = { version = "0.31", features = ["process", "signal", "term"] }
+nix = { version = "0.31", features = ["fs", "process", "signal", "term"] }
 # Pinned to the 1.5 line: rmcp 1.6/1.7 change the initialize/protocol-version
 # negotiation, which breaks the MCP bridge (e2e tests time out). Upgrading needs a
 # separate server-side migration; `~1.5` still takes 1.5.x patch updates.
