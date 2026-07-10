@@ -22,7 +22,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot, watch};
-use tokio::task::JoinSet;
+use tokio::task::{JoinHandle, JoinSet};
 use tokio::time::{timeout, Duration};
 
 use crate::{
@@ -142,12 +142,11 @@ async fn connection_task(
     let mut active_calls = HashMap::<String, ActiveCall>::new();
     let mut registration_complete = false;
 
-    loop {
+    let cancelled_calls = loop {
         tokio::select! {
             changed = shutdown_rx.changed() => {
                 if changed.is_ok() && *shutdown_rx.borrow() {
-                    cancel_active_calls(&mut active_calls);
-                    break;
+                    break cancel_active_calls(&mut active_calls);
                 }
             }
             maybe_event = events_rx.recv() => {
@@ -170,8 +169,7 @@ async fn connection_task(
             line = read_line(&mut reader) => {
                 let Some(line) = line? else {
                     debug_log(format!("server {} closed the connection", server.socket_path.display()));
-                    cancel_active_calls(&mut active_calls);
-                    break;
+                    break cancel_active_calls(&mut active_calls);
                 };
                 let message = serde_json::from_str::<ServerToProvider>(&line)
                     .context("failed to decode server message")?;
@@ -188,14 +186,14 @@ async fn connection_task(
                     ServerToProvider::Error { message, .. } => bail!(message),
                     ServerToProvider::CallTool { call_id, arguments, .. } => {
                         let (cancel_tx, cancel_rx) = oneshot::channel();
-                        active_calls.insert(call_id.clone(), ActiveCall { cancel_tx });
-                        tokio::spawn(run_command_call(
+                        let handle = tokio::spawn(run_command_call(
                             mode.clone(),
-                            call_id,
+                            call_id.clone(),
                             arguments,
                             cancel_rx,
                             events_tx.clone(),
                         ));
+                        active_calls.insert(call_id, ActiveCall { cancel_tx, handle });
                     }
                     ServerToProvider::CancelCall { call_id, .. } => {
                         if let Some(active_call) = active_calls.remove(&call_id) {
@@ -205,6 +203,15 @@ async fn connection_task(
                 }
             }
         }
+    };
+
+    // Cancelling only fires each call's oneshot; the SIGTERM happens when the
+    // call task is next polled. Wait for the tasks here, otherwise the process
+    // can exit (dropping the runtime and aborting them) before the signal is
+    // ever sent, leaving the child running as an orphan. The terminate helpers
+    // are internally bounded; the timeout only guards a stuck wait.
+    for handle in cancelled_calls {
+        let _ = timeout(Duration::from_secs(5), handle).await;
     }
 
     drop(outbound_tx);
@@ -226,6 +233,7 @@ async fn connection_task(
 
 struct ActiveCall {
     cancel_tx: oneshot::Sender<()>,
+    handle: JoinHandle<()>,
 }
 
 struct ParsedCommand {
@@ -922,10 +930,14 @@ async fn read_line<R: tokio::io::AsyncBufRead + Unpin>(reader: &mut R) -> Result
     }
 }
 
-fn cancel_active_calls(active_calls: &mut HashMap<String, ActiveCall>) {
-    for (_, active_call) in active_calls.drain() {
-        let _ = active_call.cancel_tx.send(());
-    }
+fn cancel_active_calls(active_calls: &mut HashMap<String, ActiveCall>) -> Vec<JoinHandle<()>> {
+    active_calls
+        .drain()
+        .map(|(_, active_call)| {
+            let _ = active_call.cancel_tx.send(());
+            active_call.handle
+        })
+        .collect()
 }
 
 async fn terminate_child(child: &mut tokio::process::Child, process_group_id: i32) {
