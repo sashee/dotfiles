@@ -26,6 +26,12 @@ set -euo pipefail
 # Where our broker listens on THIS machine — the -R forward's local target.
 local_broker="${TMPDIR:-/tmp}/host-tools-mcp/broker.sock"
 
+# Transport: dumbpipe (iroh) instead of a direct TCP dial — the Pi runs
+# `dumbpipe listen-tcp` in front of sshd, so this works from any network.
+# The ticket is stable (the Pi pins its IROH_SECRET); env overrides the file.
+ticket_file="${XDG_CONFIG_HOME:-$HOME/.config}/ssh-rpi/dumbpipe-ticket"
+ticket="${RPI_DUMBPIPE_TICKET:-$(cat "$ticket_file")}"
+
 # Unique flat remote bind path (always bindable, collision-free across reconnects).
 fwd="/tmp/.htm-fwd-$$-${RANDOM}${RANDOM}.sock"
 
@@ -42,6 +48,7 @@ REMOTE
 exec ssh \
 	-o ExitOnForwardFailure=yes \
 	-o "RemoteForward=$fwd $local_broker" \
+	-o "ProxyCommand=dumbpipe connect $ticket" \
 	-t \
 	"$@" \
 	rpi \

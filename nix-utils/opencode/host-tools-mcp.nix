@@ -55,7 +55,11 @@ let
 	# Connect helper: ssh to the rpi with the broker socket forwarded, creating the
 	# nested socket dynamically (see ssh-rpi.sh). Plain on-PATH script, unsandboxed
 	# like mcp-register (it needs the real ssh-agent, network, TTY and ~/.ssh).
-	sshRpi = pkgs.writeShellScriptBin "ssh-rpi" (builtins.readFile ./ssh-rpi.sh);
+	# dumbpipe is prepended to PATH for the ProxyCommand transport.
+	sshRpi = pkgs.writeShellScriptBin "ssh-rpi" ''
+		export PATH=${pkgs.lib.makeBinPath [ pkgs.dumbpipe ]}:"$PATH"
+		${builtins.readFile ./ssh-rpi.sh}
+	'';
 
 	mcpRegisterBins = pkgs.runCommand "mcp-register-bins" {} ''
 		mkdir -p "$out/bin"
