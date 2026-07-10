@@ -21,7 +21,13 @@ let
 	bin = launcher.mkLauncher {
 		name = "git";
 		target = "${pkgs.git}/bin/git";
-		keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"];
+		# GIT_SEQUENCE_EDITOR/GIT_EDITOR + LAZYGIT_DAEMON_* let lazygit's daemon-mode
+		# interactive rebase (drop/squash/reword) reach git; without them git falls
+		# back to `vi`, which is not on the sandboxed PATH. These come from the
+		# invoking user, not repo content, so keeping them doesn't widen the sandbox.
+		keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"
+		           "GIT_SEQUENCE_EDITOR" "GIT_EDITOR"
+		           "LAZYGIT_DAEMON_KIND" "LAZYGIT_DAEMON_INSTRUCTION"];
 		# Pin git's fixed-name command-exec keys at command-line precedence
 		# (beats repo-local .git/config). diff.external is pinned to difftastic
 		# rather than emptied: git treats an empty value as "exec a program named
