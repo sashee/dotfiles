@@ -982,6 +982,7 @@ fn exact_cli_pty_timeout_should_kill_descendant_processes() {
         .trim()
         .parse::<i32>()
         .expect("child pid should be an integer");
+    wait_for_process_exit(child_pid);
     let alive = process_is_alive(child_pid);
     if alive {
         kill(Pid::from_raw(child_pid), Signal::SIGKILL).expect("failed to clean up child");
