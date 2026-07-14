@@ -15,15 +15,9 @@
 
 ## Code Style
 - Prefer declarative code over imperative code.
-- Break logic into small composable functions.
 - Avoid hidden dependencies and implicit inputs.
 - Prefer data-in/data-out helpers over class-like stateful abstractions.
 - When coding in Rust, try to avoid usafe blocks if possible
-
-## Mutations
-- Do not mutate arrays, objects, maps, or sets in place if a non-mutating approach is reasonable.
-- Prefer `map`, `filter`, `reduce`, object spread, and new values over reassignment.
-- If mutation is necessary, keep it tightly scoped and explain why.
 
 ## Responses
 - Be concise.
@@ -46,3 +40,8 @@ A useful refinement is to define exceptions explicitly:
 
 - You are running in a sandbox so you won't have access to the full system.
 
+## Tooling
+
+- If a tool is needed, check if Nix is available and use that.
+- To move files between machines, use wormhole.
+- Prefer to redirect command output to a temp file instead of using tail as it makes it easier to see what is happening.
