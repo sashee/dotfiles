@@ -30,6 +30,7 @@ let
 		lazygit = import ./lazygit/default.nix { inherit pkgs git; };
 		lazysql = import ./lazysql/default.nix { inherit pkgs; };
 		magic-wormhole = import ./magic-wormhole/default.nix { inherit pkgs; };
+		aria2 = import ./aria2/default.nix { inherit pkgs; };
 		opencode = import ./opencode/default.nix { inherit pkgs unstable; };
 		claude = import ./claude/default.nix { inherit pkgs unstable; };
 		vlc = import ./vlc/default.nix { inherit pkgs; };
