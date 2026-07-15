@@ -139,8 +139,8 @@ pub enum ServerToProvider {
 
 #[derive(Debug, Clone)]
 pub enum RegisteredCommand {
-    Exact {
-        argv: Vec<String>,
+    Shell {
+        command: String,
         execution_mode: ExecutionMode,
     },
     ArgvPrefix {
@@ -150,19 +150,19 @@ pub enum RegisteredCommand {
 }
 
 impl RegisteredCommand {
-    pub fn exact(argv: Vec<String>) -> io::Result<Self> {
-        Self::exact_with_mode(argv, ExecutionMode::Pty)
+    pub fn shell(command: String) -> io::Result<Self> {
+        Self::shell_with_mode(command, ExecutionMode::Pty)
     }
 
-    fn exact_with_mode(argv: Vec<String>, execution_mode: ExecutionMode) -> io::Result<Self> {
-        if argv.is_empty() {
+    fn shell_with_mode(command: String, execution_mode: ExecutionMode) -> io::Result<Self> {
+        if command.trim().is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "missing command",
             ));
         }
-        Ok(Self::Exact {
-            argv,
+        Ok(Self::Shell {
+            command,
             execution_mode,
         })
     }
@@ -186,7 +186,7 @@ impl RegisteredCommand {
 
     pub fn execution_mode(&self) -> ExecutionMode {
         match self {
-            Self::Exact { execution_mode, .. } | Self::ArgvPrefix { execution_mode, .. } => {
+            Self::Shell { execution_mode, .. } | Self::ArgvPrefix { execution_mode, .. } => {
                 *execution_mode
             }
         }
@@ -194,13 +194,20 @@ impl RegisteredCommand {
 
     pub fn tool_name(&self) -> String {
         match self {
-            Self::Exact { argv, .. } => {
-                let mut parts = Vec::new();
-                if let Some((first, rest)) = argv.split_first() {
-                    parts.push(basename(first).to_string());
-                    parts.extend(rest.iter().cloned());
-                }
-                sanitize_tool_name(&parts)
+            Self::Shell { command, .. } => {
+                // One space-joined part (spaces sanitize to `_`): separate parts
+                // would be concatenated by sanitize_tool_name without a separator.
+                let mut words = command.split_whitespace();
+                let name = words
+                    .next()
+                    .map(|first| {
+                        std::iter::once(basename(first))
+                            .chain(words)
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    })
+                    .unwrap_or_default();
+                sanitize_tool_name(&[name])
             }
             Self::ArgvPrefix { argv, .. } => {
                 let mut parts = Vec::new();
@@ -215,12 +222,12 @@ impl RegisteredCommand {
 
     pub fn description(&self) -> String {
         match self {
-            Self::Exact {
-                argv,
+            Self::Shell {
+                command,
                 execution_mode,
             } => format!(
-                "Runs the fixed command `{}`{} Takes no command arguments and optionally accepts `timeoutMs`.",
-                argv.join(" "),
+                "Runs the fixed shell command `{}` via `sh -c`{} Takes no command arguments and optionally accepts `timeoutMs`.",
+                command,
                 execution_mode_description(*execution_mode)
             ),
             Self::ArgvPrefix {
@@ -236,7 +243,7 @@ impl RegisteredCommand {
 
     pub fn tool_definition(&self) -> Tool {
         let schema = match self {
-            Self::Exact { .. } => json!({
+            Self::Shell { .. } => json!({
                 "type": "object",
                 "properties": {
                     "timeoutMs": {
@@ -469,11 +476,11 @@ mod tests {
 
     #[test]
     fn tool_name_is_capped() {
-        let command = RegisteredCommand::exact(vec![
-            "/tmp/this-is-a-very-long-command-name-that-keeps-going-and-going-and-going".into(),
-            "with-even-more-arguments".into(),
-            "and-even-more-arguments".into(),
-        ])
+        let command = RegisteredCommand::shell(
+            "/tmp/this-is-a-very-long-command-name-that-keeps-going-and-going-and-going \
+             with-even-more-arguments and-even-more-arguments"
+                .into(),
+        )
         .expect("command should parse");
 
         let tool_name = command.tool_name();

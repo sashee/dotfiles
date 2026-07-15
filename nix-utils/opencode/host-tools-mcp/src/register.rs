@@ -642,23 +642,23 @@ fn parse_command(
     arguments: &Map<String, Value>,
 ) -> std::result::Result<ParsedCommand, CallToolResult> {
     match mode {
-        RegisteredCommand::Exact { argv, .. } => {
+        RegisteredCommand::Shell { command, .. } => {
             #[derive(Deserialize)]
             #[serde(deny_unknown_fields)]
-            struct ExactArgs {
+            struct ShellArgs {
                 #[serde(rename = "timeoutMs")]
                 timeout_ms: Option<u64>,
             }
 
-            let parsed = serde_json::from_value::<ExactArgs>(Value::Object(arguments.clone()))
+            let parsed = serde_json::from_value::<ShellArgs>(Value::Object(arguments.clone()))
                 .map_err(|error| {
                     CallToolResult::error(vec![Content::text(format!(
-                        "Invalid args for exact tool: {error}"
+                        "Invalid args for shell tool: {error}"
                     ))])
                 })?;
             Ok(ParsedCommand {
-                program: argv[0].clone(),
-                args: argv[1..].to_vec(),
+                program: "sh".to_string(),
+                args: vec!["-c".to_string(), command.clone()],
                 timeout_ms: parsed.timeout_ms,
             })
         }

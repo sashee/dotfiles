@@ -10,9 +10,11 @@
 #
 # We drive the server with a node MCP client (mcpClient.js) run via `opencode-debug -c`,
 # so the client + server both live in opencode's actual sandbox. The client self-
-# discovers the server from $OPENCODE_CONFIG. The registered command is `cat
-# /etc/machine-id`: the sandbox fakes /etc/machine-id, so a tool-call result equal to the
-# host's real machine-id proves the command executed on the host, not in the sandbox.
+# discovers the server from $OPENCODE_CONFIG. The registered command reads
+# /etc/machine-id: the sandbox fakes it, so a tool-call result equal to the host's real
+# machine-id proves the command executed on the host, not in the sandbox. mcp-register
+# reads its command from stdin and runs it via `sh -c`, so the fixed command also
+# carries a `&&` to prove shell syntax survives registration and the call.
 { pkgs }:
 let
   node = "/run/current-system/sw/bin/node";
@@ -31,6 +33,9 @@ let
   # shell-quoting is needed. "cat" matches the sanitized tool name of both registrations.
   reqFixed = pkgs.writeText "mcp-req-fixed.json" (builtins.toJSON { substr = "cat"; arguments = { }; });
   reqPrefix = pkgs.writeText "mcp-req-prefix.json" (builtins.toJSON { substr = "cat"; arguments = { args = [ "/etc/machine-id" ]; }; });
+  # mcp-register takes its command on stdin (a shell command, run via `sh -c`);
+  # redirecting from a store file sidesteps nested shell quoting in run_user.
+  cmdFixed = pkgs.writeText "mcp-cmd-fixed" "cat /etc/machine-id && echo MCP_AND_OK";
 in
 {
   testScript = ''
@@ -77,11 +82,16 @@ in
         run_user("kill $(cat /tmp/host-tools-mcp/prov.pid) 2>/dev/null; true")
         return out
 
-    # 1) fixed-argv tool (mcp-register): runs the exact `cat /etc/machine-id` on the host.
-    out_fixed = drive("${reqFixed}", "mcp-register cat /etc/machine-id")
+    # 1) shell tool (mcp-register): command read from stdin, run via `sh -c` on the
+    # host — both sides of the `&&` must execute.
+    out_fixed = drive("${reqFixed}", "mcp-register <${cmdFixed}")
     assert host_mid in out_fixed, (
         "mcp-register tool call must run on the host and return its real machine-id; "
         f"got {out_fixed!r} (host {host_mid!r})"
+    )
+    assert "MCP_AND_OK" in out_fixed, (
+        "the `&&`-chained second command must run too; "
+        f"got {out_fixed!r}"
     )
 
     # 2) prefix tool (mcp-register-prefix): caller supplies trailing args ["/etc/machine-id"].

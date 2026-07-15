@@ -184,13 +184,32 @@ struct RegisterCli {
 
 impl RegisterCli {
     fn spawn(binary: &str, args: &[String], test_id: &str) -> Self {
-        let mut child = Command::new(binary)
+        Self::spawn_with_stdin(binary, args, None, test_id)
+    }
+
+    fn spawn_with_stdin(
+        binary: &str,
+        args: &[String],
+        stdin_payload: Option<&str>,
+        test_id: &str,
+    ) -> Self {
+        let mut command = Command::new(binary);
+        command
             .env("TMPDIR", test_tmpdir(test_id))
             .args(args)
             .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("failed to spawn register cli");
+            .stderr(Stdio::piped());
+        if stdin_payload.is_some() {
+            command.stdin(Stdio::piped());
+        }
+        let mut child = command.spawn().expect("failed to spawn register cli");
+        if let Some(payload) = stdin_payload {
+            // Write the command and drop the handle: mcp-register reads stdin to EOF.
+            let mut stdin = child.stdin.take().expect("missing register cli stdin");
+            stdin
+                .write_all(payload.as_bytes())
+                .expect("failed to write command to register cli stdin");
+        }
         let stderr = child.stderr.take().expect("missing register cli stderr");
         let (stderr_tx, stderr_rx) = mpsc::channel();
         let stderr_handle = thread::spawn(move || {
@@ -218,9 +237,9 @@ impl RegisterCli {
     // mcp-register is broker-only, so point it at the test's server by symlinking
     // the server's registry.sock to the broker path mcp-register looks up. No-op
     // when there's no live server (the "no broker" test).
-    fn exact(args: &[String], test_id: &str) -> Self {
+    fn shell(command: &str, test_id: &str) -> Self {
         link_test_server(test_id);
-        Self::spawn(env!("CARGO_BIN_EXE_mcp-register"), args, test_id)
+        Self::spawn_with_stdin(env!("CARGO_BIN_EXE_mcp-register"), &[], Some(command), test_id)
     }
 
     fn prefix(args: &[String], test_id: &str) -> Self {
@@ -270,7 +289,7 @@ impl Drop for RegisterCli {
 }
 
 #[test]
-fn exact_cli_registers_fixed_command_and_streams_progress() {
+fn shell_cli_registers_fixed_command_and_streams_progress() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -282,7 +301,7 @@ fn exact_cli_registers_fixed_command_and_streams_progress() {
         "exact-progress.sh",
         "#!/bin/sh\nset -eu\nprintf 'hello stdout\\n'\nprintf 'hello stderr\\n' >&2\n",
     );
-    let cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["exact_progress_sh"]);
     call_tool(
@@ -321,13 +340,57 @@ fn exact_cli_registers_fixed_command_and_streams_progress() {
     );
 
     let exec_line = cli.recv_stderr_matching(DEFAULT_TIMEOUT, |line| line.starts_with("exec: "));
-    assert_eq!(exec_line, format!("exec: {}", script.to_string_lossy()));
+    assert_eq!(exec_line, format!("exec: sh -c {}", script.to_string_lossy()));
     let exit_line = cli.recv_stderr_matching(DEFAULT_TIMEOUT, |line| line.starts_with("exit: "));
     assert_eq!(exit_line, "exit: code=0");
 }
 
 #[test]
-fn exact_cli_pty_renders_terminal_output() {
+fn shell_cli_runs_shell_syntax_with_and_operator() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let _cli = RegisterCli::shell("echo first && echo second", &test_id);
+
+    wait_for_tools(&mut server, &["echo_first_echo_second"]);
+    call_tool(&mut server, 2, "echo_first_echo_second", json!({}));
+
+    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    assert_eq!(response["result"]["isError"], json!(false));
+    assert_eq!(
+        response["result"]["structuredContent"],
+        json!({
+            "exitCode": 0,
+            "stdout": "first\nsecond",
+            "stderr": ""
+        })
+    );
+}
+
+#[test]
+fn register_cli_rejects_argv_command() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut cli = RegisterCli::spawn(
+        env!("CARGO_BIN_EXE_mcp-register"),
+        &["echo".to_string()],
+        &test_id,
+    );
+
+    let status = cli.wait();
+    assert!(!status.success());
+    let stderr = cli.collect_stderr().join("\n");
+    assert!(
+        stderr.contains("takes no arguments"),
+        "expected an argv-rejection error, got {stderr:?}"
+    );
+}
+
+#[test]
+fn shell_cli_pty_renders_terminal_output() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -346,7 +409,7 @@ printf '\\033[31mred text\\033[0m\n'
 printf 'stderr via tty\n' >&2
 ",
     );
-    let cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["pty_render_sh"]);
     call_tool(&mut server, 2, "pty_render_sh", json!({}));
@@ -441,7 +504,7 @@ printf '%s\n' \"$*\"
 }
 
 #[test]
-fn exact_cli_rejects_tool_call_arguments_without_running_command() {
+fn shell_cli_rejects_tool_call_arguments_without_running_command() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -457,7 +520,7 @@ fn exact_cli_rejects_tool_call_arguments_without_running_command() {
             marker.display()
         ),
     );
-    let cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["exact_no_args_sh"]);
     call_tool(
@@ -574,7 +637,7 @@ fn prefix_cli_preserves_multi_part_prefix_before_ai_args() {
 }
 
 #[test]
-fn exact_cli_timeout_returns_partial_output_and_term_side_effect() {
+fn shell_cli_timeout_returns_partial_output_and_term_side_effect() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -592,7 +655,7 @@ fn exact_cli_timeout_returns_partial_output_and_term_side_effect() {
             marker.display()
         ),
     );
-    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let _cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["exact_timeout_sh"]);
     call_tool(
@@ -676,7 +739,7 @@ fn prefix_cli_timeout_returns_partial_output_and_term_side_effect() {
 }
 
 #[test]
-fn exact_cli_rejects_non_numeric_timeout() {
+fn shell_cli_rejects_non_numeric_timeout() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -688,7 +751,7 @@ fn exact_cli_rejects_non_numeric_timeout() {
         "exact-invalid-timeout.sh",
         "#!/bin/sh\nset -eu\nprintf 'unused\\n'\n",
     );
-    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let _cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["exact_invalid_timeout_sh"]);
     call_tool(
@@ -703,7 +766,7 @@ fn exact_cli_rejects_non_numeric_timeout() {
     assert!(response["result"]["content"][0]["text"]
         .as_str()
         .unwrap_or_default()
-        .contains("Invalid args for exact tool"));
+        .contains("Invalid args for shell tool"));
 }
 
 #[test]
@@ -738,7 +801,7 @@ fn prefix_cli_rejects_non_numeric_timeout() {
 }
 
 #[test]
-fn exact_cli_timeout_with_no_output_returns_empty_content() {
+fn shell_cli_timeout_with_no_output_returns_empty_content() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -756,7 +819,7 @@ fn exact_cli_timeout_with_no_output_returns_empty_content() {
             marker.display()
         ),
     );
-    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let _cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["exact_timeout_no_output_sh"]);
     call_tool(
@@ -789,7 +852,7 @@ fn exact_cli_timeout_with_no_output_returns_empty_content() {
 
 #[test]
 #[ignore = "requires setpgid for SIGKILL fallback"]
-fn exact_cli_timeout_force_kills_when_term_is_ignored() {
+fn shell_cli_timeout_force_kills_when_term_is_ignored() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -801,7 +864,7 @@ fn exact_cli_timeout_force_kills_when_term_is_ignored() {
         "exact-timeout-force-kill.sh",
         "#!/bin/sh\nset -eu\ntrap '' TERM INT\nprintf 'ignoring term\\n'\nwhile true; do sleep 1; done\n",
     );
-    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let _cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["exact_timeout_force_kill_sh"]);
     call_tool(
@@ -833,7 +896,7 @@ fn exact_cli_timeout_force_kills_when_term_is_ignored() {
 }
 
 #[test]
-fn exact_cli_finishing_before_timeout_does_not_report_timeout() {
+fn shell_cli_finishing_before_timeout_does_not_report_timeout() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -845,7 +908,7 @@ fn exact_cli_finishing_before_timeout_does_not_report_timeout() {
         "exact-finishes-before-timeout.sh",
         "#!/bin/sh\nset -eu\nprintf 'done quickly\\n'\n",
     );
-    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let _cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["exact_finishes_before_timeout_sh"]);
     call_tool(
@@ -878,7 +941,7 @@ fn exact_cli_finishing_before_timeout_does_not_report_timeout() {
 
 #[test]
 #[ignore = "requires setpgid for descendant cleanup"]
-fn exact_cli_timeout_should_kill_descendant_processes() {
+fn shell_cli_timeout_should_kill_descendant_processes() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -900,7 +963,7 @@ fn exact_cli_timeout_should_kill_descendant_processes() {
             child_pid_file.display()
         ),
     );
-    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let _cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["timeout_descendant_sh"]);
     call_tool(
@@ -936,7 +999,7 @@ fn exact_cli_timeout_should_kill_descendant_processes() {
 }
 
 #[test]
-fn exact_cli_pty_timeout_should_kill_descendant_processes() {
+fn shell_cli_pty_timeout_should_kill_descendant_processes() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -958,7 +1021,7 @@ fn exact_cli_pty_timeout_should_kill_descendant_processes() {
             child_pid_file.display()
         ),
     );
-    let cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["pty_timeout_descendant_sh"]);
     call_tool(
@@ -995,7 +1058,7 @@ fn exact_cli_pty_timeout_should_kill_descendant_processes() {
 
 #[test]
 #[ignore = "requires setpgid for descendant stdout capture"]
-fn exact_cli_captures_grandchild_stdout_and_stderr_until_timeout() {
+fn shell_cli_captures_grandchild_stdout_and_stderr_until_timeout() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -1017,7 +1080,7 @@ fn exact_cli_captures_grandchild_stdout_and_stderr_until_timeout() {
             child_pid_file.display()
         ),
     );
-    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let _cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["grandchild_output_sh"]);
     call_tool(
@@ -1083,7 +1146,7 @@ fn exact_cli_captures_grandchild_stdout_and_stderr_until_timeout() {
 
 #[test]
 #[ignore = "requires setpgid for wrapper handoff"]
-fn exact_cli_captures_output_from_wrapper_spawned_descendant_after_parent_exits() {
+fn shell_cli_captures_output_from_wrapper_spawned_descendant_after_parent_exits() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -1111,7 +1174,7 @@ fn exact_cli_captures_output_from_wrapper_spawned_descendant_after_parent_exits(
             child_pid_file.display()
         ),
     );
-    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let _cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["wrapper_descendant_output_sh"]);
     call_tool(
@@ -1160,7 +1223,7 @@ fn exact_cli_captures_output_from_wrapper_spawned_descendant_after_parent_exits(
 }
 
 #[test]
-fn exact_cli_reports_non_zero_exit_in_structured_result_and_logs_status() {
+fn shell_cli_reports_non_zero_exit_in_structured_result_and_logs_status() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -1172,7 +1235,7 @@ fn exact_cli_reports_non_zero_exit_in_structured_result_and_logs_status() {
         "fails-with-seven.sh",
         "#!/bin/sh\nset -eu\nprintf 'before fail\\n'\nprintf 'bad news\\n' >&2\nexit 7\n",
     );
-    let cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["fails_with_seven_sh"]);
     call_tool(&mut server, 2, "fails_with_seven_sh", json!({}));
@@ -1189,7 +1252,7 @@ fn exact_cli_reports_non_zero_exit_in_structured_result_and_logs_status() {
     );
 
     let exec_line = cli.recv_stderr_matching(DEFAULT_TIMEOUT, |line| line.starts_with("exec: "));
-    assert_eq!(exec_line, format!("exec: {}", script.to_string_lossy()));
+    assert_eq!(exec_line, format!("exec: sh -c {}", script.to_string_lossy()));
     let exit_line = cli.recv_stderr_matching(DEFAULT_TIMEOUT, |line| line.starts_with("exit: "));
     assert_eq!(exit_line, "exit: code=7");
 }
@@ -1213,7 +1276,7 @@ fn ctrl_c_in_register_cli_disconnects_and_cancels_calls() {
             marker.display()
         ),
     );
-    let cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["long_running_sh"]);
     call_tool(
@@ -1249,7 +1312,7 @@ fn ctrl_c_in_register_cli_disconnects_and_cancels_pty_calls() {
         "pty-long-running.sh",
         "#!/bin/sh\nset -eu\ntrap 'exit 0' TERM INT\nprintf 'started\\n'\nwhile true; do sleep 1; done\n",
     );
-    let cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["pty_long_running_sh"]);
     call_tool(
@@ -1289,7 +1352,7 @@ fn server_shutdown_cancels_active_register_cli_processes() {
             marker.display()
         ),
     );
-    let _cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let _cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["server_shutdown_sh"]);
     call_tool(
@@ -1320,7 +1383,7 @@ fn register_cli_fails_cleanly_when_no_broker_is_running() {
         "#!/bin/sh\nset -eu\nprintf 'unused\\n'\n",
     );
     // No server (so link_test_server is a no-op) and no broker -> mcp-register bails.
-    let mut cli = RegisterCli::exact(&[script.to_string_lossy().to_string()], &test_id);
+    let mut cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     let status = cli.wait();
     assert!(!status.success());
@@ -1357,7 +1420,7 @@ fn broker_bridges_register_cli_to_server() {
     // mcp-register-prefix. mcp-register finds the broker at its known socket path
     // (broker_socket_path under the shared TMPDIR); the broker fans out to the
     // server. A tools/call on the server must run the command through the broker
-    // and round-trip the output. Uses the raw `spawn` (not exact/prefix) so the
+    // and round-trip the output. Uses the raw `spawn` (not shell/prefix) so the
     // server is NOT symlinked over the broker's socket.
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
