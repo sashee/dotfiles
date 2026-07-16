@@ -17,12 +17,6 @@ pub mod register;
 pub const SOCKET_NAME: &str = "registry.sock";
 const MAX_TOOL_NAME_LEN: usize = 64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExecutionMode {
-    Pipe,
-    Pty,
-}
-
 pub fn log_root() -> PathBuf {
     env::var("TMPDIR")
         .map(PathBuf::from)
@@ -139,57 +133,29 @@ pub enum ServerToProvider {
 
 #[derive(Debug, Clone)]
 pub enum RegisteredCommand {
-    Shell {
-        command: String,
-        execution_mode: ExecutionMode,
-    },
-    ArgvPrefix {
-        argv: Vec<String>,
-        execution_mode: ExecutionMode,
-    },
+    Shell { command: String },
+    ArgvPrefix { argv: Vec<String> },
 }
 
 impl RegisteredCommand {
     pub fn shell(command: String) -> io::Result<Self> {
-        Self::shell_with_mode(command, ExecutionMode::Pty)
-    }
-
-    fn shell_with_mode(command: String, execution_mode: ExecutionMode) -> io::Result<Self> {
         if command.trim().is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "missing command",
             ));
         }
-        Ok(Self::Shell {
-            command,
-            execution_mode,
-        })
+        Ok(Self::Shell { command })
     }
 
     pub fn argv_prefix(argv: Vec<String>) -> io::Result<Self> {
-        Self::argv_prefix_with_mode(argv, ExecutionMode::Pty)
-    }
-
-    fn argv_prefix_with_mode(argv: Vec<String>, execution_mode: ExecutionMode) -> io::Result<Self> {
         if argv.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "missing command prefix",
             ));
         }
-        Ok(Self::ArgvPrefix {
-            argv,
-            execution_mode,
-        })
-    }
-
-    pub fn execution_mode(&self) -> ExecutionMode {
-        match self {
-            Self::Shell { execution_mode, .. } | Self::ArgvPrefix { execution_mode, .. } => {
-                *execution_mode
-            }
-        }
+        Ok(Self::ArgvPrefix { argv })
     }
 
     pub fn tool_name(&self) -> String {
@@ -222,21 +188,13 @@ impl RegisteredCommand {
 
     pub fn description(&self) -> String {
         match self {
-            Self::Shell {
+            Self::Shell { command } => format!(
+                "Runs the fixed shell command `{}` via `sh -c` as a plain command with separate stdout and stderr. Takes no command arguments and optionally accepts `timeoutMs` and `vt` (set true for TUI programs: runs in a terminal-emulated PTY and returns the rendered screen, stdout and stderr combined).",
                 command,
-                execution_mode,
-            } => format!(
-                "Runs the fixed shell command `{}` via `sh -c`{} Takes no command arguments and optionally accepts `timeoutMs`.",
-                command,
-                execution_mode_description(*execution_mode)
             ),
-            Self::ArgvPrefix {
-                argv,
-                execution_mode,
-            } => format!(
-                "Runs the fixed command prefix `{}`{} Accepts trailing arguments as a string array and optionally accepts `timeoutMs`.",
+            Self::ArgvPrefix { argv } => format!(
+                "Runs the fixed command prefix `{}` as a plain command with separate stdout and stderr. Accepts trailing arguments as a string array and optionally accepts `timeoutMs` and `vt` (set true for TUI programs: runs in a terminal-emulated PTY and returns the rendered screen, stdout and stderr combined).",
                 argv.join(" "),
-                execution_mode_description(*execution_mode)
             ),
         }
     }
@@ -249,6 +207,10 @@ impl RegisteredCommand {
                     "timeoutMs": {
                         "type": "integer",
                         "minimum": 1
+                    },
+                    "vt": {
+                        "type": "boolean",
+                        "description": "Run in a terminal-emulated PTY and return the rendered screen (stdout+stderr combined). Use only for TUI/terminal-drawing programs; default false runs it as a plain command."
                     }
                 },
                 "additionalProperties": false
@@ -263,6 +225,10 @@ impl RegisteredCommand {
                     "timeoutMs": {
                         "type": "integer",
                         "minimum": 1
+                    },
+                    "vt": {
+                        "type": "boolean",
+                        "description": "Run in a terminal-emulated PTY and return the rendered screen (stdout+stderr combined). Use only for TUI/terminal-drawing programs; default false runs it as a plain command."
                     }
                 },
                 "additionalProperties": false
@@ -393,13 +359,6 @@ fn sanitize_tool_name(parts: &[String]) -> String {
     capped.trim_matches('_').to_string()
 }
 
-fn execution_mode_description(execution_mode: ExecutionMode) -> &'static str {
-    match execution_mode {
-        ExecutionMode::Pipe => ".",
-        ExecutionMode::Pty => " in a terminal-emulated PTY with rendered plain-text output. Stdout and stderr are combined.",
-    }
-}
-
 fn basename(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
@@ -472,6 +431,24 @@ mod tests {
         assert_eq!(found[0].socket_path, live.join(SOCKET_NAME));
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // Pins the AI-facing contract: both tool variants accept an optional
+    // boolean `vt` and the description tells the caller when to set it.
+    #[test]
+    fn tool_definition_exposes_vt_parameter() {
+        let commands = [
+            RegisteredCommand::shell("echo hi".into()).expect("valid shell command"),
+            RegisteredCommand::argv_prefix(vec!["echo".into()]).expect("valid prefix"),
+        ];
+        for command in commands {
+            let tool = command.tool_definition();
+            let schema = serde_json::Value::Object(tool.input_schema.as_ref().clone());
+            assert_eq!(schema["properties"]["vt"]["type"], "boolean");
+            assert_eq!(schema["additionalProperties"], false);
+            let description = tool.description.expect("tool should have a description");
+            assert!(description.contains("`vt`"), "got {description:?}");
+        }
     }
 
     #[test]

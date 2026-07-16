@@ -26,15 +26,16 @@ use tokio::task::{JoinHandle, JoinSet};
 use tokio::time::{timeout, Duration};
 
 use crate::{
-    broker_socket_path, debug_log, live_broker_server, progress_message, ExecutionMode,
-    LiveServer, ProgressUpdate, ProviderToServer, RegisteredCommand, ServerToProvider,
+    broker_socket_path, debug_log, live_broker_server, progress_message, LiveServer,
+    ProgressUpdate, ProviderToServer, RegisteredCommand, ServerToProvider,
 };
 
-/// Upper bound on how long a finished PTY command's output may keep flowing
+/// Upper bound on how long a finished command's output may keep flowing
 /// before the result is returned without waiting for EOF. Only reached when an
-/// orphaned grandchild keeps the PTY slave open past the child's exit; in the
-/// normal case EOF arrives immediately and the result returns right away.
-const PTY_EOF_FALLBACK: Duration = Duration::from_millis(2000);
+/// orphaned grandchild keeps the PTY slave or an output pipe open past the
+/// child's exit; in the normal case EOF arrives immediately and the result
+/// returns right away.
+const EOF_FALLBACK: Duration = Duration::from_millis(2000);
 
 pub async fn run_register(mode: RegisteredCommand) -> Result<()> {
     debug_log(format!(
@@ -240,6 +241,7 @@ struct ParsedCommand {
     program: String,
     args: Vec<String>,
     timeout_ms: Option<u64>,
+    vt: bool,
 }
 
 enum RunnerEvent {
@@ -278,6 +280,7 @@ async fn run_command_call_inner(
         program,
         args,
         timeout_ms,
+        vt,
     } = match parse_command(mode, arguments) {
         Ok(command) => command,
         Err(result) => return Ok(Some(result)),
@@ -285,13 +288,10 @@ async fn run_command_call_inner(
 
     eprintln!("exec: {}", format_command_for_log(&program, &args));
 
-    let output = match mode.execution_mode() {
-        ExecutionMode::Pipe => {
-            run_piped_command(&program, &args, timeout_ms, call_id, cancel_rx, events_tx).await?
-        }
-        ExecutionMode::Pty => {
-            run_pty_command(&program, &args, timeout_ms, call_id, cancel_rx, events_tx).await?
-        }
+    let output = if vt {
+        run_pty_command(&program, &args, timeout_ms, call_id, cancel_rx, events_tx).await?
+    } else {
+        run_piped_command(&program, &args, timeout_ms, call_id, cancel_rx, events_tx).await?
     };
 
     if let Some(code) = output.status.code() {
@@ -447,7 +447,7 @@ async fn run_pty_command(
                     .ok_or_else(|| anyhow!("PTY child wait channel closed unexpectedly"))?
                     .context("failed to wait for PTY child")?;
                 exit_status = Some(status);
-                eof_fallback = Some(Box::pin(tokio::time::sleep(PTY_EOF_FALLBACK)));
+                eof_fallback = Some(Box::pin(tokio::time::sleep(EOF_FALLBACK)));
             }
             maybe_output = output_rx.recv(), if !output_closed => {
                 match maybe_output {
@@ -491,7 +491,7 @@ async fn run_pty_command(
                 timed_out = true;
                 exit_status = Some(terminate_process_group_and_wait(process_group_id, &mut status_rx).await?);
                 timeout_sleep = None;
-                eof_fallback = Some(Box::pin(tokio::time::sleep(PTY_EOF_FALLBACK)));
+                eof_fallback = Some(Box::pin(tokio::time::sleep(EOF_FALLBACK)));
             }
         }
     }
@@ -565,17 +565,26 @@ async fn collect_command_output(
     let mut stderr_lines = Vec::new();
     let mut next_progress = 1usize;
     let mut exit_status = None;
+    // Both stdout and stderr must reach EOF before the result is built:
+    // breaking on the first stream's EOF can drop the other stream's
+    // still-queued lines under load.
+    let mut closed_streams = 0usize;
     let mut timed_out = false;
     let timeout_sleep =
         timeout_ms.map(|ms| Box::pin(tokio::time::sleep(Duration::from_millis(ms))));
     let mut timeout_sleep = timeout_sleep;
+    // Armed when the child exits. Both pipes normally reach EOF right after,
+    // so this only fires when an orphaned grandchild still holds a pipe open
+    // past the child's exit.
+    let mut eof_fallback = None;
 
-    loop {
+    while !(closed_streams >= 2 && exit_status.is_some()) {
         tokio::select! {
             status = child.wait(), if exit_status.is_none() => {
                 exit_status = Some(status.context("failed to wait for child")?);
+                eof_fallback = Some(Box::pin(tokio::time::sleep(EOF_FALLBACK)));
             }
-            maybe_output = output_rx.recv() => {
+            maybe_output = output_rx.recv(), if closed_streams < 2 => {
                 match maybe_output {
                     Some(OutputEvent::Line { kind, line }) => {
                         match kind {
@@ -600,16 +609,19 @@ async fn collect_command_output(
                     }
                     Some(OutputEvent::Snapshot { .. }) => {}
                     Some(OutputEvent::Closed) => {
-                        if exit_status.is_some() {
-                            break;
-                        }
+                        closed_streams += 1;
                     }
                     None => {
-                        if exit_status.is_some() {
-                            break;
-                        }
+                        closed_streams = 2;
                     }
                 }
+            }
+            _ = async {
+                if let Some(sleep) = eof_fallback.as_mut() {
+                    sleep.await;
+                }
+            }, if eof_fallback.is_some() => {
+                break;
             }
             _ = &mut *cancel_rx => {
                 terminate_child(child, process_group_id).await;
@@ -625,6 +637,7 @@ async fn collect_command_output(
                 terminate_child(child, process_group_id).await;
                 exit_status = Some(child.wait().await.context("failed to wait for timed out child")?);
                 timeout_sleep = None;
+                eof_fallback = Some(Box::pin(tokio::time::sleep(EOF_FALLBACK)));
             }
         }
     }
@@ -642,12 +655,14 @@ fn parse_command(
     arguments: &Map<String, Value>,
 ) -> std::result::Result<ParsedCommand, CallToolResult> {
     match mode {
-        RegisteredCommand::Shell { command, .. } => {
+        RegisteredCommand::Shell { command } => {
             #[derive(Deserialize)]
             #[serde(deny_unknown_fields)]
             struct ShellArgs {
                 #[serde(rename = "timeoutMs")]
                 timeout_ms: Option<u64>,
+                #[serde(default)]
+                vt: bool,
             }
 
             let parsed = serde_json::from_value::<ShellArgs>(Value::Object(arguments.clone()))
@@ -660,9 +675,10 @@ fn parse_command(
                 program: "sh".to_string(),
                 args: vec!["-c".to_string(), command.clone()],
                 timeout_ms: parsed.timeout_ms,
+                vt: parsed.vt,
             })
         }
-        RegisteredCommand::ArgvPrefix { argv: prefix, .. } => {
+        RegisteredCommand::ArgvPrefix { argv: prefix } => {
             #[derive(Deserialize)]
             #[serde(deny_unknown_fields)]
             struct PrefixArgs {
@@ -670,6 +686,8 @@ fn parse_command(
                 args: Vec<String>,
                 #[serde(rename = "timeoutMs")]
                 timeout_ms: Option<u64>,
+                #[serde(default)]
+                vt: bool,
             }
 
             let parsed = serde_json::from_value::<PrefixArgs>(Value::Object(arguments.clone()))
@@ -690,6 +708,7 @@ fn parse_command(
                 program: program.clone(),
                 args,
                 timeout_ms: parsed.timeout_ms,
+                vt: parsed.vt,
             })
         }
     }
@@ -997,14 +1016,14 @@ mod tests {
 
     // The read loop must end via PTY EOF (all slave fds closed), not by burning
     // the whole fallback: if the parent's slave fds leak again, EOF never comes
-    // and this takes PTY_EOF_FALLBACK.
+    // and this takes EOF_FALLBACK.
     #[tokio::test]
     async fn pty_read_ends_via_eof_without_fallback_delay() {
         let started = Instant::now();
         let output = run_pty_script("echo hi").await;
         assert!(output.stdout.contains("hi"));
         assert!(
-            started.elapsed() < PTY_EOF_FALLBACK,
+            started.elapsed() < EOF_FALLBACK,
             "a plain command must finish via EOF, not the fallback timer (took {:?})",
             started.elapsed()
         );
@@ -1020,8 +1039,74 @@ mod tests {
         assert!(output.status.success());
         assert!(output.stdout.contains("hi"));
         assert!(
-            elapsed >= PTY_EOF_FALLBACK,
+            elapsed >= EOF_FALLBACK,
             "EOF cannot arrive while the grandchild holds the PTY (took {elapsed:?})"
+        );
+        assert!(
+            elapsed < Duration::from_secs(8),
+            "the fallback must bound the wait (took {elapsed:?})"
+        );
+    }
+
+    async fn run_piped_script(script: &str) -> CommandOutput {
+        let (_cancel_tx, mut cancel_rx) = oneshot::channel();
+        let (events_tx, _events_rx) = mpsc::unbounded_channel();
+        run_piped_command(
+            "sh",
+            &["-c".to_string(), script.to_string()],
+            None,
+            "test-call",
+            &mut cancel_rx,
+            &events_tx,
+        )
+        .await
+        .expect("piped command should run")
+    }
+
+    // Regression: with two independent pipes, EOF on one stream while the
+    // other still has data in flight must not end collection. The grandchild
+    // closes its stdout copy 200ms after the parent exited (so the stdout EOF
+    // is processed with the exit status already known) and only then writes
+    // to stderr — breaking on the first stream's EOF would drop the line.
+    #[tokio::test]
+    async fn piped_stderr_arriving_after_stdout_eof_is_captured() {
+        let output =
+            run_piped_script("( sleep 0.2; exec >&-; sleep 0.3; echo late-err >&2 ) &").await;
+        assert!(output.status.success());
+        assert!(
+            output.stderr.contains("late-err"),
+            "stderr written after stdout closed must be captured, got {:?}",
+            output.stderr
+        );
+    }
+
+    // The collection loop must end via EOF on both pipes, not by burning the
+    // whole fallback.
+    #[tokio::test]
+    async fn piped_read_ends_via_eof_without_fallback_delay() {
+        let started = Instant::now();
+        let output = run_piped_script("echo out; echo err >&2").await;
+        assert!(output.stdout.contains("out"));
+        assert!(output.stderr.contains("err"));
+        assert!(
+            started.elapsed() < EOF_FALLBACK,
+            "a plain command must finish via EOF, not the fallback timer (took {:?})",
+            started.elapsed()
+        );
+    }
+
+    // A grandchild that keeps the pipes open must not stall the result
+    // forever: the fallback returns the output collected so far.
+    #[tokio::test]
+    async fn piped_fallback_bounds_held_open_pipes() {
+        let started = Instant::now();
+        let output = run_piped_script("echo hi; sleep 10 &").await;
+        let elapsed = started.elapsed();
+        assert!(output.status.success());
+        assert!(output.stdout.contains("hi"));
+        assert!(
+            elapsed >= EOF_FALLBACK,
+            "EOF cannot arrive while the grandchild holds the pipes (took {elapsed:?})"
         );
         assert!(
             elapsed < Duration::from_secs(8),

@@ -322,20 +322,20 @@ fn shell_cli_registers_fixed_command_and_streams_progress() {
         progress_b["params"]["message"].clone(),
     ];
     assert!(progress_messages.contains(&json!("stdout: hello stdout")));
-    assert!(progress_messages.contains(&json!("stdout: hello stderr")));
+    assert!(progress_messages.contains(&json!("stderr: hello stderr")));
 
     let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
     let text = response["result"]["content"][0]["text"]
         .as_str()
         .unwrap_or_default();
     assert!(text.contains("hello stdout"));
-    assert!(text.contains("hello stderr"));
+    assert!(text.contains("stderr: hello stderr"));
     assert_eq!(
         response["result"]["structuredContent"],
         json!({
             "exitCode": 0,
-            "stdout": "hello stdout\nhello stderr",
-            "stderr": ""
+            "stdout": "hello stdout",
+            "stderr": "hello stderr"
         })
     );
 
@@ -412,7 +412,7 @@ printf 'stderr via tty\n' >&2
     let cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["pty_render_sh"]);
-    call_tool(&mut server, 2, "pty_render_sh", json!({}));
+    call_tool(&mut server, 2, "pty_render_sh", json!({ "vt": true }));
 
     let response = recv_or_panic_with_stderr(&server, &cli, DEFAULT_TIMEOUT, |message| {
         message["id"] == json!(2)
@@ -432,6 +432,127 @@ printf 'stderr via tty\n' >&2
     assert!(text.contains("fresh line"));
     assert!(text.contains("red text"));
     assert!(!text.contains('\u{1b}'));
+}
+
+#[test]
+fn shell_cli_vt_true_renders_tui_screen() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    // Draws like a TUI: clear screen, then write the rows OUT OF ORDER via
+    // absolute cursor positioning and overwrite a placeholder. The raw byte
+    // stream is scrambled, so the assertion only passes if the vt100
+    // emulation reassembles the final screen.
+    let script = write_script(
+        &test_id,
+        "tui-screen.sh",
+        "#!/bin/sh
+set -eu
+printf '\\033[2J\\033[H'
+printf '\\033[2;1Hloading...'
+printf '\\033[3;1Hthird: done'
+printf '\\033[1;1Hfirst: \\033[32mok\\033[0m'
+printf '\\033[2;1Hsecond: ready\\n'
+",
+    );
+    let cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
+
+    wait_for_tools(&mut server, &["tui_screen_sh"]);
+    call_tool(&mut server, 2, "tui_screen_sh", json!({ "vt": true }));
+
+    let response = recv_or_panic_with_stderr(&server, &cli, DEFAULT_TIMEOUT, |message| {
+        message["id"] == json!(2)
+    });
+    assert_eq!(response["result"]["isError"], json!(false));
+    assert_eq!(
+        response["result"]["structuredContent"],
+        json!({
+            "exitCode": 0,
+            "stdout": "first: ok\nsecond: ready\nthird: done",
+            "stderr": ""
+        })
+    );
+    let text = response["result"]["content"][0]["text"]
+        .as_str()
+        .expect("content text should be a string");
+    assert!(!text.contains('\u{1b}'));
+}
+
+#[test]
+fn shell_cli_default_runs_plain_without_vt_rendering() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let script = write_script(
+        &test_id,
+        "plain-passthrough.sh",
+        "#!/bin/sh
+set -eu
+printf 'stale\\rfresh\\n'
+printf '\\033[31mred\\033[0m\\n'
+printf 'plain stderr\\n' >&2
+",
+    );
+    let cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
+
+    wait_for_tools(&mut server, &["plain_passthrough_sh"]);
+    // `vt` absent and explicit `vt: false` behave identically: raw
+    // passthrough with escape bytes and mid-line \r preserved, stderr kept
+    // in its own field.
+    for (id, arguments) in [(2, json!({})), (3, json!({ "vt": false }))] {
+        call_tool(&mut server, id, "plain_passthrough_sh", arguments);
+        let response = recv_or_panic_with_stderr(&server, &cli, DEFAULT_TIMEOUT, |message| {
+            message["id"] == json!(id)
+        });
+        assert_eq!(response["result"]["isError"], json!(false));
+        assert_eq!(
+            response["result"]["structuredContent"],
+            json!({
+                "exitCode": 0,
+                "stdout": "stale\rfresh\n\u{1b}[31mred\u{1b}[0m",
+                "stderr": "plain stderr"
+            })
+        );
+    }
+}
+
+#[test]
+fn shell_cli_rejects_non_boolean_vt_without_running_command() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let marker = temp_test_dir(&test_id).join("vt-validate-executed");
+    let script = write_script(
+        &test_id,
+        "vt-validate.sh",
+        &format!(
+            "#!/bin/sh\nset -eu\ntouch {}\nprintf 'should not run\\n'\n",
+            marker.display()
+        ),
+    );
+    let cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
+
+    wait_for_tools(&mut server, &["vt_validate_sh"]);
+    call_tool(&mut server, 2, "vt_validate_sh", json!({ "vt": "yes" }));
+
+    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    assert_eq!(response["result"]["isError"], json!(true));
+    assert!(response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("Invalid args for shell tool"));
+    assert!(!marker.exists(), "command should not have executed");
+
+    let _ = cli;
 }
 
 #[test]
@@ -494,7 +615,7 @@ printf '%s\n' \"$*\"
         &mut server,
         2,
         "echo_tty_args_sh",
-        json!({ "args": ["install", "app.apk"] }),
+        json!({ "args": ["install", "app.apk"], "vt": true }),
     );
     let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
     assert_eq!(
@@ -851,7 +972,6 @@ fn shell_cli_timeout_with_no_output_returns_empty_content() {
 }
 
 #[test]
-#[ignore = "requires setpgid for SIGKILL fallback"]
 fn shell_cli_timeout_force_kills_when_term_is_ignored() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
@@ -940,7 +1060,6 @@ fn shell_cli_finishing_before_timeout_does_not_report_timeout() {
 }
 
 #[test]
-#[ignore = "requires setpgid for descendant cleanup"]
 fn shell_cli_timeout_should_kill_descendant_processes() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
@@ -1028,7 +1147,7 @@ fn shell_cli_pty_timeout_should_kill_descendant_processes() {
         &mut server,
         2,
         "pty_timeout_descendant_sh",
-        json!({ "timeoutMs": 100 }),
+        json!({ "timeoutMs": 100, "vt": true }),
     );
 
     let response = recv_or_panic_with_stderr(&server, &cli, EXTENDED_TIMEOUT, |message| {
@@ -1057,7 +1176,6 @@ fn shell_cli_pty_timeout_should_kill_descendant_processes() {
 }
 
 #[test]
-#[ignore = "requires setpgid for descendant stdout capture"]
 fn shell_cli_captures_grandchild_stdout_and_stderr_until_timeout() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
@@ -1144,9 +1262,12 @@ fn shell_cli_captures_grandchild_stdout_and_stderr_until_timeout() {
     );
 }
 
+// After the parent exits, output from a wrapper-spawned descendant that keeps
+// the pipes open is collected until the EOF fallback (2s) bounds the wait —
+// the call must return without hanging on the descendant and without a
+// timeout being reported.
 #[test]
-#[ignore = "requires setpgid for wrapper handoff"]
-fn shell_cli_captures_output_from_wrapper_spawned_descendant_after_parent_exits() {
+fn shell_cli_captures_descendant_output_after_parent_exit_until_eof_fallback() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut server = ChildHarness::host_tools_mcp(&test_id);
@@ -1163,7 +1284,7 @@ fn shell_cli_captures_output_from_wrapper_spawned_descendant_after_parent_exits(
     let monitor = write_script(
         &test_id,
         "wrapper-monitor.sh",
-        "#!/bin/sh\nset -eu\ntrap \"\" TERM INT\ni=1\nwhile [ \"$i\" -le 3 ]; do\n  printf 'wrapper stdout %s\\n' \"$i\"\n  printf 'wrapper stderr %s\\n' \"$i\" >&2\n  i=$((i + 1))\n  sleep 1\ndone\nwhile true; do sleep 1; done\n",
+        "#!/bin/sh\nset -eu\ntrap \"\" TERM INT\nprintf 'wrapper stdout 1\\n'\nprintf 'wrapper stderr 1\\n' >&2\nsleep 0.5\nprintf 'wrapper stdout 2\\n'\nprintf 'wrapper stderr 2\\n' >&2\nsleep 10\nprintf 'wrapper stdout late\\n'\n",
     );
     let script = write_script(
         &test_id,
@@ -1177,20 +1298,15 @@ fn shell_cli_captures_output_from_wrapper_spawned_descendant_after_parent_exits(
     let _cli = RegisterCli::shell(&script.to_string_lossy(), &test_id);
 
     wait_for_tools(&mut server, &["wrapper_descendant_output_sh"]);
-    call_tool(
-        &mut server,
-        2,
-        "wrapper_descendant_output_sh",
-        json!({ "timeoutMs": 2500 }),
-    );
+    call_tool(&mut server, 2, "wrapper_descendant_output_sh", json!({}));
 
     let response = server.recv_matching(EXTENDED_TIMEOUT, |message| message["id"] == json!(2));
     wait_for_file(&child_pid_file);
 
     assert_eq!(response["result"]["isError"], json!(false));
     assert_eq!(
-        response["result"]["structuredContent"]["timedOut"],
-        json!(true)
+        response["result"]["structuredContent"].get("timedOut"),
+        None
     );
 
     let stdout = response["result"]["structuredContent"]["stdout"]
@@ -1200,26 +1316,26 @@ fn shell_cli_captures_output_from_wrapper_spawned_descendant_after_parent_exits(
         .as_str()
         .expect("stderr should be a string");
 
-    for line in ["wrapper stdout 1", "wrapper stdout 2", "wrapper stdout 3"] {
+    for line in ["wrapper stdout 1", "wrapper stdout 2"] {
         assert!(stdout.contains(line), "missing stdout line: {line}");
     }
-    for line in ["wrapper stderr 1", "wrapper stderr 2", "wrapper stderr 3"] {
+    for line in ["wrapper stderr 1", "wrapper stderr 2"] {
         assert!(stderr.contains(line), "missing stderr line: {line}");
     }
+    assert!(
+        !stdout.contains("wrapper stdout late"),
+        "output past the EOF fallback must not delay the result"
+    );
 
+    // The fallback returns the result but does not kill the descendant; clean it up.
     let child_pid = fs::read_to_string(&child_pid_file)
         .expect("failed to read child pid file")
         .trim()
         .parse::<i32>()
         .expect("child pid should be an integer");
-    let alive = process_is_alive(child_pid);
-    if alive {
+    if process_is_alive(child_pid) {
         kill(Pid::from_raw(child_pid), Signal::SIGKILL).expect("failed to clean up child");
     }
-    assert!(
-        !alive,
-        "wrapper descendant process {child_pid} survived timeout after parent exit"
-    );
 }
 
 #[test]
@@ -1246,8 +1362,8 @@ fn shell_cli_reports_non_zero_exit_in_structured_result_and_logs_status() {
         response["result"]["structuredContent"],
         json!({
             "exitCode": 7,
-            "stdout": "before fail\nbad news",
-            "stderr": ""
+            "stdout": "before fail",
+            "stderr": "bad news"
         })
     );
 
@@ -1258,7 +1374,6 @@ fn shell_cli_reports_non_zero_exit_in_structured_result_and_logs_status() {
 }
 
 #[test]
-#[ignore = "requires setpgid for ctrl-c cancellation"]
 fn ctrl_c_in_register_cli_disconnects_and_cancels_calls() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
@@ -1319,7 +1434,7 @@ fn ctrl_c_in_register_cli_disconnects_and_cancels_pty_calls() {
         &mut server,
         2,
         "pty_long_running_sh",
-        json!({ "_meta": { "progressToken": 3 } }),
+        json!({ "vt": true, "_meta": { "progressToken": 3 } }),
     );
     let _ = server.recv_matching(DEFAULT_TIMEOUT, |message| {
         message["method"] == "notifications/progress"
