@@ -52,7 +52,9 @@ in
     # --- auto-start runtime: launching a client actually brings the broker up ---
     # preLaunchHostCmd runs host-side (before the sandbox) -> `host-tools-mcp-broker
     # --ensure` detached, so the broker starts regardless of `opencode --version`.
-    run_user("timeout 60 opencode --version >/dev/null 2>&1 || true")
+    # A long idle grace keeps the broker (which sees no registries here) from
+    # idle-exiting before the socket check when `opencode --version` is slow (TCG).
+    run_user("HOST_TOOLS_MCP_BROKER_IDLE_MS=600000 timeout 120 opencode --version >/dev/null 2>&1 || true")
     machine.wait_until_succeeds("test -S /tmp/host-tools-mcp/broker.sock")
     # Reset so this idle broker doesn't interfere with the manual flow below.
     # The `[-]` keeps the pattern from matching this very kill command's own shell.
