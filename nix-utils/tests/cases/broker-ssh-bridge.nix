@@ -72,14 +72,29 @@ in
     #    sh_c, call it, and print the result. Backgrounded so the su session ends;
     #    the wrapper writes the result to out/err and the exit code to rc.
     run_user("nohup ${clientRun} >/dev/null 2>&1 &")
-    machine.wait_until_succeeds("ls /tmp/host-tools-mcp/*/registry.sock 2>/dev/null")
+    # Wait for the in-sandbox server's socket, but fail fast if the client exits
+    # first (the clientRun wrapper writes rc before any socket exists) — surface
+    # its stderr instead of a blind timeout. On success the client stays alive
+    # (polling for sh_c) and writes rc only much later, so the socket always wins.
+    # Generous timeout: node/V8 startup is pathologically slow under aarch64 TCG.
+    machine.wait_until_succeeds(
+        "ls /tmp/host-tools-mcp/*/registry.sock 2>/dev/null "
+        "|| test -s /tmp/host-tools-mcp/rc",
+        timeout=1800,
+    )
+    if not machine.succeed("ls /tmp/host-tools-mcp/*/registry.sock 2>/dev/null || true").strip():
+        rc = run_user("cat /tmp/host-tools-mcp/rc").strip()
+        raise Exception(
+            f"mcp client exited (rc={rc}) before creating registry.sock; "
+            f"err={run_user('cat /tmp/host-tools-mcp/err 2>/dev/null; true')!r}"
+        )
 
     # 2. Broker on the host: discovers the server, listens on its known socket.
     run_user(
       "nohup host-tools-mcp-broker >/tmp/host-tools-mcp/broker.out 2>&1 "
       "& echo $! >/tmp/host-tools-mcp/broker.pid"
     )
-    machine.wait_until_succeeds("test -S /tmp/host-tools-mcp/broker.sock")
+    machine.wait_until_succeeds("test -S /tmp/host-tools-mcp/broker.sock", timeout=1800)
 
     # 3. One ssh connection reverse-forwarding the broker socket to the "remote"
     #    path; mcp-register (TMPDIR=/tmp/rem) finds the broker there — NO env var.
@@ -95,7 +110,7 @@ in
     #    and prints the command output. Waiting on the exit code (not the output
     #    file) means a failed client aborts immediately with its stderr instead of
     #    timing out.
-    machine.wait_until_succeeds("test -s /tmp/host-tools-mcp/rc")
+    machine.wait_until_succeeds("test -s /tmp/host-tools-mcp/rc", timeout=1800)
     rc = run_user("cat /tmp/host-tools-mcp/rc").strip()
     out = run_user("cat /tmp/host-tools-mcp/out")
     assert rc == "0" and "BROKER_BRIDGE_OK" in out, (
