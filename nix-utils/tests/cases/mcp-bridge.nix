@@ -17,7 +17,10 @@
 # carries a `&&` to prove shell syntax survives registration and the call.
 { pkgs }:
 let
-  node = "/run/current-system/sw/bin/node";
+  # Store-path node (not /run/current-system/sw/bin/node): the sandbox binds the whole
+  # host root ro, so any store path resolves, and this doesn't depend on the machine
+  # under test having node in its system profile (nixos-test's aarch64 machine doesn't).
+  node = "${pkgs.nodejs}/bin/node";
   mcpClient = ./probes-mcp/mcpClient.js;
   # opencode-shell runs the node client inside opencode's sandbox; it spawns the MCP
   # server (from $OPENCODE_CONFIG) and prints the tool-call result to stdout.

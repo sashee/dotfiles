@@ -21,7 +21,10 @@
 # (the claude/opencode wrappers invoke `host-tools-mcp-broker --ensure`).
 { pkgs }:
 let
-  node = "/run/current-system/sw/bin/node";
+  # Store-path node (not /run/current-system/sw/bin/node): the sandbox binds the whole
+  # host root ro, so any store path resolves, and this doesn't depend on the machine
+  # under test having node in its system profile (nixos-test's aarch64 machine doesn't).
+  node = "${pkgs.nodejs}/bin/node";
   mcpClient = ./probes-mcp/mcpClient.js;
   clientCmd = "opencode-shell -c '${node} ${mcpClient}'";
   # Runs the client and records its exit code, so the test can distinguish a

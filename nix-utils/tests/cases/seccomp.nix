@@ -15,9 +15,11 @@ let
   probes = import ./probes.nix { inherit pkgs; };
   p = probes.socketFamily;
   # Run the probe under a tool's seccomp via its -debug shell. Use node's absolute
-  # path: a tool's keepEnv may drop PATH, so `node` isn't resolvable by name inside.
+  # store path: a tool's keepEnv may drop PATH, so `node` isn't resolvable by name
+  # inside; a store path also resolves in the sandbox (host root is ro-bound) without
+  # depending on the machine under test having node in its system profile.
   # The wrapper sees skip=true and runs node un-rewrapped under the tool's seccomp.
-  under = tool: fam: "${tool}-debug -c '/run/current-system/sw/bin/node ${p} ${fam}'";
+  under = tool: fam: "${tool}-debug -c '${pkgs.nodejs}/bin/node ${p} ${fam}'";
 in
 {
   testScript = ''
