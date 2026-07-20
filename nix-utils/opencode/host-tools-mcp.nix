@@ -24,7 +24,10 @@ let
 		target = "${hostToolsMcp}/bin/host-tools-mcp-broker";
 		# Pass TMPDIR through (don't pin it): the in-sandbox broker must derive the
 		# same ${TMPDIR:-/tmp}/host-tools-mcp/broker.sock as host-side mcp-register.
-		keepEnv = [ "HOME" "PATH" "TMPDIR" ];
+		# HOST_TOOLS_MCP_BROKER_IDLE_MS is an optional idle-grace override, normally
+		# unset (broker falls back to its 30s default); passed through only so tests
+		# can hold the broker open while a slow client starts.
+		keepEnv = [ "HOME" "PATH" "TMPDIR" "HOST_TOOLS_MCP_BROKER_IDLE_MS" ];
 		setEnv = {};
 	};
 	brokerWrapper = import ../_wrapper/default.nix {
