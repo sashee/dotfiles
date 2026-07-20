@@ -14,9 +14,19 @@ let
     config = { allowUnfree = true; };
     overlays = [];
   };
-  nixgl = import (fetchTarball "https://github.com/nix-community/nixGL/archive/main.tar.gz") { inherit pkgs; };
+  isAarch64 = pkgs.stdenv.hostPlatform.isAarch64;
 
-  scriptsEnv = import ./lib.nix { inherit pkgs unstable nixgl; };
+  # nixGL provides x86-only Intel/nvidia GL wrappers; nothing to wrap on aarch64,
+  # so pass null (chromium/vkquake fall back to the unwrapped binary).
+  nixgl = if isAarch64 then null
+    else import (fetchTarball "https://github.com/nix-community/nixGL/archive/main.tar.gz") { inherit pkgs; };
+
+  # Only tor-browser is genuinely x86-only in nixpkgs; keep everything else that
+  # builds on aarch64 (unlike the headless rpi5 host, CI shouldn't assume headless).
+  scriptsEnv = import ./lib.nix {
+    inherit pkgs unstable nixgl;
+    skip = if isAarch64 then [ "tor-browser" ] else [];
+  };
   # Pass the already-built full env so the tools-smoke test can launch every tool
   # without rebuilding it (and with the same nixgl as the real env).
   tests = import ./tests { inherit pkgs unstable; fullEnv = scriptsEnv; };
