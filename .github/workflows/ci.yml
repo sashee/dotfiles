@@ -19,3 +19,33 @@ jobs:
 
       - name: Build
         run: nix-build nix-utils
+
+  build-arm:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Reclaim disk space
+        run: |
+          sudo rm -rf \
+            /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /usr/share/swift /usr/local/share/boost /opt/hostedtoolcache || true
+          sudo docker image prune --all --force || true
+          df -h
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          enable_kvm: true
+
+      - name: Add swap
+        run: |
+          sudo fallocate -l 8G /mnt/ci-swapfile
+          sudo chmod 600 /mnt/ci-swapfile
+          sudo mkswap /mnt/ci-swapfile
+          sudo swapon /mnt/ci-swapfile
+          free -h
+
+      - name: Build (aarch64 - runs the VM sandbox tests under tcg)
+        run: nix-build nix-utils
