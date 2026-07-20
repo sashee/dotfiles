@@ -32,9 +32,16 @@ let
     services.dbus.enable = true;
     system.stateVersion = stateVersion;
   };
+  # NixOS VM tests require the `kvm` system feature by default; the free aarch64 CI
+  # runner has no /dev/kvm. Drop the *requirement* so tests schedule on a KVM-less
+  # builder — QEMU's accel=kvm:tcg still uses KVM where present (x86) and falls back
+  # to TCG where absent (aarch64 CI). Mirrors sashee/nixos-test's dropKvm.
+  dropKvm = t: t.overrideTestDerivation (old: {
+    requiredSystemFeatures = builtins.filter (f: f != "kvm") old.requiredSystemFeatures;
+  });
 in
-  import ./lib.nix {
+  builtins.mapAttrs (_: dropKvm) (import ./lib.nix {
     inherit pkgs;
     machineModules = [ testMachine ];
     inherit user;
-  }
+  })
