@@ -270,6 +270,13 @@ ${pkgs.jq}/bin/jq . ${sandboxRestrictionsFile} >&2
 '';
     })
     (mkWrappedScript {
+      # Like -debug (a bash shell in the tool's real sandbox, same env) but WITHOUT
+      # strace: strace is ptrace-based and pathologically slow under aarch64 TCG
+      # emulation, so tests that run a command in the sandbox use this instead.
+      scriptName = "${name}-shell";
+      commandString = debugBinPath;
+    })
+    (mkWrappedScript {
       scriptName = "${name}-ranger";
       commandString = "${pkgs.ranger}/bin/ranger";
     })

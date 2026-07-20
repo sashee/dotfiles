@@ -12,7 +12,7 @@
 # nested in host-tools-mcp/, so the remote dir must exist before `ssh -R` binds it.
 #
 # We reuse the mcp-bridge harness: an MCP client (mcpClient.js) runs INSIDE
-# opencode's sandbox via `opencode-debug -c`, spawning the real server; it polls
+# opencode's sandbox via `opencode-shell -c`, spawning the real server; it polls
 # for the `sh_c` tool and calls it. The provider chain that makes `sh_c` appear
 # is: server <- broker (host) <- ssh -R <- mcp-register-prefix. The command runs
 # in the mcp-register process and its output round-trips back to the client.
@@ -23,7 +23,7 @@
 let
   node = "/run/current-system/sw/bin/node";
   mcpClient = ./probes-mcp/mcpClient.js;
-  clientCmd = "opencode-debug -c '${node} ${mcpClient}'";
+  clientCmd = "opencode-shell -c '${node} ${mcpClient}'";
   # Runs the client and records its exit code, so the test can distinguish a
   # still-running client from one that failed (or printed nothing).
   clientRun = pkgs.writeShellScript "mcp-client-run" ''

@@ -8,7 +8,7 @@
 # invoke only pre-registered host commands. The Rust e2e tests cover the protocol in the
 # build env; this proves the REAL boundary end to end.
 #
-# We drive the server with a node MCP client (mcpClient.js) run via `opencode-debug -c`,
+# We drive the server with a node MCP client (mcpClient.js) run via `opencode-shell -c`,
 # so the client + server both live in opencode's actual sandbox. The client self-
 # discovers the server from $OPENCODE_CONFIG. The registered command reads
 # /etc/machine-id: the sandbox fakes it, so a tool-call result equal to the host's real
@@ -19,9 +19,9 @@
 let
   node = "/run/current-system/sw/bin/node";
   mcpClient = ./probes-mcp/mcpClient.js;
-  # opencode-debug runs the node client inside opencode's sandbox; it spawns the MCP
+  # opencode-shell runs the node client inside opencode's sandbox; it spawns the MCP
   # server (from $OPENCODE_CONFIG) and prints the tool-call result to stdout.
-  clientCmd = "opencode-debug -c '${node} ${mcpClient}'";
+  clientCmd = "opencode-shell -c '${node} ${mcpClient}'";
   # Runs the client and records its exit code, so the test can distinguish a
   # still-running client from one that failed (or printed nothing) and react
   # instead of spinning against an output file until the harness timeout.
@@ -44,7 +44,7 @@ in
 
     # Sanity: opencode's sandbox fakes /etc/machine-id, so the host's real id is a
     # reliable discriminator for host-side (vs in-sandbox) execution.
-    sandbox_mid = run_user("opencode-debug -c 'cat /etc/machine-id'").strip()
+    sandbox_mid = run_user("opencode-shell -c 'cat /etc/machine-id'").strip()
     assert sandbox_mid and sandbox_mid != host_mid, (
         f"sandbox should fake machine-id (host={host_mid!r} sandbox={sandbox_mid!r})"
     )
