@@ -13,11 +13,21 @@
 const fs = require("fs");
 const { spawn } = require("child_process");
 
+// Timestamped breadcrumbs to stderr (captured to /tmp/host-tools-mcp/err). Under
+// aarch64 TCG the client can be very slow; if a wait times out the test dumps err,
+// and these lines show how far the client got + how long each phase took.
+const t0 = Date.now();
+const log = (m) => console.error(`[mcpClient +${((Date.now() - t0) / 1000).toFixed(1)}s] ${m}`);
+
 const req = JSON.parse(fs.readFileSync("/tmp/host-tools-mcp/req.json", "utf8"));
 const cfg = JSON.parse(fs.readFileSync(process.env.OPENCODE_CONFIG, "utf8"));
 const command = cfg.mcp["host-tools-mcp"].command;
 
+log("spawning server: " + command.join(" "));
 const srv = spawn(command[0], command.slice(1), { stdio: ["pipe", "pipe", "inherit"] });
+log("server spawned pid=" + srv.pid);
+srv.on("error", (e) => log("server spawn error: " + e));
+srv.on("exit", (code, sig) => log(`server exited code=${code} sig=${sig}`));
 
 // Reassemble line-delimited JSON-RPC messages from the server's stdout into a queue.
 const queue = [];
@@ -53,6 +63,7 @@ function fail(msg, code) { console.error(msg); done(code); }
 (async () => {
   send({ jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "vm-test", version: "0.1.0" } } });
   await recvMatching((m) => m.id === 0, 15000);
+  log("initialize acked");
   send({ jsonrpc: "2.0", method: "notifications/initialized" });
 
   // Poll tools/list until the host-registered tool shows up (absorbs the timing of the
@@ -69,10 +80,12 @@ function fail(msg, code) { console.error(msg); done(code); }
     if (!tool) await sleep(300);
   }
   if (!tool) fail("no tool matching substr appeared in tools/list", 3);
+  log("tool found: " + tool.name);
 
   const callId = id++;
   send({ jsonrpc: "2.0", id: callId, method: "tools/call", params: { name: tool.name, arguments: req.arguments || {} } });
   const resp = await recvMatching((m) => m.id === callId, 20000);
+  log("tool call returned");
   const content = (resp.result && resp.result.content) || [];
   const text = content.map((c) => (c && c.text) || "").join("\n");
   // An empty text must fail loudly: the tests assert on the output, and a silent

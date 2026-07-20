@@ -64,6 +64,33 @@ let
         full = "su - " + USER + " -c " + shlex.quote(wrapped)
         return (machine.succeed if succeed else machine.fail)(full)
 
+    # Diagnostics for the host-tools-mcp tests. When a registry.sock / rc wait times
+    # out, dump enough state to tell *why* it hung rather than leaving a blind timeout:
+    # node/V8 startup is pathologically slow under aarch64 TCG (worse under load), so we
+    # want to see whether the client is alive or stuck (STAT/etimes), whether the box is
+    # under CPU/memory pressure or OOMing, whether the in-sandbox server created its dir
+    # but never bound the socket, and how far the client got (its captured out/err).
+    # Everything goes to the test log, which CI keeps.
+    def dump_mcp_diag(label):
+        print(">>> host-tools-mcp diag (" + label + ") <<<")
+        for cmd in [
+            "uptime; cat /proc/loadavg; free -m",
+            "ps -eo pid,ppid,stat,etimes,rss,comm,args --sort=-rss | head -n 50",
+            "ls -laR /tmp/host-tools-mcp 2>/dev/null",
+            "for f in out err rc prov.out; do echo === $f ===; cat /tmp/host-tools-mcp/$f 2>/dev/null; done",
+            "journalctl -b --no-pager | tail -n 40",
+        ]:
+            print("$ " + cmd)
+            print(machine.execute(cmd)[1])
+
+    # wait_until_succeeds, but on timeout dump the mcp diagnostics before re-raising.
+    def wait_or_diag(cond, label, timeout=1800):
+        try:
+            machine.wait_until_succeeds(cond, timeout=timeout)
+        except Exception:
+            dump_mcp_diag(label + " timed out")
+            raise
+
   '';
 
   # Build one VM test on the base machine plus any extra per-test modules.

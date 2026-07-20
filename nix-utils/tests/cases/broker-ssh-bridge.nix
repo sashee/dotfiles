@@ -77,12 +77,13 @@ in
     # its stderr instead of a blind timeout. On success the client stays alive
     # (polling for sh_c) and writes rc only much later, so the socket always wins.
     # Generous timeout: node/V8 startup is pathologically slow under aarch64 TCG.
-    machine.wait_until_succeeds(
+    wait_or_diag(
         "ls /tmp/host-tools-mcp/*/registry.sock 2>/dev/null "
         "|| test -s /tmp/host-tools-mcp/rc",
-        timeout=1800,
+        "registry.sock wait",
     )
     if not machine.succeed("ls /tmp/host-tools-mcp/*/registry.sock 2>/dev/null || true").strip():
+        dump_mcp_diag("client exited before registry.sock")
         rc = run_user("cat /tmp/host-tools-mcp/rc").strip()
         raise Exception(
             f"mcp client exited (rc={rc}) before creating registry.sock; "
@@ -94,7 +95,7 @@ in
       "nohup host-tools-mcp-broker >/tmp/host-tools-mcp/broker.out 2>&1 "
       "& echo $! >/tmp/host-tools-mcp/broker.pid"
     )
-    machine.wait_until_succeeds("test -S /tmp/host-tools-mcp/broker.sock", timeout=1800)
+    wait_or_diag("test -S /tmp/host-tools-mcp/broker.sock", "broker.sock wait")
 
     # 3. One ssh connection reverse-forwarding the broker socket to the "remote"
     #    path; mcp-register (TMPDIR=/tmp/rem) finds the broker there — NO env var.
@@ -110,7 +111,7 @@ in
     #    and prints the command output. Waiting on the exit code (not the output
     #    file) means a failed client aborts immediately with its stderr instead of
     #    timing out.
-    machine.wait_until_succeeds("test -s /tmp/host-tools-mcp/rc", timeout=1800)
+    wait_or_diag("test -s /tmp/host-tools-mcp/rc", "final rc wait")
     rc = run_user("cat /tmp/host-tools-mcp/rc").strip()
     out = run_user("cat /tmp/host-tools-mcp/out")
     assert rc == "0" and "BROKER_BRIDGE_OK" in out, (

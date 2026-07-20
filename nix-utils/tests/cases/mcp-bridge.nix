@@ -57,7 +57,21 @@ in
         # writes the result to out/err and the exit code to rc.
         run_user("nohup ${clientRun} >/dev/null 2>&1 &")
         # The in-sandbox server's registry socket appears in the host-shared dir.
-        machine.wait_until_succeeds("ls /tmp/host-tools-mcp/*/registry.sock 2>/dev/null")
+        # Race it against the client's rc (written only if the client exits) so a
+        # crashed client fails fast with its stderr; on timeout, dump diagnostics
+        # instead of a blind wait (node/V8 startup is very slow under aarch64 TCG).
+        wait_or_diag(
+            "ls /tmp/host-tools-mcp/*/registry.sock 2>/dev/null "
+            "|| test -s /tmp/host-tools-mcp/rc",
+            "registry.sock wait",
+        )
+        if not machine.succeed("ls /tmp/host-tools-mcp/*/registry.sock 2>/dev/null || true").strip():
+            dump_mcp_diag("client exited before registry.sock")
+            rc = run_user("cat /tmp/host-tools-mcp/rc").strip()
+            raise Exception(
+                f"mcp client exited (rc={rc}) before creating registry.sock; "
+                f"err={run_user('cat /tmp/host-tools-mcp/err 2>/dev/null; true')!r}"
+            )
         # mcp-register is broker-only and connects to broker_socket_path()
         # (/tmp/host-tools-mcp/broker.sock). No broker here, so symlink that path to
         # the server's registry socket — mcp-register then registers straight to it.
@@ -70,7 +84,7 @@ in
         # The client lists + calls the tool, prints the result text, and exits;
         # waiting on the exit code (not the output file) means a failed client
         # aborts the test immediately with its stderr instead of timing out.
-        machine.wait_until_succeeds("test -s /tmp/host-tools-mcp/rc")
+        wait_or_diag("test -s /tmp/host-tools-mcp/rc", "final rc wait")
         rc = run_user("cat /tmp/host-tools-mcp/rc").strip()
         out = run_user("cat /tmp/host-tools-mcp/out")
         if rc != "0" or not out.strip():
