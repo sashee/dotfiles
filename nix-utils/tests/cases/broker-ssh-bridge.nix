@@ -39,8 +39,12 @@ let
     substr = "sh_c";
     arguments = { args = [ "echo BROKER_BRIDGE_OK" ]; };
   });
-  # Absolute path avoids depending on the remote ssh session's PATH.
-  regBin = "/run/current-system/sw/bin/mcp-register-prefix";
+  # Store path (not /run/current-system/sw/bin/...): the aarch64 machine installs
+  # the tools in a different profile, and the ssh session's PATH doesn't include
+  # it either. The store path is arch-independent and always in the machine
+  # closure — same reasoning as the store-path node above.
+  hostTools = import ../../opencode/host-tools-mcp.nix { inherit pkgs; };
+  regBin = "${hostTools.hostToolsMcp}/bin/mcp-register-prefix";
   sshOpts = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
     + "-o BatchMode=yes -o ExitOnForwardFailure=yes -o StreamLocalBindUnlink=yes";
 in

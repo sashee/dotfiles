@@ -34,7 +34,12 @@ in
 
     # 1) Every tool's sandbox sets up: <tool>-debug runs `bash -c true` inside the
     #    tool's real sandbox (no binary/display/network needed).
-    debugs = machine.succeed("ls /run/current-system/sw/bin | grep -- '-debug$' || true").split()
+    # Discover <tool>-debug wrappers across the login-shell PATH (not the hardcoded
+    # /run/current-system/sw/bin: the aarch64 machine installs tools in another
+    # profile). run_user is a login shell, so $PATH covers whatever profile they're in.
+    debugs = run_user(
+        "IFS=:; for d in $PATH; do ls \"$d\" 2>/dev/null; done | grep -- '-debug$' | sort -u"
+    ).split()
     assert len(debugs) >= 10, f"expected many -debug tools, got {debugs}"
     for d in debugs:
         run_user(f"timeout 60 {d} -c true </dev/null >/dev/null 2>&1")
