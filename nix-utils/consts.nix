@@ -79,6 +79,14 @@
 		# whole dir can go. Guarded by tests/cases/uds-connectable.nix.
 		{ path = "/run/systemd"; type = "dir"; }
 		{ path = "/etc/ssh/ssh_config.d"; type = "dir"; }
+		# systemd-ssh-generator's local sshd listener (/run/ssh-unix-local/socket,
+		# bound unconditionally by systemd >=256 whenever sshd is installed, for
+		# host-to-itself `ssh .host`). Pairs with the /etc/ssh/ssh_config.d block
+		# above (the systemd-ssh-proxy fragment). A sandboxed tool has no reason to
+		# reach the local ssh daemon; block the whole dir. Present only on hosts
+		# running sshd (the real rpi5 does; the x86 test machine doesn't) — an absent
+		# path is a no-op. Guarded by tests/cases/uds-connectable.nix.
+		{ path = "/run/ssh-unix-local"; type = "dir"; }
 		# Medium risk sockets
 		{ path = "/run/libvirt"; type = "dir"; }
 		{ path = "$XDG_RUNTIME_DIR/pipewire-0"; type = "file"; }
