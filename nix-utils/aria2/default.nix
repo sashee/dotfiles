@@ -5,6 +5,9 @@ let
 	launcher = import ../launcher.nix { inherit pkgs; };
 	sandbox_restrictions = {
 		network = true;
+		fs = {
+			"$HOME/.cache/aria2" = { perm = "rw"; mkdir = true; };
+		};
 	};
 	bin = launcher.mkLauncher {
 		name = "aria2c";
