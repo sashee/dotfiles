@@ -33,6 +33,10 @@ let
 		aria2 = import ./aria2/default.nix { inherit pkgs; };
 		opencode = import ./opencode/default.nix { inherit pkgs unstable; };
 		claude = import ./claude/default.nix { inherit pkgs unstable; };
+		# The mcp-register CLIs + broker. A zshPrograms entry (not otherPrograms) on
+		# purpose: its fs rules must reach the login shell's merged sandbox, or a
+		# register run from the sandboxed shell can't see the broker socket dir.
+		host-tools-mcp = import ./host-tools-mcp/default.nix { inherit pkgs; };
 		vlc = import ./vlc/default.nix { inherit pkgs; };
 		npm = import ./npm/default.nix { inherit pkgs; };
 		jwt = import ./jwt/default.nix { inherit pkgs; };

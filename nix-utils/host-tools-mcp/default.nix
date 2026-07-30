@@ -1,6 +1,16 @@
-# Shared host-tools-mcp infrastructure: the Rust package (server + mcp-register +
-# broker), the host-side register/broker bin set, and the broker auto-start cmd.
-# Both the opencode and claude wrappers consume this so it lives in one place.
+# The host-tools-mcp infrastructure, as a program in its own right: the Rust package
+# (server + mcp-register + broker), the host-side register/broker bin set, and the
+# broker auto-start cmd.
+#
+# This is deliberately NOT part of opencode/claude, even though they're its main
+# consumers. mcp-register/-prefix are the registration channel into a remote box: you
+# ssh in and register host commands as MCP tools. A headless box therefore needs these
+# CLIs but has no use for an agent, and while these bins rode on opencode's `scripts`
+# it had to install opencode to get them (see hosts/rpi5 in the nixos-test repo).
+#
+# ./crate holds the Rust sources one level down rather than beside this file: rustSrc
+# copies the whole crate path, so a flat layout would make every edit here invalidate a
+# Rust build that runs the full test suite (doCheck) — expensive on the aarch64 CI job.
 { pkgs }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
@@ -8,10 +18,10 @@ let
 	hostToolsMcp = pkgs.rustPlatform.buildRustPackage {
 		pname = "host-tools-mcp";
 		version = "0.1.0";
-		src = rustSrc "opencode/host-tools-mcp";
-		sourceRoot = "nix-utils/opencode/host-tools-mcp";
+		src = rustSrc "host-tools-mcp/crate";
+		sourceRoot = "nix-utils/host-tools-mcp/crate";
 		cargoLock = {
-			lockFile = ./host-tools-mcp/Cargo.lock;
+			lockFile = ./crate/Cargo.lock;
 		};
 		doCheck = true;
 	};
@@ -78,5 +88,25 @@ let
 	brokerEnsureCmd = "${pkgs.util-linux}/bin/setsid -f ${brokerBinPath} --ensure >/dev/null 2>&1 || true";
 in
 {
+	# The bins this program contributes to the env: mcp-register, mcp-register-prefix,
+	# host-tools-mcp-broker, ssh-rpi. Previously appended to opencode's and claude's
+	# scripts, which is what tied the registration CLIs to having an agent installed.
+	scripts = [ mcpRegisterBins ];
+
+	# These bins are unsandboxed (they need the real ssh-agent, network and ~/.ssh), so
+	# this isn't the sandbox they run in — it's what zsh/default.nix merges into the
+	# LOGIN SHELL's sandbox. mcp-register derives its socket path from
+	# ${TMPDIR:-/tmp}/host-tools-mcp, so both spellings must be writable inside the
+	# sandboxed shell or a register run from that shell can't reach the broker. Until
+	# this program existed, that binding reached zsh only via opencode/claude, so
+	# skipping them would have left the CLI on PATH but unable to connect. Mirrors the
+	# brokerWrapper rules above; "$TMPDIR/..." is skipped when TMPDIR is unset.
+	sandbox_restrictions = {
+		fs = {
+			"/tmp/host-tools-mcp" = { perm = "rw"; mkdir = true; };
+			"$TMPDIR/host-tools-mcp" = { perm = "rw"; mkdir = true; };
+		};
+	};
+
 	inherit hostToolsMcp mcpRegisterBins brokerEnsureCmd;
 }

@@ -1,9 +1,13 @@
-// MCP client probe. Runs INSIDE opencode's sandbox (via `opencode-debug -c`), so it
-// exercises the real host-tools-mcp server in the actual bwrap sandbox.
+// MCP client probe. Runs INSIDE a real bwrap sandbox (the probe-mcp-client profile, via
+// its `-shell`), so it exercises the host-tools-mcp server across the actual sandbox
+// boundary rather than in the build env.
 //
-// It self-discovers the server the same way opencode does: read $OPENCODE_CONFIG and
-// take `.mcp["host-tools-mcp"].command` as the argv to spawn (no hardcoded store path,
-// no change to opencode/default.nix). It then drives the MCP stdio protocol
+// It discovers the server the same way an agent does — read the config named by
+// $MCP_CLIENT_CONFIG and take `.mcp["host-tools-mcp"].command` as the argv to spawn (no
+// hardcoded store path). The case supplies that config; it used to be opencode's own
+// $OPENCODE_CONFIG, which tied every MCP test to opencode being installed. That an
+// agent's real config points at a working server is asserted separately, per agent, in
+// program-opencode.nix / program-claude.nix. It then drives the MCP stdio protocol
 // (line-delimited JSON-RPC): initialize -> poll tools/list until a tool whose name
 // contains req.substr appears (the host-side provider registers asynchronously) ->
 // tools/call it with req.arguments -> print the result's text to stdout, and exit.
@@ -20,7 +24,7 @@ const t0 = Date.now();
 const log = (m) => console.error(`[mcpClient +${((Date.now() - t0) / 1000).toFixed(1)}s] ${m}`);
 
 const req = JSON.parse(fs.readFileSync("/tmp/host-tools-mcp/req.json", "utf8"));
-const cfg = JSON.parse(fs.readFileSync(process.env.OPENCODE_CONFIG, "utf8"));
+const cfg = JSON.parse(fs.readFileSync(process.env.MCP_CLIENT_CONFIG, "utf8"));
 const command = cfg.mcp["host-tools-mcp"].command;
 
 log("spawning server: " + command.join(" "));

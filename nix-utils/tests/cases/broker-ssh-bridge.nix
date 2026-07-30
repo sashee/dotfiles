@@ -1,4 +1,4 @@
-# Case: the host-tools-mcp broker reached over a real SSH reverse forward.
+# Machinery case: the host-tools-mcp broker reached over a real SSH reverse forward.
 #
 # This is the end-to-end of the "remote shell" design: a single ssh connection
 # reverse-forwards the broker socket; a remote `mcp-register` finds the broker at
@@ -11,22 +11,32 @@
 # two real machines both use the default /tmp and need no TMPDIR. The socket is
 # nested in host-tools-mcp/, so the remote dir must exist before `ssh -R` binds it.
 #
-# We reuse the mcp-bridge harness: an MCP client (mcpClient.js) runs INSIDE
-# opencode's sandbox via `opencode-shell -c`, spawning the real server; it polls
-# for the `sh_c` tool and calls it. The provider chain that makes `sh_c` appear
-# is: server <- broker (host) <- ssh -R <- mcp-register-prefix. The command runs
-# in the mcp-register process and its output round-trips back to the client.
+# We reuse the mcp-bridge harness: an MCP client (mcpClient.js) runs INSIDE the
+# synthetic probe-mcp-client sandbox, spawning the real server; it polls for the
+# `sh_c` tool and calls it. The provider chain that makes `sh_c` appear is:
+# server <- broker (host) <- ssh -R <- mcp-register-prefix. The command runs in
+# the mcp-register process and its output round-trips back to the client.
 #
-# Isolated because it needs sshd. Also asserts the launcher auto-start wiring
-# (the claude/opencode wrappers invoke `host-tools-mcp-broker --ensure`).
+# No real program appears here: the client used to run in opencode's sandbox, which
+# made this case fail on a machine that skips opencode — the headless box this
+# whole channel exists to serve. The agent-side wiring (their wrappers invoke
+# `host-tools-mcp-broker --ensure`) is asserted in program-opencode.nix /
+# program-claude.nix instead.
+#
+# Isolated because it needs sshd.
 { pkgs }:
 let
+  probeTools = import ../probe-tools { inherit pkgs; };
   # Store-path node (not /run/current-system/sw/bin/node): the sandbox binds the whole
   # host root ro, so any store path resolves, and this doesn't depend on the machine
   # under test having node in its system profile (nixos-test's aarch64 machine doesn't).
   node = "${pkgs.nodejs}/bin/node";
   mcpClient = ./probes-mcp/mcpClient.js;
-  clientCmd = "opencode-shell -c '${node} ${mcpClient}'";
+  # What the client spawns as the server — the test's own config, not an agent's.
+  clientConfig = pkgs.writeText "mcp-client-config.json" (builtins.toJSON {
+    mcp."host-tools-mcp".command = [ "${hostTools.hostToolsMcp}/bin/host-tools-mcp" ];
+  });
+  clientCmd = "MCP_CLIENT_CONFIG=${clientConfig} ${probeTools.shell "probe-mcp-client"} -c '${node} ${mcpClient}'";
   # Runs the client and records its exit code, so the test can distinguish a
   # still-running client from one that failed (or printed nothing).
   clientRun = pkgs.writeShellScript "mcp-client-run" ''
@@ -43,7 +53,7 @@ let
   # the tools in a different profile, and the ssh session's PATH doesn't include
   # it either. The store path is arch-independent and always in the machine
   # closure — same reasoning as the store-path node above.
-  hostTools = import ../../opencode/host-tools-mcp.nix { inherit pkgs; };
+  hostTools = import ../../host-tools-mcp/default.nix { inherit pkgs; };
   regBin = "${hostTools.hostToolsMcp}/bin/mcp-register-prefix";
   sshOpts = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
     + "-o BatchMode=yes -o ExitOnForwardFailure=yes -o StreamLocalBindUnlink=yes";
@@ -52,28 +62,6 @@ in
   isolate = true;
   machineModules = [ { services.openssh.enable = true; } ];
   testScript = ''
-    # --- auto-start wiring: the client launchers invoke the broker --ensure ---
-    # opencode is not optional here: the rest of this case runs its MCP client through
-    # opencode-shell. claude is, because a machine may skip it (hosts/rpi5 does) — and
-    # `command -v` on an absent tool used to leave `grep` with no file operand, reading
-    # stdin until the test's 3600s timeout.
-    run_user("grep -q host-tools-mcp-broker $(command -v opencode)")
-    if present("claude"):
-        run_user("grep -q host-tools-mcp-broker $(command -v claude)")
-    else:
-        skip_absent("claude")
-
-    # --- auto-start runtime: launching a client actually brings the broker up ---
-    # preLaunchHostCmd runs host-side (before the sandbox) -> `host-tools-mcp-broker
-    # --ensure` detached, so the broker starts regardless of `opencode --version`.
-    # A long idle grace keeps the broker (which sees no registries here) from
-    # idle-exiting before the socket check when `opencode --version` is slow (TCG).
-    run_user("HOST_TOOLS_MCP_BROKER_IDLE_MS=600000 timeout 120 opencode --version >/dev/null 2>&1 || true")
-    machine.wait_until_succeeds("test -S /tmp/host-tools-mcp/broker.sock")
-    # Reset so this idle broker doesn't interfere with the manual flow below.
-    # The `[-]` keeps the pattern from matching this very kill command's own shell.
-    run_user("pkill -f 'host-tools-mcp[-]broker' 2>/dev/null; rm -f /tmp/host-tools-mcp/broker.sock; true")
-
     # --- passwordless ssh to localhost as the test user ---
     run_user("mkdir -p ~/.ssh && chmod 700 ~/.ssh")
     run_user("ssh-keygen -t ed25519 -N ''' -f ~/.ssh/id_ed25519 -q")
@@ -82,7 +70,7 @@ in
     run_user("rm -rf /tmp/host-tools-mcp; mkdir -p /tmp/host-tools-mcp")
     run_user("cp ${req} /tmp/host-tools-mcp/req.json")
 
-    # 1. MCP client inside opencode's sandbox spawns the server; it will poll for
+    # 1. MCP client inside the probe's sandbox spawns the server; it will poll for
     #    sh_c, call it, and print the result. Backgrounded so the su session ends;
     #    the wrapper writes the result to out/err and the exit code to rc.
     run_user("nohup ${clientRun} >/dev/null 2>&1 &")

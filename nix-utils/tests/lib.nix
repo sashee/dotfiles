@@ -163,6 +163,8 @@ let
     # machine that skips the program loses only that program's own assertions.
     program-keepassxc = import ./cases/program-keepassxc.nix { inherit pkgs; };
     program-flameshot = import ./cases/program-flameshot.nix { inherit pkgs; };
+    program-opencode = import ./cases/program-opencode.nix { inherit pkgs; };
+    program-claude = import ./cases/program-claude.nix { inherit pkgs; };
   };
 
   isolated = lib.filterAttrs (_: c: c.isolate or false) cases;

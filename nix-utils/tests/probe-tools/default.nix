@@ -124,6 +124,24 @@ let
       name = "probe-passthru";
       keepEnv = null;
     };
+
+    # Host for the node MCP client in mcp-bridge / broker-ssh-bridge: an agent-shaped
+    # sandbox (the host-tools-mcp dir shared rw with the host, network) without being an
+    # agent. Those cases used opencode's sandbox, which made the whole MCP bridge
+    # untestable on a machine that skips opencode — the machine this channel exists for.
+    # MCP_CLIENT_CONFIG is kept so the case can hand in the server command at launch,
+    # rather than this probe having to know about host-tools-mcp.
+    probe-mcp-client = mkProbe {
+      name = "probe-mcp-client";
+      keepEnv = defaultKeepEnv ++ [ "MCP_CLIENT_CONFIG" ];
+      sandbox_restrictions = {
+        fs = {
+          "/tmp/host-tools-mcp" = { perm = "rw"; mkdir = true; };
+          "$TMPDIR/host-tools-mcp" = { perm = "rw"; mkdir = true; };
+        };
+        network = true;
+      };
+    };
   };
   # All the probe wrappers under one prefix, so a case can name them by store path
   # (`${bin}/probe-dev-full-shell`) without any of them being installed anywhere.
