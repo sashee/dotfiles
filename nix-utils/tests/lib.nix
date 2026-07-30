@@ -61,8 +61,23 @@ let
             'set -a; eval "$(systemctl --user show-environment 2>/dev/null)"; set +a; '
             + cmd
         )
-        full = "su - " + USER + " -c " + shlex.quote(wrapped)
+        # </dev/null: a command that reads stdin would otherwise inherit the driver's
+        # and block until the whole test times out, with no diagnostic (a `grep PAT`
+        # whose file argument came from an empty `$(command -v <absent tool>)` cost a
+        # CI run its full hour that way). No case feeds stdin through run_user.
+        full = "su - " + USER + " -c " + shlex.quote(wrapped) + " </dev/null"
         return (machine.succeed if succeed else machine.fail)(full)
+
+    # True if the machine under test has <x> on the login-shell PATH. The machine may
+    # legitimately not install every program (lib.nix's `skip`; hosts/rpi5 drops the
+    # GUI apps and claude), so a case that asserts something about a REAL program
+    # guards on this and says so when it skips. Machinery assertions never need it: they
+    # run under ../probe-tools, invoked by store path, so nothing has to be installed.
+    def present(x):
+        return run_user(f"command -v {x} >/dev/null 2>&1 && echo y || echo n").strip() == "y"
+
+    def skip_absent(x):
+        print(f"[skip] {x} is not installed on this machine; its per-program assertions do not apply")
 
     # Diagnostics for the host-tools-mcp tests. When a registry.sock / rc wait times
     # out, dump enough state to tell *why* it hung rather than leaving a blind timeout:
@@ -93,20 +108,37 @@ let
 
   '';
 
-  # Build one VM test on the base machine plus any extra per-test modules.
-  mkTest = { name, testScript, extraModules ? [ ] }: pkgs.testers.runNixOSTest {
-    inherit name;
-    # Don't pin nixpkgs.* read-only on the nodes, so a consumer's machineModules
-    # may set nixpkgs.config (e.g. allowUnfree) / overlays without a types.unique
-    # collision. Small eval-time cost; our own tester sets no nixpkgs.* options.
-    node.pkgsReadOnly = false;
-    nodes.machine = { imports = machineModules ++ extraModules ++ [ (ensureLinger user) ]; };
-    testScript = (preamble user) + testScript;
-  };
+  # Build one VM test on the base machine plus any extra per-test modules. `extraNodes`
+  # adds further nodes ALONGSIDE the machine under test, for a case that needs a second
+  # box (remote-register ssh's to one). Those nodes are the case's own: it defines them
+  # in full and drives them with the plain driver API, while `machine` stays the machine
+  # under test that the preamble's helpers operate on.
+  mkTest = { name, testScript, extraModules ? [ ], extraNodes ? { }, globalTimeout ? null }:
+    pkgs.testers.runNixOSTest ({
+      inherit name;
+      # Don't pin nixpkgs.* read-only on the nodes, so a consumer's machineModules
+      # may set nixpkgs.config (e.g. allowUnfree) / overlays without a types.unique
+      # collision. Small eval-time cost; our own tester sets no nixpkgs.* options.
+      node.pkgsReadOnly = false;
+      nodes = {
+        machine = { imports = machineModules ++ extraModules ++ [ (ensureLinger user) ]; };
+      } // extraNodes;
+      testScript = (preamble user) + testScript;
+    } // lib.optionalAttrs (globalTimeout != null) { inherit globalTimeout; });
 
   # The case library: each case is
-  #   { testScript; isolate ? false; machineModules ? []; }
-  # independent of the machine.
+  #   { testScript; isolate ? false; machineModules ? []; nodes ? {}; globalTimeout ? null; }
+  # independent of the machine. `nodes` (isolated cases only) adds extra VMs beside it.
+  #
+  # Two kinds of case, and the distinction matters for what may be skipped:
+  #   - machinery: asserts a sandbox mechanism (dbus filtering, seccomp families, /dev
+  #     modes, env scrubbing, fs perms) under the synthetic ./probe-tools profiles, run
+  #     by store path so the machine under test is not altered to accommodate the test.
+  #     Depends on no real program, so it runs identically on every machine and must
+  #     never skip.
+  #   - per-program: asserts one real program's intent ("keepassxc must not reach the
+  #     internet"), guarded with present() and reported via skip_absent() when the
+  #     machine doesn't install it.
   cases = {
     node-sibling-isolation = import ./cases/node-sibling-isolation.nix { inherit pkgs; };
     dev-baseline = import ./cases/dev-baseline.nix { inherit pkgs; };
@@ -128,11 +160,18 @@ let
     dbus-proxy-filter = import ./cases/dbus-proxy-filter.nix { inherit pkgs; };
     seccomp = import ./cases/seccomp.nix { inherit pkgs; };
     mcp-bridge = import ./cases/mcp-bridge.nix { inherit pkgs; };
-    broker-ssh-bridge = import ./cases/broker-ssh-bridge.nix { inherit pkgs; };
+    remote-register = import ./cases/remote-register.nix { inherit pkgs; };
     env-scrubbing = import ./cases/env-scrubbing.nix { inherit pkgs; };
     ipc-isolation = import ./cases/ipc-isolation.nix { inherit pkgs; };
     fs-perms = import ./cases/fs-perms.nix { inherit pkgs; };
     dbus-own = import ./cases/dbus-own.nix { inherit pkgs; };
+    # Per-program cases: hand-written intent for one REAL program, guarded on it being
+    # installed. The machinery they rely on is covered by the probe cases above, so a
+    # machine that skips the program loses only that program's own assertions.
+    program-keepassxc = import ./cases/program-keepassxc.nix { inherit pkgs; };
+    program-flameshot = import ./cases/program-flameshot.nix { inherit pkgs; };
+    program-opencode = import ./cases/program-opencode.nix { inherit pkgs; };
+    program-claude = import ./cases/program-claude.nix { inherit pkgs; };
   };
 
   isolated = lib.filterAttrs (_: c: c.isolate or false) cases;
@@ -150,6 +189,8 @@ let
       name = "nix-utils-${name}";
       testScript = c.testScript;
       extraModules = c.machineModules or [ ];
+      extraNodes = c.nodes or { };
+      globalTimeout = c.globalTimeout or null;
     }
   ) isolated;
 in

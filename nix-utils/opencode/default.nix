@@ -4,8 +4,8 @@
 }:
 let
 	launcher = import ../launcher.nix { inherit pkgs; };
-	hostTools = import ./host-tools-mcp.nix { inherit pkgs; };
-	inherit (hostTools) hostToolsMcp mcpRegisterBins brokerEnsureCmd;
+	hostTools = import ../host-tools-mcp/default.nix { inherit pkgs; };
+	inherit (hostTools) hostToolsMcp brokerEnsureCmd;
 
 	agentsmd = pkgs.writeTextFile {
 		name = "AGENTS.md";
@@ -62,6 +62,6 @@ let
 	};
 in
 {
-	scripts = wrapper.scripts ++ [ mcpRegisterBins ];
+	scripts = wrapper.scripts;
 	inherit sandbox_restrictions;
 }
