@@ -51,6 +51,10 @@ let
   # mcp-register takes its command on stdin (a shell command, run via `sh -c`);
   # redirecting from a store file sidesteps nested shell quoting in run_user.
   cmdFixed = pkgs.writeText "mcp-cmd-fixed" "cat /etc/machine-id && echo MCP_AND_OK";
+  # By store path, not PATH: a machine may skip the host-tools-mcp program, and this is a
+  # machinery case — it must not depend on what the machine under test installs.
+  mcpRegister = "${hostTools.mcpRegisterBins}/bin/mcp-register";
+  mcpRegisterPrefix = "${hostTools.mcpRegisterBins}/bin/mcp-register-prefix";
 in
 {
   testScript = ''
@@ -64,7 +68,7 @@ in
         f"sandbox should fake machine-id (host={host_mid!r} sandbox={sandbox_mid!r})"
     )
 
-    def drive(req, provider):
+    def drive(req, provider, after_broker_link=None):
         run_user("rm -rf /tmp/host-tools-mcp; mkdir -p /tmp/host-tools-mcp")
         run_user("cp " + req + " /tmp/host-tools-mcp/req.json")
         # Start the MCP client INSIDE the probe's sandbox (it spawns host-tools-mcp).
@@ -91,6 +95,11 @@ in
         # (/tmp/host-tools-mcp/broker.sock). No broker here, so symlink that path to
         # the server's registry socket — mcp-register then registers straight to it.
         run_user("ln -sf \"$(ls /tmp/host-tools-mcp/*/registry.sock | head -1)\" /tmp/host-tools-mcp/broker.sock")
+        # A caller-supplied precondition on the socket, checked before the provider starts
+        # so a failure reports itself instead of surfacing as a provider that never
+        # registers (which would only show up as a wait_or_diag timeout much later).
+        if after_broker_link is not None:
+            after_broker_link()
         # Start the host-side provider: registers a host command and serves calls.
         run_user(
             "nohup " + provider + " >/tmp/host-tools-mcp/prov.out 2>&1 "
@@ -113,7 +122,7 @@ in
 
     # 1) shell tool (mcp-register): command read from stdin, run via `sh -c` on the
     # host — both sides of the `&&` must execute.
-    out_fixed = drive("${reqFixed}", "mcp-register <${cmdFixed}")
+    out_fixed = drive("${reqFixed}", "${mcpRegister} <${cmdFixed}")
     assert host_mid in out_fixed, (
         "mcp-register tool call must run on the host and return its real machine-id; "
         f"got {out_fixed!r} (host {host_mid!r})"
@@ -124,10 +133,37 @@ in
     )
 
     # 2) prefix tool (mcp-register-prefix): caller supplies trailing args ["/etc/machine-id"].
-    out_prefix = drive("${reqPrefix}", "mcp-register-prefix cat")
+    out_prefix = drive("${reqPrefix}", "${mcpRegisterPrefix} cat")
     assert host_mid in out_prefix, (
         "mcp-register-prefix tool call (caller-supplied trailing args) must run on the "
         f"host; got {out_prefix!r} (host {host_mid!r})"
     )
+
+    # 3) Registering from inside the SANDBOXED LOGIN SHELL, which is how a real remote
+    # session does it: you ssh in and land in the sandboxed zsh. mcp-register-prefix is a
+    # raw bin (not a wrapped tool), so it runs *inside* zsh's own sandbox, and it can only
+    # reach the broker socket because zsh's merged fs rules bind /tmp/host-tools-mcp —
+    # a binding that reaches zsh solely through host-tools-mcp's sandbox_restrictions
+    # (zsh/default.nix folds every zshPrograms entry's fs rules into the shell's sandbox).
+    # Drop those rules and this is the assertion that fails.
+    #
+    # Conditional on the machine shipping the register CLI: a machine that skips the
+    # host-tools-mcp program has no CLI to run from its shell, so zsh legitimately has no
+    # such binding. Steps 1-2 above stay unconditional — they run the bins by store path.
+    if not present("mcp-register-prefix"):
+        skip_absent("mcp-register-prefix")
+    else:
+        def socket_visible_in_zsh():
+            run_user("zsh -c 'test -S /tmp/host-tools-mcp/broker.sock'")
+
+        out_zsh = drive(
+            "${reqPrefix}",
+            "zsh -c '${mcpRegisterPrefix} cat'",
+            after_broker_link=socket_visible_in_zsh,
+        )
+        assert host_mid in out_zsh, (
+            "a register run from inside the sandboxed login shell must still reach the broker "
+            f"and execute on the host; got {out_zsh!r} (host {host_mid!r})"
+        )
   '';
 }

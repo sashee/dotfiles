@@ -125,7 +125,7 @@ let
       keepEnv = null;
     };
 
-    # Host for the node MCP client in mcp-bridge / broker-ssh-bridge: an agent-shaped
+    # Host for the node MCP client in mcp-bridge / remote-register: an agent-shaped
     # sandbox (the host-tools-mcp dir shared rw with the host, network) without being an
     # agent. Those cases used opencode's sandbox, which made the whole MCP bridge
     # untestable on a machine that skips opencode — the machine this channel exists for.

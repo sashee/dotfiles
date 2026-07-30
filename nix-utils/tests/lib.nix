@@ -108,20 +108,27 @@ let
 
   '';
 
-  # Build one VM test on the base machine plus any extra per-test modules.
-  mkTest = { name, testScript, extraModules ? [ ] }: pkgs.testers.runNixOSTest {
-    inherit name;
-    # Don't pin nixpkgs.* read-only on the nodes, so a consumer's machineModules
-    # may set nixpkgs.config (e.g. allowUnfree) / overlays without a types.unique
-    # collision. Small eval-time cost; our own tester sets no nixpkgs.* options.
-    node.pkgsReadOnly = false;
-    nodes.machine = { imports = machineModules ++ extraModules ++ [ (ensureLinger user) ]; };
-    testScript = (preamble user) + testScript;
-  };
+  # Build one VM test on the base machine plus any extra per-test modules. `extraNodes`
+  # adds further nodes ALONGSIDE the machine under test, for a case that needs a second
+  # box (remote-register ssh's to one). Those nodes are the case's own: it defines them
+  # in full and drives them with the plain driver API, while `machine` stays the machine
+  # under test that the preamble's helpers operate on.
+  mkTest = { name, testScript, extraModules ? [ ], extraNodes ? { }, globalTimeout ? null }:
+    pkgs.testers.runNixOSTest ({
+      inherit name;
+      # Don't pin nixpkgs.* read-only on the nodes, so a consumer's machineModules
+      # may set nixpkgs.config (e.g. allowUnfree) / overlays without a types.unique
+      # collision. Small eval-time cost; our own tester sets no nixpkgs.* options.
+      node.pkgsReadOnly = false;
+      nodes = {
+        machine = { imports = machineModules ++ extraModules ++ [ (ensureLinger user) ]; };
+      } // extraNodes;
+      testScript = (preamble user) + testScript;
+    } // lib.optionalAttrs (globalTimeout != null) { inherit globalTimeout; });
 
   # The case library: each case is
-  #   { testScript; isolate ? false; machineModules ? []; }
-  # independent of the machine.
+  #   { testScript; isolate ? false; machineModules ? []; nodes ? {}; globalTimeout ? null; }
+  # independent of the machine. `nodes` (isolated cases only) adds extra VMs beside it.
   #
   # Two kinds of case, and the distinction matters for what may be skipped:
   #   - machinery: asserts a sandbox mechanism (dbus filtering, seccomp families, /dev
@@ -153,7 +160,7 @@ let
     dbus-proxy-filter = import ./cases/dbus-proxy-filter.nix { inherit pkgs; };
     seccomp = import ./cases/seccomp.nix { inherit pkgs; };
     mcp-bridge = import ./cases/mcp-bridge.nix { inherit pkgs; };
-    broker-ssh-bridge = import ./cases/broker-ssh-bridge.nix { inherit pkgs; };
+    remote-register = import ./cases/remote-register.nix { inherit pkgs; };
     env-scrubbing = import ./cases/env-scrubbing.nix { inherit pkgs; };
     ipc-isolation = import ./cases/ipc-isolation.nix { inherit pkgs; };
     fs-perms = import ./cases/fs-perms.nix { inherit pkgs; };
@@ -182,6 +189,8 @@ let
       name = "nix-utils-${name}";
       testScript = c.testScript;
       extraModules = c.machineModules or [ ];
+      extraNodes = c.nodes or { };
+      globalTimeout = c.globalTimeout or null;
     }
   ) isolated;
 in

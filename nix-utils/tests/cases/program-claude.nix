@@ -1,6 +1,6 @@
 # Per-program case: claude's own MCP wiring and secret handling, asserted only if this
 # machine installs it (hosts/rpi5 skips claude). The bridge machinery is covered by
-# mcp-bridge.nix / broker-ssh-bridge.nix under synthetic probes, and env scrubbing as a
+# mcp-bridge.nix / remote-register.nix under synthetic probes, and env scrubbing as a
 # mechanism by env-scrubbing.nix, so skipping here loses only claude's own assertions.
 #
 # What must hold for claude specifically:

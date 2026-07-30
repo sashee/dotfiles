@@ -1,7 +1,7 @@
 # Per-program case: opencode's own MCP wiring, asserted only if this machine installs it
 # (a headless box can skip the agent and keep just the host-tools-mcp CLIs). The bridge
 # machinery itself — server in a sandbox, host-side register, broker, ssh forward — is
-# covered by mcp-bridge.nix / broker-ssh-bridge.nix under synthetic probes, so skipping
+# covered by mcp-bridge.nix / remote-register.nix under synthetic probes, so skipping
 # here loses only opencode's own wiring.
 #
 # What must hold for opencode specifically, none of it derivable from its config:
