@@ -29,9 +29,6 @@ let
 in
 {
   testScript = ''
-    def present(x):
-        return run_user(f"command -v {x} >/dev/null 2>&1 && echo y || echo n").strip() == "y"
-
     # 1) Every tool's sandbox sets up: <tool>-debug runs `bash -c true` inside the
     #    tool's real sandbox (no binary/display/network needed).
     # Discover <tool>-debug wrappers across the login-shell PATH (not the hardcoded

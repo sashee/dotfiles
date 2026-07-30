@@ -53,8 +53,15 @@ in
   machineModules = [ { services.openssh.enable = true; } ];
   testScript = ''
     # --- auto-start wiring: the client launchers invoke the broker --ensure ---
+    # opencode is not optional here: the rest of this case runs its MCP client through
+    # opencode-shell. claude is, because a machine may skip it (hosts/rpi5 does) — and
+    # `command -v` on an absent tool used to leave `grep` with no file operand, reading
+    # stdin until the test's 3600s timeout.
     run_user("grep -q host-tools-mcp-broker $(command -v opencode)")
-    run_user("grep -q host-tools-mcp-broker $(command -v claude)")
+    if present("claude"):
+        run_user("grep -q host-tools-mcp-broker $(command -v claude)")
+    else:
+        skip_absent("claude")
 
     # --- auto-start runtime: launching a client actually brings the broker up ---
     # preLaunchHostCmd runs host-side (before the sandbox) -> `host-tools-mcp-broker
