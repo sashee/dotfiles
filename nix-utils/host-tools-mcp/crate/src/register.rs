@@ -15,7 +15,7 @@ use nix::sys::signal::{kill, signal, SigHandler, Signal};
 use nix::sys::wait::{waitpid, WaitStatus};
 use nix::unistd::setpgid;
 use nix::unistd::Pid;
-use rmcp::model::{CallToolResult, Content};
+use rmcp::model::{CallToolResult, ContentBlock};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -667,7 +667,7 @@ fn parse_command(
 
             let parsed = serde_json::from_value::<ShellArgs>(Value::Object(arguments.clone()))
                 .map_err(|error| {
-                    CallToolResult::error(vec![Content::text(format!(
+                    CallToolResult::error(vec![ContentBlock::text(format!(
                         "Invalid args for shell tool: {error}"
                     ))])
                 })?;
@@ -692,7 +692,7 @@ fn parse_command(
 
             let parsed = serde_json::from_value::<PrefixArgs>(Value::Object(arguments.clone()))
                 .map_err(|error| {
-                    CallToolResult::error(vec![Content::text(format!(
+                    CallToolResult::error(vec![ContentBlock::text(format!(
                         "Invalid args for prefix tool: {error}"
                     ))])
                 })?;
@@ -753,7 +753,7 @@ fn build_result(
     let content = if text_parts.is_empty() {
         Vec::new()
     } else {
-        vec![Content::text(text_parts.join("\n"))]
+        vec![ContentBlock::text(text_parts.join("\n"))]
     };
 
     let mut result = if timed_out || status.success() {

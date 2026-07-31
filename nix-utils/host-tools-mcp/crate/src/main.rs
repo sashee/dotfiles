@@ -12,9 +12,9 @@ use host_tools_mcp::{
     create_server_dir, log_root, ProviderToServer, ServerToProvider, SOCKET_NAME,
 };
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, CancelledNotificationParam, InitializeRequestParams,
-    InitializeResult, ListToolsResult, PaginatedRequestParams, ProgressNotificationParam,
-    ProgressToken, RequestId, ServerCapabilities, ServerInfo, Tool,
+    CallToolRequestParams, CallToolResponse, CallToolResult, CancelledNotificationParam,
+    InitializeRequestParams, InitializeResult, ListToolsResult, PaginatedRequestParams,
+    ProgressNotificationParam, ProgressToken, RequestId, ServerCapabilities, ServerInfo, Tool,
 };
 use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{ErrorData, Peer, RoleServer, ServerHandler, ServiceExt};
@@ -537,7 +537,7 @@ impl ServerHandler for HostToolsMcp {
         &self,
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
-    ) -> impl std::future::Future<Output = Result<CallToolResult, ErrorData>> + Send + '_ {
+    ) -> impl std::future::Future<Output = Result<CallToolResponse, ErrorData>> + Send + '_ {
         async move {
             let arguments = request.arguments.clone().unwrap_or_default();
             let started_call = self.state.start_call(&request, &context)?;
@@ -552,9 +552,11 @@ impl ServerHandler for HostToolsMcp {
                 return Err(cancellation_error("tool provider disconnected"));
             }
 
+            // rmcp 3 lets call_tool return a task handle instead of a result; this server
+            // always runs the call to completion, so the plain CallToolResult converts in.
             tokio::select! {
                 result = started_call.receiver => match result {
-                    Ok(result) => result,
+                    Ok(result) => result.map(CallToolResponse::from),
                     Err(_) => Err(cancellation_error("tool provider disconnected")),
                 },
                 _ = context.ct.cancelled() => {
@@ -569,13 +571,18 @@ impl ServerHandler for HostToolsMcp {
         notification: CancelledNotificationParam,
         _context: NotificationContext<RoleServer>,
     ) -> impl std::future::Future<Output = ()> + Send + '_ {
-        self.state.cancel_call_by_request_id(
-            &notification.request_id,
-            notification
-                .reason
-                .as_deref()
-                .unwrap_or("tool call cancelled"),
-        );
+        // rmcp 3 made request_id optional (cancellation can now target a task instead).
+        // This server only tracks calls by request id, so an id-less notification names
+        // nothing we can cancel.
+        if let Some(request_id) = &notification.request_id {
+            self.state.cancel_call_by_request_id(
+                request_id,
+                notification
+                    .reason
+                    .as_deref()
+                    .unwrap_or("tool call cancelled"),
+            );
+        }
         std::future::ready(())
     }
 
@@ -646,11 +653,16 @@ async fn handle_provider_message(
             message,
         } => {
             if let Some((peer, token)) = state.progress_target(&call_id) {
-                let notification = ProgressNotificationParam {
-                    progress_token: token,
-                    progress,
-                    total,
-                    message,
+                // #[non_exhaustive] in rmcp 3, so the struct literal is out; both optional
+                // fields go through the consuming builder.
+                let notification = ProgressNotificationParam::new(token, progress);
+                let notification = match total {
+                    Some(total) => notification.with_total(total),
+                    None => notification,
+                };
+                let notification = match message {
+                    Some(message) => notification.with_message(message),
+                    None => notification,
                 };
                 let _ = peer.notify_progress(notification).await;
             }
