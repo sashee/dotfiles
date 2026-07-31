@@ -14,6 +14,9 @@ use serde_json::{json, Value};
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_millis(1500);
 const FILE_TIMEOUT: Duration = Duration::from_millis(1000);
+/// The MCP protocol version this suite speaks, asserted in both directions by
+/// `initialize_client` so an rmcp upgrade that shifts negotiation fails loudly here.
+const PROTOCOL_VERSION: &str = "2025-11-25";
 
 fn gen_test_id() -> String {
     format!("{:08x}", random::<u32>())
@@ -772,7 +775,7 @@ fn initialize_client(child: &mut ChildHarness) {
         "id": 0,
         "method": "initialize",
         "params": {
-            "protocolVersion": "2025-11-25",
+            "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {},
             "clientInfo": {
                 "name": "e2e-test",
@@ -782,6 +785,16 @@ fn initialize_client(child: &mut ChildHarness) {
     }));
     let initialize = child.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(0));
     assert!(initialize["result"]["capabilities"]["tools"].is_object());
+    // The server has no negotiation logic of its own — get_info() returns whatever rmcp
+    // defaults to — so this assertion is the only thing guarding the rmcp pin described in
+    // Cargo.toml. Without it, a version change passes every test here and only surfaces
+    // against a real agent.
+    assert_eq!(
+        initialize["result"]["protocolVersion"],
+        json!(PROTOCOL_VERSION),
+        "server must negotiate the version the client offered; a change here is the rmcp \
+         upgrade hazard described in Cargo.toml"
+    );
     child.send_json_rpc(json!({
         "jsonrpc": "2.0",
         "method": "notifications/initialized"

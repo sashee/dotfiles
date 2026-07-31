@@ -23,6 +23,10 @@ const { spawn } = require("child_process");
 const t0 = Date.now();
 const log = (m) => console.error(`[mcpClient +${((Date.now() - t0) / 1000).toFixed(1)}s] ${m}`);
 
+// Kept in sync with PROTOCOL_VERSION in host-tools-mcp/crate/tests/e2e.rs — the server
+// echoes whatever rmcp defaults to, so both suites assert it to guard the rmcp pin.
+const PROTOCOL_VERSION = "2025-11-25";
+
 const req = JSON.parse(fs.readFileSync("/tmp/host-tools-mcp/req.json", "utf8"));
 const cfg = JSON.parse(fs.readFileSync(process.env.MCP_CLIENT_CONFIG, "utf8"));
 const command = cfg.mcp["host-tools-mcp"].command;
@@ -65,8 +69,16 @@ function done(code) { try { srv.kill("SIGTERM"); } catch (e) {} process.exit(cod
 function fail(msg, code) { console.error(msg); done(code); }
 
 (async () => {
-  send({ jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "vm-test", version: "0.1.0" } } });
-  await recvMatching((m) => m.id === 0, 15000);
+  send({ jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: "vm-test", version: "0.1.0" } } });
+  const init = await recvMatching((m) => m.id === 0, 15000);
+  // Check the handshake actually succeeded rather than treating any id===0 message as an
+  // ack. An initialize *error*, or a server that negotiates a different version, would
+  // otherwise surface 30s later as the misleading "no tool matching substr" (exit 3).
+  if (init.error) fail("initialize failed: " + JSON.stringify(init.error), 5);
+  const negotiated = init.result && init.result.protocolVersion;
+  if (negotiated !== PROTOCOL_VERSION) {
+    fail(`server negotiated protocolVersion ${JSON.stringify(negotiated)}, expected ${PROTOCOL_VERSION}`, 5);
+  }
   log("initialize acked");
   send({ jsonrpc: "2.0", method: "notifications/initialized" });
 
