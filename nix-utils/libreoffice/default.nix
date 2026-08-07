@@ -15,6 +15,14 @@ let
 			# Opt back into CUPS (blocked in consts.nix for everyone else) so printing
 			# works. ro is enough — connect() to the socket needs no fs write.
 			"/run/cups" = { perm = "ro"; };
+			# All of $HOME rw: a document can live anywhere, and there is no way to
+			# know the target before launch (restrict_to_current_folder is off below,
+			# since libreoffice is started from a launcher, not a shell in the doc's
+			# dir). This is for libreoffice ITSELF only — consts.unmergeableFsPaths
+			# keeps it out of the login shell's merged fs (zsh/default.nix), so it
+			# can't widen zsh/tmux/zellij. Consequence: started FROM a sandboxed
+			# shell, this bind resolves against that shell's masked view of $HOME,
+			# so it reaches only the shell's writable window.
 			"$HOME" = {perm = "rw";};
 		};
 		network = false;

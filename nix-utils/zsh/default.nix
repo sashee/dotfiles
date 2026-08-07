@@ -24,12 +24,19 @@ let
 	# Skip programs with unrestricted access (empty sandbox_restrictions)
 	filtered_prgs = builtins.filter (prg: prg.sandbox_restrictions != {}) prgs;
 
+	# A program's own fs may claim a bare root (libreoffice takes all of $HOME rw so
+	# it can open documents anywhere). Merging that into the shell would re-expose
+	# the whole real home and make the per-launch-folder confinement a no-op, so
+	# those keys are dropped here — see consts.unmergeableFsPaths. base_fs is the
+	# fold's seed, so anything the shell itself needs from home goes there instead.
+	mergeable_fs = prg_fs: builtins.removeAttrs prg_fs consts.unmergeableFsPaths;
+
 	merged_restrictions = builtins.foldl' (acc: prg:
 		let
 			prg_restrictions = prg.sandbox_restrictions or {};
 		in
 		{
-		fs = acc.fs // (prg_restrictions.fs or {});
+		fs = acc.fs // (mergeable_fs (prg_restrictions.fs or {}));
 		files = acc.files // (prg_restrictions.files or {});
 		# Carry real_machine_id through the merge so journal-readers (isd) make
 		# the shells keep the real machine-id (journalctl needs it).
