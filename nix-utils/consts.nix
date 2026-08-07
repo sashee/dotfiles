@@ -34,6 +34,18 @@
 	# abstract-sockets.nix fails if a sandboxed tool can reach a *listening* abstract
 	# socket not on this list (e.g. an X server's @/tmp/.X11-unix/X0). Empty so far.
 	allowedAbstractSockets = [ ];
+	# fs paths a program may legitimately claim for ITSELF but that must never be
+	# merged into the login shell's sandbox (zsh/default.nix folds every zsh
+	# program's fs into the shell's). They sit at or above the base layers
+	# (`--tmpfs /home`, `--tmpfs /tmp`, `--dev`), and mounts are applied
+	# shallowest-first, so re-binding one there undoes the shell's
+	# per-launch-folder confinement wholesale: libreoffice's `$HOME` rw did
+	# exactly that, and `ls ~` in zsh-nonet showed the entire real home rw
+	# (~/.ssh keys included) despite "Restricting to folder: ...".
+	# Only bare roots — subpaths ($HOME/.cache, /tmp/host-tools-mcp) merge normally,
+	# which is how a program shares what the shell actually needs.
+	# Guarded by tests/cases/program-zsh-home-scoping.nix.
+	unmergeableFsPaths = [ "$HOME" "/" "/tmp" "$XDG_RUNTIME_DIR" "$TMPDIR" ];
 	protectedPaths = [
 		# User data directories
 		# Block all of ~/.config by default; tools opt back in to specific
