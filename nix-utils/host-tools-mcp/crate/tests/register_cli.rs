@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -17,6 +17,15 @@ use serde_json::{json, Value};
 const DEFAULT_TIMEOUT: Duration = Duration::from_millis(1500);
 const FILE_TIMEOUT: Duration = Duration::from_millis(1800);
 const EXTENDED_TIMEOUT: Duration = Duration::from_millis(3000);
+/// How long the harness waits to *observe* a signal-driven sequence: a signal
+/// delivered to a process group, a `trap` handler in `/bin/sh` running to
+/// completion, the child reaped, and only then a JSON-RPC response or a marker
+/// file. That is several context switches worth of process churn, unrelated to
+/// the timeouts the tests assert on (`timeoutMs` is the behaviour under test;
+/// this is only patience). Deliberately generous — it costs wall clock only
+/// when a test is already failing, and the tight `DEFAULT_TIMEOUT` made these
+/// tests flake on loaded 4-core ARM boxes.
+const SIGNAL_ROUNDTRIP_TIMEOUT: Duration = Duration::from_millis(5000);
 
 fn gen_test_id() -> String {
     format!("{:08x}", random::<u32>())
@@ -148,21 +157,28 @@ impl ChildHarness {
         self.stdin.flush().expect("failed to flush request");
     }
 
-    fn recv_message_timeout(&self, timeout: Duration) -> Option<Value> {
-        self.stdout_rx.recv_timeout(timeout).ok()
+    fn recv_message_timeout(&self, timeout: Duration) -> Result<Value, RecvTimeoutError> {
+        self.stdout_rx.recv_timeout(timeout)
     }
 
+    /// Receive until `predicate` matches. On failure the panic reports the
+    /// waited-for duration, whether the child's stdout closed (a crashed
+    /// server, not a slow one) and every message that did arrive, so the
+    /// failure is diagnosable from test output without reading the source.
     fn recv_matching(&self, timeout: Duration, predicate: impl Fn(&Value) -> bool) -> Value {
         let deadline = Instant::now() + timeout;
+        let mut seen = Vec::new();
         while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
-            let message = self
-                .recv_message_timeout(remaining)
-                .expect("timed out waiting for child message");
-            if predicate(&message) {
-                return message;
+            match self.recv_message_timeout(remaining) {
+                Ok(message) if predicate(&message) => return message,
+                Ok(message) => seen.push(message),
+                Err(RecvTimeoutError::Timeout) => break,
+                Err(RecvTimeoutError::Disconnected) => {
+                    panic!("child stdout closed before a matching message arrived; saw {seen:?}")
+                }
             }
         }
-        panic!("timed out waiting for matching child message");
+        panic!("timed out after {timeout:?} waiting for a matching child message; saw {seen:?}");
     }
 }
 
@@ -786,8 +802,10 @@ fn shell_cli_timeout_returns_partial_output_and_term_side_effect() {
         json!({ "timeoutMs": 100 }),
     );
 
-    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
-    wait_for_file(&marker);
+    let response = server.recv_matching(SIGNAL_ROUNDTRIP_TIMEOUT, |message| {
+        message["id"] == json!(2)
+    });
+    wait_for_file_within(&marker, SIGNAL_ROUNDTRIP_TIMEOUT);
 
     assert_eq!(response["result"]["isError"], json!(false));
     let timeout_text = response["result"]["content"]
@@ -837,8 +855,10 @@ fn prefix_cli_timeout_returns_partial_output_and_term_side_effect() {
         json!({ "args": ["hello"], "timeoutMs": 100 }),
     );
 
-    let response = server.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
-    wait_for_file(&marker);
+    let response = server.recv_matching(SIGNAL_ROUNDTRIP_TIMEOUT, |message| {
+        message["id"] == json!(2)
+    });
+    wait_for_file_within(&marker, SIGNAL_ROUNDTRIP_TIMEOUT);
 
     assert_eq!(response["result"]["isError"], json!(false));
     let timeout_text = response["result"]["content"]
@@ -1406,7 +1426,7 @@ fn ctrl_c_in_register_cli_disconnects_and_cancels_calls() {
     });
 
     send_sigint(cli.pid());
-    wait_for_file(&marker);
+    wait_for_file_within(&marker, SIGNAL_ROUNDTRIP_TIMEOUT);
     let (response, list_changed) = recv_call_response_and_list_changed(&server, json!(2));
     assert!(response.get("error").is_some());
     assert_eq!(
@@ -1485,8 +1505,8 @@ fn server_shutdown_cancels_active_register_cli_processes() {
     let _ = server.child.wait();
     // Waiting on the marker spans a multi-process teardown chain (server EOF ->
     // register CLI SIGTERM -> shell TERM trap -> touch), which can exceed the tight
-    // FILE_TIMEOUT under CI load. Use the more generous EXTENDED_TIMEOUT.
-    wait_for_file_within(&marker, EXTENDED_TIMEOUT);
+    // FILE_TIMEOUT under CI load.
+    wait_for_file_within(&marker, SIGNAL_ROUNDTRIP_TIMEOUT);
 }
 
 #[test]
@@ -1669,7 +1689,8 @@ fn wait_for_file_within(path: &Path, timeout: Duration) {
 }
 
 fn recv_call_response_and_list_changed(server: &ChildHarness, id: Value) -> (Value, Value) {
-    let deadline = Instant::now() + DEFAULT_TIMEOUT;
+    // Only ever called after a SIGINT, so this spans a signal round-trip.
+    let deadline = Instant::now() + SIGNAL_ROUNDTRIP_TIMEOUT;
     let mut response = None;
     let mut list_changed = None;
 
@@ -1699,7 +1720,7 @@ fn recv_or_panic_with_stderr(
 ) -> Value {
     let deadline = Instant::now() + timeout;
     while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
-        let Some(message) = server.recv_message_timeout(remaining) else {
+        let Ok(message) = server.recv_message_timeout(remaining) else {
             panic!(
                 "timed out waiting for child message; register stderr: {:?}",
                 cli.collect_stderr()
