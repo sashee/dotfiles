@@ -9,7 +9,7 @@ use std::task::{Context, Poll};
 use anyhow::Result;
 use chrono::Local;
 use host_tools_mcp::{
-    create_server_dir, log_root, ProviderToServer, ServerToProvider, SOCKET_NAME,
+    create_server_dir, log_root, spill, ProviderToServer, ServerToProvider, SOCKET_NAME,
 };
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, CancelledNotificationParam,
@@ -179,6 +179,10 @@ fn trim_line_end(line: &[u8]) -> &[u8] {
 #[derive(Clone)]
 struct HostToolsMcp {
     state: Arc<SharedState>,
+    /// Where `file: true` calls spill their results. Read-only config, not
+    /// state: it lives beside the server's logs, inside the same per-process
+    /// dir, so spilled results share their lifetime.
+    results_dir: PathBuf,
 }
 
 struct SharedState {
@@ -218,6 +222,11 @@ struct StartedCall {
     provider_id: u64,
     sender: mpsc::UnboundedSender<ServerToProvider>,
     receiver: oneshot::Receiver<Result<CallToolResult, ErrorData>>,
+    /// Whether `file` on this tool is the bridge's injected spill flag rather
+    /// than a parameter the provider declared itself. Read from the same
+    /// registration the call was routed by, so it cannot drift from the schema
+    /// the client was shown.
+    file_param_injected: bool,
 }
 
 impl SharedState {
@@ -420,6 +429,7 @@ impl SharedState {
             .get(request.name.as_ref())
             .ok_or_else(|| ErrorData::method_not_found::<rmcp::model::CallToolRequestMethod>())?;
         let provider_id = registration.provider_id;
+        let file_param_injected = spill::file_param_is_injected(&registration.tool);
         let sender = inner
             .providers
             .get(&provider_id)
@@ -446,6 +456,7 @@ impl SharedState {
             provider_id,
             sender,
             receiver,
+            file_param_injected,
         })
     }
 
@@ -503,6 +514,19 @@ impl SharedState {
     }
 }
 
+impl HostToolsMcp {
+    /// Write a `file: true` result to `results_dir` and replace it with the
+    /// path plus a preview. A write failure returns the result inline instead:
+    /// a full tool result is worth more than the context the spill would save.
+    fn spill_result(&self, call_id: &str, result: CallToolResult) -> CallToolResult {
+        let files = spill::plan(&result, &self.results_dir, call_id);
+        match spill::write_all(&files) {
+            Ok(()) => spill::spilled_result(&files, result.is_error),
+            Err(error) => spill::write_failed_result(result, &error),
+        }
+    }
+}
+
 impl ServerHandler for HostToolsMcp {
     fn initialize(
         &self,
@@ -521,7 +545,15 @@ impl ServerHandler for HostToolsMcp {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<ListToolsResult, ErrorData>> + Send + '_ {
-        let tools = self.state.snapshot_tools();
+        // The registry stores exactly what the provider registered; `file` is
+        // added here, on the way out, so the client-facing schema is the only
+        // place the injected parameter exists.
+        let tools = self
+            .state
+            .snapshot_tools()
+            .iter()
+            .map(spill::with_file_param)
+            .collect::<Vec<_>>();
         std::future::ready({
             let mut result = ListToolsResult::default();
             result.tools = tools;
@@ -530,7 +562,9 @@ impl ServerHandler for HostToolsMcp {
     }
 
     fn get_tool(&self, name: &str) -> Option<Tool> {
-        self.state.get_tool(name)
+        self.state
+            .get_tool(name)
+            .map(|tool| spill::with_file_param(&tool))
     }
 
     fn call_tool(
@@ -539,8 +573,12 @@ impl ServerHandler for HostToolsMcp {
         context: RequestContext<RoleServer>,
     ) -> impl std::future::Future<Output = Result<CallToolResponse, ErrorData>> + Send + '_ {
         async move {
-            let arguments = request.arguments.clone().unwrap_or_default();
+            let mut arguments = request.arguments.clone().unwrap_or_default();
             let started_call = self.state.start_call(&request, &context)?;
+            // Strip the spill flag before forwarding: providers never declared
+            // it, and most declare `additionalProperties: false`.
+            let spill_to_file =
+                started_call.file_param_injected && spill::take_file_flag(&mut arguments);
             let message = ServerToProvider::CallTool {
                 call_id: started_call.call_id.clone(),
                 tool: request.name.to_string(),
@@ -556,7 +594,13 @@ impl ServerHandler for HostToolsMcp {
             // always runs the call to completion, so the plain CallToolResult converts in.
             tokio::select! {
                 result = started_call.receiver => match result {
-                    Ok(result) => result.map(CallToolResponse::from),
+                    Ok(result) => result
+                        .map(|result| if spill_to_file {
+                            self.spill_result(&started_call.call_id, result)
+                        } else {
+                            result
+                        })
+                        .map(CallToolResponse::from),
                     Err(_) => Err(cancellation_error("tool provider disconnected")),
                 },
                 _ = context.ct.cancelled() => {
@@ -791,7 +835,10 @@ async fn main() -> Result<()> {
     })?;
     let listener_handle = tokio::spawn(run_accept_loop(state.clone(), listener, log_dir.clone()));
 
-    let server = HostToolsMcp { state }.serve((stdin, stdout)).await?;
+    let results_dir = log_dir.join(spill::RESULTS_DIR);
+    let server = HostToolsMcp { state, results_dir }
+        .serve((stdin, stdout))
+        .await?;
     let wait_result = server.waiting().await;
     listener_handle.abort();
     wait_result?;

@@ -51,6 +51,12 @@ let
   # mcp-register takes its command on stdin (a shell command, run via `sh -c`);
   # redirecting from a store file sidesteps nested shell quoting in run_user.
   cmdFixed = pkgs.writeText "mcp-cmd-fixed" "cat /etc/machine-id && echo MCP_AND_OK";
+  # For the `file: true` case: output deliberately longer than the summary's preview
+  # window (20 lines), with the machine-id last. A one-line command would put the id
+  # inside the preview, and "the output did not come back inline" would then be
+  # unassertable — the test would pass on a bridge that spilled nothing.
+  cmdSpill = pkgs.writeText "mcp-cmd-spill" "seq 1 200 && cat /etc/machine-id";
+  reqSpill = pkgs.writeText "mcp-req-spill.json" (builtins.toJSON { substr = "seq"; arguments = { file = true; }; });
   # By store path, not PATH: a machine may skip the host-tools-mcp program, and this is a
   # machinery case — it must not depend on what the machine under test installs.
   mcpRegister = "${hostTools.mcpRegisterBins}/bin/mcp-register";
@@ -165,5 +171,39 @@ in
             "a register run from inside the sandboxed login shell must still reach the broker "
             f"and execute on the host; got {out_zsh!r} (host {host_mid!r})"
         )
+
+    # 4) `file: true`: the bridge writes the result to disk and answers with the path
+    # instead of the output. The Rust e2e tests cover the spill itself, but they run in
+    # the build env, where there is no sandbox boundary for the path to be wrong across.
+    # What only a VM can prove is that the path the server reports is the same path the
+    # CLIENT can open — the server is a stdio child of the client, so it writes from
+    # inside the client's mount namespace, and the results dir is nested under the
+    # /tmp/host-tools-mcp the profile binds rw.
+    out_spill = drive("${reqSpill}", "${mcpRegister} <${cmdSpill}")
+    assert host_mid not in out_spill, (
+        "with file:true the output must NOT come back inline (only a path and a preview); "
+        f"got {out_spill!r} (host {host_mid!r})"
+    )
+    spilled = [
+        word for word in out_spill.split()
+        if word.startswith("/tmp/host-tools-mcp/") and word.endswith(".txt")
+    ]
+    assert len(spilled) == 1, (
+        f"expected exactly one spilled .txt path in the result; got {spilled!r} "
+        f"from {out_spill!r}"
+    )
+    # Read it back THROUGH THE CLIENT'S OWN SANDBOX, not from the host: reading it as
+    # the host would pass even if the path were unreachable from where the agent runs,
+    # which is the only failure this case exists to catch.
+    spilled_body = run_user("${clientShell} -c 'cat " + spilled[0] + "'")
+    assert host_mid in spilled_body, (
+        "the spilled file must hold the host-side output and be readable from inside "
+        f"the client's sandbox; got {spilled_body!r} (host {host_mid!r})"
+    )
+    # The whole output, not just the previewed head — a spill that truncated to what
+    # the summary already showed would make the file pointless.
+    assert "\n200\n" in spilled_body, (
+        f"the spilled file must hold the full output, not only the preview; got {spilled_body!r}"
+    )
   '';
 }

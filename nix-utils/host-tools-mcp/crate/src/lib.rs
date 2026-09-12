@@ -13,6 +13,7 @@ use serde_json::{json, Map, Value};
 
 pub mod broker;
 pub mod register;
+pub mod spill;
 
 pub const SOCKET_NAME: &str = "registry.sock";
 const MAX_TOOL_NAME_LEN: usize = 64;
@@ -137,6 +138,18 @@ pub enum RegisteredCommand {
     ArgvPrefix { argv: Vec<String> },
 }
 
+/// The optional parameters, shared by both variants so the two descriptions
+/// cannot drift apart. The sentence reads as an exhaustive list, so `file` has
+/// to appear here even though it is the bridge's (see [`crate::spill`]) rather
+/// than this provider's: naming only `timeoutMs` and `vt` tells the caller that
+/// those are all there is, which would steer it away from a parameter the
+/// schema does declare.
+const OPTIONAL_PARAMS: &str = "Optionally accepts `timeoutMs`, `vt` \
+(set true for TUI programs: runs in a terminal-emulated PTY and returns the \
+rendered screen, stdout and stderr combined) and `file` (set true to write the \
+result to a file and get back its path plus a preview, instead of the whole \
+output inline — use it when the output could be large).";
+
 impl RegisteredCommand {
     pub fn shell(command: String) -> io::Result<Self> {
         if command.trim().is_empty() {
@@ -189,11 +202,10 @@ impl RegisteredCommand {
     pub fn description(&self) -> String {
         match self {
             Self::Shell { command } => format!(
-                "Runs the fixed shell command `{}` via `sh -c` as a plain command with separate stdout and stderr. Takes no command arguments and optionally accepts `timeoutMs` and `vt` (set true for TUI programs: runs in a terminal-emulated PTY and returns the rendered screen, stdout and stderr combined).",
-                command,
+                "Runs the fixed shell command `{command}` via `sh -c` as a plain command with separate stdout and stderr. Takes no command arguments. {OPTIONAL_PARAMS}",
             ),
             Self::ArgvPrefix { argv } => format!(
-                "Runs the fixed command prefix `{}` as a plain command with separate stdout and stderr. Accepts trailing arguments as a string array and optionally accepts `timeoutMs` and `vt` (set true for TUI programs: runs in a terminal-emulated PTY and returns the rendered screen, stdout and stderr combined).",
+                "Runs the fixed command prefix `{}` as a plain command with separate stdout and stderr. Accepts trailing arguments as a string array. {OPTIONAL_PARAMS}",
                 argv.join(" "),
             ),
         }
@@ -448,6 +460,28 @@ mod tests {
             assert_eq!(schema["additionalProperties"], false);
             let description = tool.description.expect("tool should have a description");
             assert!(description.contains("`vt`"), "got {description:?}");
+        }
+    }
+
+    // `file` is the other half of that contract, and the odd one: the bridge
+    // adds it to the schema on the way out (see `spill::with_file_param`), so
+    // it is named in the description here but absent from the schema below.
+    #[test]
+    fn tool_description_mentions_the_bridges_file_parameter() {
+        let commands = [
+            RegisteredCommand::shell("echo hi".into()).expect("valid shell command"),
+            RegisteredCommand::argv_prefix(vec!["echo".into()]).expect("valid prefix"),
+        ];
+        for command in commands {
+            let tool = command.tool_definition();
+            assert!(
+                crate::spill::file_param_is_injected(&tool),
+                "the provider must not declare `file` itself, or the bridge \
+                 would treat it as the provider's own parameter and stop \
+                 injecting and stripping it"
+            );
+            let description = tool.description.expect("tool should have a description");
+            assert!(description.contains("`file`"), "got {description:?}");
         }
     }
 

@@ -354,6 +354,118 @@ fn registers_tools_calls_them_and_logs_provider_messages() {
         .any(|line| line["direction"] == "in" && line["message"]["type"] == "tool_call_result"));
 }
 
+/// The `file: true` path end to end: the bridge advertises the parameter on a
+/// tool the provider never declared it on, keeps it away from the provider, and
+/// answers with a path the caller can read instead of the output itself.
+#[test]
+fn file_true_spills_the_result_and_hides_the_flag_from_the_provider() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut child = ChildHarness::spawn(&test_id);
+    wait_for_file(&child.socket_path());
+    initialize_client(&mut child);
+
+    let mut provider = ProviderHarness::connect(&child.socket_path());
+    register_tools(&mut provider, 1, &[tool_definition("ping")]);
+    expect_tool_list_changed(&child);
+
+    let listed = list_tools(&mut child);
+    assert_eq!(
+        listed[0]["inputSchema"]["properties"]["file"]["type"],
+        json!("boolean"),
+        "the bridge should advertise `file` on every proxied tool"
+    );
+    assert_eq!(
+        listed[0]["inputSchema"]["properties"]["message"]["type"],
+        json!("string"),
+        "the provider's own parameters must survive injection"
+    );
+
+    call_tool(
+        &mut child,
+        2,
+        json!({
+            "name": "ping",
+            "arguments": {"message": "hello", "file": true}
+        }),
+    );
+
+    let call_message =
+        provider.recv_matching(DEFAULT_TIMEOUT, |message| message["type"] == "call_tool");
+    assert_eq!(call_message["arguments"], json!({"message": "hello"}));
+
+    let body = (1..=100)
+        .map(|index| format!("line {index}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    provider.send(json!({
+        "type": "tool_call_result",
+        "callId": call_message["callId"],
+        "result": {
+            "content": [{"type": "text", "text": body}],
+            "isError": false
+        }
+    }));
+
+    let response = child.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    let summary = response["result"]["content"][0]["text"]
+        .as_str()
+        .expect("summary text")
+        .to_string();
+
+    let call_id = call_message["callId"].as_str().expect("missing callId");
+    let spilled = child
+        .process_dir()
+        .join("results")
+        .join(format!("{call_id}.txt"));
+    assert!(
+        summary.contains(&spilled.display().to_string()),
+        "summary should name the spilled path, got: {summary}"
+    );
+    assert_eq!(
+        fs::read_to_string(&spilled).expect("spilled file should exist"),
+        body,
+        "the file holds the output verbatim"
+    );
+    // The output itself must not come back inline — that is the whole point.
+    assert!(!summary.contains("line 100"), "got: {summary}");
+    assert!(summary.contains("line 1\n"), "preview missing, got: {summary}");
+}
+
+/// Without the flag the bridge is transparent: nothing is written, and the
+/// result comes back exactly as the provider sent it.
+#[test]
+fn results_are_returned_inline_unless_file_is_requested() {
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut child = ChildHarness::spawn(&test_id);
+    wait_for_file(&child.socket_path());
+    initialize_client(&mut child);
+
+    let mut provider = ProviderHarness::connect(&child.socket_path());
+    register_tools(&mut provider, 1, &[tool_definition("ping")]);
+    expect_tool_list_changed(&child);
+
+    call_tool(&mut child, 2, tool_call_params("ping", "hello"));
+    let call_message =
+        provider.recv_matching(DEFAULT_TIMEOUT, |message| message["type"] == "call_tool");
+    provider.send(json!({
+        "type": "tool_call_result",
+        "callId": call_message["callId"],
+        "result": {
+            "content": [{"type": "text", "text": "provider says hello"}],
+            "isError": false
+        }
+    }));
+
+    let response = child.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    assert_eq!(
+        response["result"]["content"][0]["text"],
+        json!("provider says hello")
+    );
+    assert!(!child.process_dir().join("results").exists());
+}
+
 #[test]
 fn rejects_duplicate_tool_registration_and_duplicate_names_in_batch() {
     let test_id = gen_test_id();
