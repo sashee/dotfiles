@@ -16,6 +16,8 @@ pane_frames false
 default_mode "locked"
 scroll_buffer_size 100000
 scrollback_editor "${builtins.elemAt nvim.scripts 0}/bin/nvim"
+scroll_mode_sync false
+web_server false
 
 keybinds {
 	normal {
