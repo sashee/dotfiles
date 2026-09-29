@@ -48,6 +48,15 @@ let
 		real_machine_id = false;
 	} filtered_prgs;
 
+	# The shell's tools as one store path, prepended to PATH in the zshrc: the inherited
+	# ~/dotfiles/nix-utils/result/bin is hidden by the sandbox's --tmpfs /home, while
+	# /nix/store stays visible. It can't be the scripts-env `result` itself — that
+	# contains zsh, so the zshrc referencing it would be a self-reference.
+	prgs_env = pkgs.buildEnv {
+		name = "zsh-programs-env";
+		paths = builtins.concatLists (map (prg: prg.scripts) prgs);
+	};
+
 	config = pkgs.writeTextDir ".zshrc" ''
 export LANG="en_US.UTF-8"
 export LC_COLLATE="en_US.UTF-8"
@@ -63,6 +72,7 @@ export HISTFILE=$HOME/.local/share/zsh/zsh_history/.zsh_history
 source <(${pkgs.fzf}/bin/fzf --zsh)
 
 path+=('${pkgs.fzf}/bin')
+path=('${prgs_env}/bin' $path)
 
 export FZF_BASE=${pkgs.fzf}/share/fzf
 

@@ -169,6 +169,7 @@ let
     # installed. The machinery they rely on is covered by the probe cases above, so a
     # machine that skips the program loses only that program's own assertions.
     program-zsh-home-scoping = import ./cases/program-zsh-home-scoping.nix { inherit pkgs; };
+    program-zsh-tool-path = import ./cases/program-zsh-tool-path.nix { inherit pkgs; };
     program-keepassxc = import ./cases/program-keepassxc.nix { inherit pkgs; };
     program-flameshot = import ./cases/program-flameshot.nix { inherit pkgs; };
     program-opencode = import ./cases/program-opencode.nix { inherit pkgs; };
