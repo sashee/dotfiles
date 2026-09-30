@@ -6,7 +6,9 @@
 #
 # Recreates that layout: ~/result -> a store path holding the tools, and a PATH whose
 # ONLY route to them is ~/result/bin (coreutils has none of them). Interactive (-i)
-# because zsh reads the zshrc only for interactive shells.
+# because zsh reads the zshrc only for interactive shells. The store path is the profile
+# the login shell finds zsh-nonet in (the same lookup `present` guards on), not the
+# hardcoded /run/current-system/sw: a machine may install the tools per-user.
 { pkgs }:
 let
   coreutils = pkgs.coreutils;
@@ -16,7 +18,7 @@ in
     if not present("zsh-nonet") or not present("git"):
         skip_absent("zsh-nonet / git")
     else:
-        run_user('rm -rf ~/work ~/result && mkdir -p ~/work && ln -s "$(readlink -f /run/current-system/sw)" ~/result')
+        run_user('rm -rf ~/work ~/result && mkdir -p ~/work && ln -s "$(readlink -f "$(dirname "$(command -v zsh-nonet)")/..")" ~/result')
 
         for shell in ["zsh", "zsh-nonet"]:
             out = run_user(
