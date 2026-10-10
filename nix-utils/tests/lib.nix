@@ -35,6 +35,18 @@ let
     users.users.${u}.linger = lib.mkForce true;
   };
 
+  # Layered onto the machine under test: root every store path the test script
+  # references (probes, *.js, ...) through the system closure. The guest sees the
+  # host's store via an overlay, but its Nix DB only registers the system closure, so
+  # script-only paths are garbage to it: any guest GC (e.g. a consumer's boot-time
+  # nix-gc) deletes them mid-test. writeText records each interpolated path as a
+  # reference, and /run/current-system keeps that closure alive, as on a real host.
+  # (virtualisation.additionalPaths would only register them, not root them.) Adds
+  # store paths only; the machine's behaviour is unchanged.
+  rootScriptRefs = name: script: {
+    system.extraDependencies = [ (pkgs.writeText "${name}-script-refs" script) ];
+  };
+
   # Python preamble exposing `run_user(cmd, succeed=True)`. The user's uid is
   # discovered at runtime, so callers only need to name an existing user.
   preamble = u: ''
@@ -114,6 +126,7 @@ let
   # in full and drives them with the plain driver API, while `machine` stays the machine
   # under test that the preamble's helpers operate on.
   mkTest = { name, testScript, extraModules ? [ ], extraNodes ? { }, globalTimeout ? null }:
+    let script = (preamble user) + testScript; in
     pkgs.testers.runNixOSTest ({
       inherit name;
       # Don't pin nixpkgs.* read-only on the nodes, so a consumer's machineModules
@@ -121,9 +134,12 @@ let
       # collision. Small eval-time cost; our own tester sets no nixpkgs.* options.
       node.pkgsReadOnly = false;
       nodes = {
-        machine = { imports = machineModules ++ extraModules ++ [ (ensureLinger user) ]; };
+        machine = {
+          imports = machineModules ++ extraModules
+            ++ [ (ensureLinger user) (rootScriptRefs name script) ];
+        };
       } // extraNodes;
-      testScript = (preamble user) + testScript;
+      testScript = script;
     } // lib.optionalAttrs (globalTimeout != null) { inherit globalTimeout; });
 
   # The case library: each case is
