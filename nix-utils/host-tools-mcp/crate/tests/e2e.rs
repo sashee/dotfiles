@@ -269,22 +269,83 @@ fn startup_creates_artifacts_and_empty_tool_list() {
 #[test]
 fn tool_list_carries_cache_fields_required_by_2026_07_28() {
     // Claude Code rejects a 2026-07-28 tools/list result without `ttlMs` and
-    // `cacheScope` ("tools fetch failed"), and rmcp does not fill them in.
+    // `cacheScope` ("tools fetch failed").
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
     let mut child = ChildHarness::spawn(&test_id);
     wait_for_file(&child.socket_path());
 
-    initialize_client_with_version(&mut child, "2026-07-28");
+    let tools = list_tools_2026_07_28(&mut child);
+    assert_eq!(tools["ttlMs"], json!(0));
+    assert_eq!(tools["cacheScope"], json!("private"));
+    assert_eq!(tools["tools"], json!([]));
+}
+
+#[test]
+fn tool_list_changes_reach_2026_07_28_clients_through_subscriptions_listen() {
+    // 2026-07-28 has no `initialize`: a client only hears `tools/list_changed`
+    // on a `subscriptions/listen` stream. Without it, tools registered after the
+    // client's first tools/list never show up ("connected - no tools").
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut child = ChildHarness::spawn(&test_id);
+    wait_for_file(&child.socket_path());
+
     child.send_json_rpc(json!({
         "jsonrpc": "2.0",
-        "id": 1,
-        "method": "tools/list"
+        "id": "listen:0",
+        "method": "subscriptions/listen",
+        "params": {
+            "_meta": meta_2026_07_28(),
+            "notifications": {"toolsListChanged": true}
+        }
     }));
-    let response = child.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(1));
-    assert_eq!(response["result"]["ttlMs"], json!(0));
-    assert_eq!(response["result"]["cacheScope"], json!("private"));
-    assert_eq!(response["result"]["tools"], json!([]));
+    let acknowledged = child.recv_matching(DEFAULT_TIMEOUT, |message| {
+        message["method"] == "notifications/subscriptions/acknowledged"
+            || message["id"] == json!("listen:0")
+    });
+    assert_eq!(
+        acknowledged["params"]["notifications"],
+        json!({"toolsListChanged": true}),
+        "subscriptions/listen must be accepted, got {acknowledged}"
+    );
+
+    let mut provider = ProviderHarness::connect(&child.socket_path());
+    register_tools(&mut provider, 1, &[tool_definition("ping")]);
+    let list_changed = expect_tool_list_changed(&child);
+    assert_eq!(
+        list_changed["params"]["_meta"]["io.modelcontextprotocol/subscriptionId"],
+        json!("listen:0")
+    );
+    let tools = list_tools_2026_07_28(&mut child);
+    assert_eq!(
+        tool_names(tools["tools"].as_array().expect("missing tools")),
+        vec!["ping".to_string()]
+    );
+
+    child.send_json_rpc(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "_meta": meta_2026_07_28(),
+            "name": "ping",
+            "arguments": {"message": "hello"}
+        }
+    }));
+    let call_message =
+        provider.recv_matching(DEFAULT_TIMEOUT, |message| message["type"] == "call_tool");
+    provider.send(json!({
+        "type": "tool_call_result",
+        "callId": call_message["callId"],
+        "result": {"content": [{"type": "text", "text": "pong"}], "isError": false}
+    }));
+    let result = child.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(2));
+    assert_eq!(result["result"]["content"][0]["text"], json!("pong"));
+
+    drop(provider);
+    expect_tool_list_changed(&child);
+    assert_eq!(list_tools_2026_07_28(&mut child)["tools"], json!([]));
 }
 
 #[test]
@@ -816,6 +877,25 @@ fn deregistering_unknown_or_unowned_tools_returns_errors() {
 }
 
 #[test]
+fn provider_that_never_registered_disconnects_without_notifying() {
+    // Most registry connections never register a tool (~40 in one real session).
+    // Each one used to send tools/list_changed, so the client re-fetched tools/list
+    // every time for nothing.
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut child = ChildHarness::spawn(&test_id);
+    wait_for_file(&child.socket_path());
+    initialize_client(&mut child);
+
+    drop(ProviderHarness::connect(&child.socket_path()));
+    let unexpected = child.recv_message_timeout(Duration::from_millis(500));
+    assert!(
+        unexpected.is_none(),
+        "an idle provider's disconnect reached the client: {unexpected:?}"
+    );
+}
+
+#[test]
 fn reconnecting_provider_can_reuse_a_tool_name_after_disconnect() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
@@ -903,16 +983,12 @@ fn disconnecting_a_provider_unregisters_tools_and_cancels_calls() {
 }
 
 fn initialize_client(child: &mut ChildHarness) {
-    initialize_client_with_version(child, PROTOCOL_VERSION);
-}
-
-fn initialize_client_with_version(child: &mut ChildHarness, protocol_version: &str) {
     child.send_json_rpc(json!({
         "jsonrpc": "2.0",
         "id": 0,
         "method": "initialize",
         "params": {
-            "protocolVersion": protocol_version,
+            "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {},
             "clientInfo": {
                 "name": "e2e-test",
@@ -928,7 +1004,7 @@ fn initialize_client_with_version(child: &mut ChildHarness, protocol_version: &s
     // against a real agent.
     assert_eq!(
         initialize["result"]["protocolVersion"],
-        json!(protocol_version),
+        json!(PROTOCOL_VERSION),
         "server must negotiate the version the client offered; a change here is the rmcp \
          upgrade hazard described in Cargo.toml"
     );
@@ -967,6 +1043,28 @@ fn list_tools(child: &mut ChildHarness) -> Vec<Value> {
         .as_array()
         .cloned()
         .unwrap_or_default()
+}
+
+/// Request `_meta` that a 2026-07-28 client sends on every request in place of
+/// an `initialize` handshake.
+fn meta_2026_07_28() -> Value {
+    json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": {"name": "e2e-test", "version": "0.1.0"}
+    })
+}
+
+/// The full tools/list result, as a 2026-07-28 client requests it.
+fn list_tools_2026_07_28(child: &mut ChildHarness) -> Value {
+    child.send_json_rpc(json!({
+        "jsonrpc": "2.0",
+        "id": 98,
+        "method": "tools/list",
+        "params": {"_meta": meta_2026_07_28()}
+    }));
+    let response = child.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(98));
+    response["result"].clone()
 }
 
 fn call_tool(child: &mut ChildHarness, id: i64, params: Value) {

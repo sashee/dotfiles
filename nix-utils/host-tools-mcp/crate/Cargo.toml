@@ -9,7 +9,7 @@ publish = false
 anyhow = "1.0"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 nix = { version = "0.31", features = ["fs", "process", "signal", "term"] }
-rmcp = { version = "3", features = ["server", "macros", "schemars", "transport-async-rw"] }
+rmcp = { version = "3.5.1", features = ["server", "macros", "schemars", "transport-async-rw"] }
 schemars = "1.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

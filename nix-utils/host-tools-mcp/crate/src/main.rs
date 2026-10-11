@@ -12,12 +12,12 @@ use host_tools_mcp::{
     create_server_dir, log_root, spill, ProviderToServer, ServerToProvider, SOCKET_NAME,
 };
 use rmcp::model::{
-    CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult,
-    CancelledNotificationParam, InitializeRequestParams, InitializeResult, ListToolsResult,
-    PaginatedRequestParams, ProgressNotificationParam, ProgressToken, RequestId,
-    ServerCapabilities, ServerInfo, Tool,
+    CallToolRequestParams, CallToolResponse, CallToolResult, CancelledNotificationParam,
+    InitializeRequestParams, InitializeResult, ListToolsResult, PaginatedRequestParams,
+    ProgressNotificationParam, ProgressToken, RequestId, ServerCapabilities, ServerConfig,
+    SubscriptionFilter, Tool,
 };
-use rmcp::service::{NotificationContext, RequestContext};
+use rmcp::service::{NotificationContext, RequestContext, SubscriptionContext, SubscriptionSink};
 use rmcp::{ErrorData, Peer, RoleServer, ServerHandler, ServiceExt};
 use serde::Serialize;
 use serde_json::Value;
@@ -194,9 +194,30 @@ struct RegistryState {
     next_provider_id: u64,
     next_call_id: u64,
     peer: Option<Peer<RoleServer>>,
+    /// Open `subscriptions/listen` streams, keyed by their request id.
+    subscriptions: HashMap<RequestId, SubscriptionSink>,
     providers: HashMap<u64, ProviderConnection>,
     tools: BTreeMap<String, RegisteredTool>,
     active_calls: HashMap<String, ActiveCall>,
+}
+
+/// Who to tell when the tool list changes, cloned out of the lock so the sends
+/// happen without holding it. A client before 2026-07-28 negotiates through
+/// `initialize` and takes notifications on its session `peer`; from 2026-07-28
+/// there is no `initialize`, and `tools/list_changed` is only delivered on a
+/// `subscriptions/listen` stream.
+struct ListChangedTargets {
+    peer: Option<Peer<RoleServer>>,
+    subscriptions: Vec<SubscriptionSink>,
+}
+
+impl RegistryState {
+    fn list_changed_targets(&self) -> ListChangedTargets {
+        ListChangedTargets {
+            peer: self.peer.clone(),
+            subscriptions: self.subscriptions.values().cloned().collect(),
+        }
+    }
 }
 
 struct ProviderConnection {
@@ -237,6 +258,7 @@ impl SharedState {
                 next_provider_id: 1,
                 next_call_id: 1,
                 peer: None,
+                subscriptions: HashMap::new(),
                 providers: HashMap::new(),
                 tools: BTreeMap::new(),
                 active_calls: HashMap::new(),
@@ -246,6 +268,22 @@ impl SharedState {
 
     fn set_peer(&self, peer: Peer<RoleServer>) {
         self.inner.lock().expect("registry lock poisoned").peer = Some(peer);
+    }
+
+    fn add_subscription(&self, sink: SubscriptionSink) {
+        self.inner
+            .lock()
+            .expect("registry lock poisoned")
+            .subscriptions
+            .insert(sink.id().clone(), sink);
+    }
+
+    fn remove_subscription(&self, id: &RequestId) {
+        self.inner
+            .lock()
+            .expect("registry lock poisoned")
+            .subscriptions
+            .remove(id);
     }
 
     fn snapshot_tools(&self) -> Vec<Tool> {
@@ -292,7 +330,7 @@ impl SharedState {
         &self,
         provider_id: u64,
         tools: Vec<Tool>,
-    ) -> Result<Option<Peer<RoleServer>>, String> {
+    ) -> Result<ListChangedTargets, String> {
         let mut inner = self.inner.lock().expect("registry lock poisoned");
         if !inner.providers.contains_key(&provider_id) {
             return Err(format!("unknown provider {provider_id}"));
@@ -324,14 +362,14 @@ impl SharedState {
                 .insert(name);
         }
 
-        Ok(inner.peer.clone())
+        Ok(inner.list_changed_targets())
     }
 
     fn deregister_tools(
         &self,
         provider_id: u64,
         names: &[String],
-    ) -> Result<Option<Peer<RoleServer>>, String> {
+    ) -> Result<ListChangedTargets, String> {
         let mut inner = self.inner.lock().expect("registry lock poisoned");
         let provider_tools = inner
             .providers
@@ -373,7 +411,7 @@ impl SharedState {
             }
         }
 
-        let peer = inner.peer.clone();
+        let targets = inner.list_changed_targets();
         let cancelled = call_ids
             .into_iter()
             .filter_map(|call_id| {
@@ -389,14 +427,15 @@ impl SharedState {
             })
             .count();
         let _ = cancelled;
-        Ok(peer)
+        Ok(targets)
     }
 
-    fn disconnect_provider(&self, provider_id: u64) -> Option<Peer<RoleServer>> {
+    /// Who to notify, if dropping the provider took tools off the list. Most
+    /// connections never register anything (dozens per session), and telling
+    /// the client about each one makes it re-fetch tools/list for nothing.
+    fn disconnect_provider(&self, provider_id: u64) -> Option<ListChangedTargets> {
         let mut inner = self.inner.lock().expect("registry lock poisoned");
-        let Some(provider) = inner.providers.remove(&provider_id) else {
-            return inner.peer.clone();
-        };
+        let provider = inner.providers.remove(&provider_id)?;
 
         for name in &provider.tools {
             inner.tools.remove(name);
@@ -416,7 +455,7 @@ impl SharedState {
             }
         }
 
-        inner.peer.clone()
+        (!provider.tools.is_empty()).then(|| inner.list_changed_targets())
     }
 
     fn start_call(
@@ -555,19 +594,39 @@ impl ServerHandler for HostToolsMcp {
             .iter()
             .map(spill::with_file_param)
             .collect::<Vec<_>>();
-        // Protocol 2026-07-28 makes `ttlMs` and `cacheScope` required (SEP-2549), and
-        // Claude Code rejects the whole list without them; rmcp leaves both unset. The
-        // registry changes at runtime, so the list is never fresh beyond `list_changed`,
-        // and it describes this host process, so it is private. Older peers ignore both.
-        std::future::ready(Ok(ListToolsResult::with_all_items(tools)
-            .with_ttl_ms(0)
-            .with_cache_scope(CacheScope::Private)))
+        // No cache hints: for 2026-07-28 peers rmcp (>= 3.5.1) fills the required
+        // `ttlMs: 0` / `cacheScope: "private"`, which suit a registry that changes
+        // at runtime, and older peers get the legacy shape without them.
+        std::future::ready(Ok(ListToolsResult::with_all_items(tools)))
     }
 
     fn get_tool(&self, name: &str) -> Option<Tool> {
         self.state
             .get_tool(name)
             .map(|tool| spill::with_file_param(&tool))
+    }
+
+    fn accepted_subscription_filter(
+        &self,
+        _requested: &SubscriptionFilter,
+    ) -> Option<SubscriptionFilter> {
+        // rmcp's default (`None`) answers `subscriptions/listen` with -32601, which
+        // leaves a 2026-07-28 client with no way to hear about tools registered after
+        // its first `tools/list`. rmcp narrows this to what was requested.
+        Some(SubscriptionFilter::builder().tools_list_changed().build())
+    }
+
+    fn listen(
+        &self,
+        context: SubscriptionContext,
+    ) -> impl std::future::Future<Output = Result<(), ErrorData>> + Send + '_ {
+        async move {
+            let id = context.sink().id().clone();
+            self.state.add_subscription(context.sink().clone());
+            context.cancelled().await;
+            self.state.remove_subscription(&id);
+            Ok(())
+        }
     }
 
     fn call_tool(
@@ -589,7 +648,9 @@ impl ServerHandler for HostToolsMcp {
             };
 
             if started_call.sender.send(message).is_err() {
-                self.state.disconnect_provider(started_call.provider_id);
+                // The reader task's own disconnect will find the provider gone and
+                // stay silent, so this is the one chance to report its tools removed.
+                disconnect_and_notify(&self.state, started_call.provider_id).await;
                 return Err(cancellation_error("tool provider disconnected"));
             }
 
@@ -633,8 +694,8 @@ impl ServerHandler for HostToolsMcp {
         std::future::ready(())
     }
 
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(
             ServerCapabilities::builder()
                 .enable_tools()
                 .enable_tool_list_changed()
@@ -649,9 +710,18 @@ impl ServerHandler for HostToolsMcp {
     }
 }
 
-async fn notify_tools_changed(peer: Option<Peer<RoleServer>>) {
-    if let Some(peer) = peer {
+async fn notify_tools_changed(targets: ListChangedTargets) {
+    if let Some(peer) = targets.peer {
         let _ = peer.notify_tool_list_changed().await;
+    }
+    for sink in targets.subscriptions {
+        let _ = sink.notify_tool_list_changed().await;
+    }
+}
+
+async fn disconnect_and_notify(state: &SharedState, provider_id: u64) {
+    if let Some(targets) = state.disconnect_provider(provider_id) {
+        notify_tools_changed(targets).await;
     }
 }
 
@@ -664,9 +734,9 @@ async fn handle_provider_message(
     match message {
         ProviderToServer::RegisterTools { id, tools } => {
             match state.register_tools(provider_id, tools) {
-                Ok(peer) => {
+                Ok(targets) => {
                     let _ = sender.send(ServerToProvider::Success { in_reply_to: id });
-                    notify_tools_changed(peer).await;
+                    notify_tools_changed(targets).await;
                 }
                 Err(error) => {
                     let _ = sender.send(ServerToProvider::Error {
@@ -678,9 +748,9 @@ async fn handle_provider_message(
         }
         ProviderToServer::DeregisterTools { id, tools } => {
             match state.deregister_tools(provider_id, &tools) {
-                Ok(peer) => {
+                Ok(targets) => {
                     let _ = sender.send(ServerToProvider::Success { in_reply_to: id });
-                    notify_tools_changed(peer).await;
+                    notify_tools_changed(targets).await;
                 }
                 Err(error) => {
                     let _ = sender.send(ServerToProvider::Error {
@@ -751,16 +821,14 @@ async fn provider_reader_task(
             Ok(_) => {
                 let raw = line.trim_end();
                 let Ok(value) = serde_json::from_str::<Value>(raw) else {
-                    let peer = state.disconnect_provider(provider_id);
-                    notify_tools_changed(peer).await;
+                    disconnect_and_notify(&state, provider_id).await;
                     return;
                 };
                 if logger.log_value("in", &value).is_err() {
                     break;
                 }
                 let Ok(message) = serde_json::from_value::<ProviderToServer>(value) else {
-                    let peer = state.disconnect_provider(provider_id);
-                    notify_tools_changed(peer).await;
+                    disconnect_and_notify(&state, provider_id).await;
                     return;
                 };
                 handle_provider_message(state.clone(), provider_id, message, &sender).await;
@@ -769,8 +837,7 @@ async fn provider_reader_task(
         }
     }
 
-    let peer = state.disconnect_provider(provider_id);
-    notify_tools_changed(peer).await;
+    disconnect_and_notify(&state, provider_id).await;
 }
 
 async fn provider_connection_task(
