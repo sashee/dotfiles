@@ -12,9 +12,10 @@ use host_tools_mcp::{
     create_server_dir, log_root, spill, ProviderToServer, ServerToProvider, SOCKET_NAME,
 };
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, CancelledNotificationParam,
-    InitializeRequestParams, InitializeResult, ListToolsResult, PaginatedRequestParams,
-    ProgressNotificationParam, ProgressToken, RequestId, ServerCapabilities, ServerInfo, Tool,
+    CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult,
+    CancelledNotificationParam, InitializeRequestParams, InitializeResult, ListToolsResult,
+    PaginatedRequestParams, ProgressNotificationParam, ProgressToken, RequestId,
+    ServerCapabilities, ServerInfo, Tool,
 };
 use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{ErrorData, Peer, RoleServer, ServerHandler, ServiceExt};
@@ -554,11 +555,13 @@ impl ServerHandler for HostToolsMcp {
             .iter()
             .map(spill::with_file_param)
             .collect::<Vec<_>>();
-        std::future::ready({
-            let mut result = ListToolsResult::default();
-            result.tools = tools;
-            Ok(result)
-        })
+        // Protocol 2026-07-28 makes `ttlMs` and `cacheScope` required (SEP-2549), and
+        // Claude Code rejects the whole list without them; rmcp leaves both unset. The
+        // registry changes at runtime, so the list is never fresh beyond `list_changed`,
+        // and it describes this host process, so it is private. Older peers ignore both.
+        std::future::ready(Ok(ListToolsResult::with_all_items(tools)
+            .with_ttl_ms(0)
+            .with_cache_scope(CacheScope::Private)))
     }
 
     fn get_tool(&self, name: &str) -> Option<Tool> {

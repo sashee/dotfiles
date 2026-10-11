@@ -267,6 +267,27 @@ fn startup_creates_artifacts_and_empty_tool_list() {
 }
 
 #[test]
+fn tool_list_carries_cache_fields_required_by_2026_07_28() {
+    // Claude Code rejects a 2026-07-28 tools/list result without `ttlMs` and
+    // `cacheScope` ("tools fetch failed"), and rmcp does not fill them in.
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut child = ChildHarness::spawn(&test_id);
+    wait_for_file(&child.socket_path());
+
+    initialize_client_with_version(&mut child, "2026-07-28");
+    child.send_json_rpc(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list"
+    }));
+    let response = child.recv_matching(DEFAULT_TIMEOUT, |message| message["id"] == json!(1));
+    assert_eq!(response["result"]["ttlMs"], json!(0));
+    assert_eq!(response["result"]["cacheScope"], json!("private"));
+    assert_eq!(response["result"]["tools"], json!([]));
+}
+
+#[test]
 fn provider_log_is_created_after_connect() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
@@ -882,12 +903,16 @@ fn disconnecting_a_provider_unregisters_tools_and_cancels_calls() {
 }
 
 fn initialize_client(child: &mut ChildHarness) {
+    initialize_client_with_version(child, PROTOCOL_VERSION);
+}
+
+fn initialize_client_with_version(child: &mut ChildHarness, protocol_version: &str) {
     child.send_json_rpc(json!({
         "jsonrpc": "2.0",
         "id": 0,
         "method": "initialize",
         "params": {
-            "protocolVersion": PROTOCOL_VERSION,
+            "protocolVersion": protocol_version,
             "capabilities": {},
             "clientInfo": {
                 "name": "e2e-test",
@@ -903,7 +928,7 @@ fn initialize_client(child: &mut ChildHarness) {
     // against a real agent.
     assert_eq!(
         initialize["result"]["protocolVersion"],
-        json!(PROTOCOL_VERSION),
+        json!(protocol_version),
         "server must negotiate the version the client offered; a change here is the rmcp \
          upgrade hazard described in Cargo.toml"
     );
