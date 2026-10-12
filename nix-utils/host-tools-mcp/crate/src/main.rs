@@ -270,12 +270,12 @@ impl SharedState {
         self.inner.lock().expect("registry lock poisoned").peer = Some(peer);
     }
 
-    fn add_subscription(&self, sink: SubscriptionSink) {
-        self.inner
-            .lock()
-            .expect("registry lock poisoned")
-            .subscriptions
-            .insert(sink.id().clone(), sink);
+    /// Whether any tools are registered, read under the same lock as the insert:
+    /// a concurrent registration either sees this stream or is seen here.
+    fn add_subscription(&self, sink: SubscriptionSink) -> bool {
+        let mut inner = self.inner.lock().expect("registry lock poisoned");
+        inner.subscriptions.insert(sink.id().clone(), sink);
+        !inner.tools.is_empty()
     }
 
     fn remove_subscription(&self, id: &RequestId) {
@@ -621,8 +621,16 @@ impl ServerHandler for HostToolsMcp {
         context: SubscriptionContext,
     ) -> impl std::future::Future<Output = Result<(), ErrorData>> + Send + '_ {
         async move {
-            let id = context.sink().id().clone();
-            self.state.add_subscription(context.sink().clone());
+            let sink = context.sink().clone();
+            let id = sink.id().clone();
+            // rmcp sends the acknowledgment before calling listen(), so a provider can
+            // register in between and notify a subscriber set without this stream: the
+            // client would sit on a stale tools/list. Announce if anything is registered;
+            // a registration racing this one notifies the stream itself or is seen here,
+            // never both. Tools registered long before the listen cost one extra refetch.
+            if self.state.add_subscription(sink.clone()) {
+                let _ = sink.notify_tool_list_changed().await;
+            }
             context.cancelled().await;
             self.state.remove_subscription(&id);
             Ok(())

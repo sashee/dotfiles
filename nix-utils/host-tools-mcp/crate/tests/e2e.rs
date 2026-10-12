@@ -349,6 +349,36 @@ fn tool_list_changes_reach_2026_07_28_clients_through_subscriptions_listen() {
 }
 
 #[test]
+fn subscriptions_listen_announces_tools_registered_before_the_stream_was_live() {
+    // rmcp acknowledges `subscriptions/listen` before the server records the
+    // stream, so a registration that lands in between notifies nobody. That
+    // window is too short to hit on purpose (it failed CI only under load);
+    // registering before the listen is the same server state, made deterministic.
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut child = ChildHarness::spawn(&test_id);
+    wait_for_file(&child.socket_path());
+
+    let mut provider = ProviderHarness::connect(&child.socket_path());
+    register_tools(&mut provider, 1, &[tool_definition("ping")]);
+
+    child.send_json_rpc(json!({
+        "jsonrpc": "2.0",
+        "id": "listen:0",
+        "method": "subscriptions/listen",
+        "params": {
+            "_meta": meta_2026_07_28(),
+            "notifications": {"toolsListChanged": true}
+        }
+    }));
+    let list_changed = expect_tool_list_changed(&child);
+    assert_eq!(
+        list_changed["params"]["_meta"]["io.modelcontextprotocol/subscriptionId"],
+        json!("listen:0")
+    );
+}
+
+#[test]
 fn provider_log_is_created_after_connect() {
     let test_id = gen_test_id();
     let _test_dir = test_dir(&test_id);
