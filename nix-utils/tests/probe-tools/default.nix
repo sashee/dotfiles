@@ -77,7 +77,7 @@ let
       };
     };
 
-    # The three non-default /dev modes.
+    # The non-default /dev modes.
     probe-dev-full = mkProbe {
       name = "probe-dev-full";
       sandbox_restrictions = { dev = true; };
@@ -89,6 +89,11 @@ let
     probe-dev-glob = mkProbe {
       name = "probe-dev-glob";
       sandbox_restrictions = { dev = [ "/dev/ttyUSB*" "/dev/ttyACM*" "/dev/kvm" ]; };
+    };
+    # The multiplexer mode (zellij/tmux): same globs over the live host /dev.
+    probe-dev-live = mkProbe {
+      name = "probe-dev-live";
+      sandbox_restrictions = { dev = { live = [ "/dev/ttyUSB*" "/dev/ttyACM*" "/dev/kvm" ]; }; };
     };
 
     # Session bus through the filtering xdg-dbus-proxy, with the most restrictive rule

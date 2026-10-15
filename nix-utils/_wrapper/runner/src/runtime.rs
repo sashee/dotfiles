@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fs;
 use std::fs::OpenOptions;
@@ -28,7 +29,7 @@ use seccompiler::{
     SeccompRule,
 };
 
-use crate::config::{DbusProxyConfig, DevConfig, MountRule, RunnerConfig};
+use crate::config::{DbusProxyConfig, DevConfig, LiveDev, MountRule, RunnerConfig};
 use crate::error::RunnerError;
 
 static NEXT_PROXY_ID: AtomicU64 = AtomicU64::new(0);
@@ -153,8 +154,11 @@ pub fn run(config: RunnerConfig, passthrough_args: Vec<OsString>) -> Result<i32,
         bwrap_args.push(restrict_path);
     }
 
+    let (dev_bind_args, dev_block_mounts) = dev_launch_rules(&config)?;
+    bwrap_args.extend(dev_bind_args);
+
     let mut mounts = config.mounts.clone();
-    mounts.extend(dev_allowlist_block_mounts(&config)?);
+    mounts.extend(dev_block_mounts);
 
     ensure_mount_targets(&mounts, &host_env, &config.optional_env_vars)?;
 
@@ -383,13 +387,42 @@ fn build_seccomp_filter_fd(blocked_socket_families: &[i32]) -> Result<fs::File, 
     Ok(filter_file)
 }
 
-fn dev_allowlist_block_mounts(config: &RunnerConfig) -> Result<Vec<MountRule>, RunnerError> {
-    let patterns = match &config.dev {
-        DevConfig::Allowlist(patterns) => patterns,
-        _ => return Ok(Vec::new()),
-    };
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum DevEntryKind {
+    Dir,
+    Symlink,
+    Other,
+}
 
-    let compiled_patterns = patterns
+/// One top-level /dev entry as seen at launch.
+#[derive(Debug, Clone)]
+struct DevEntry {
+    name: String,
+    kind: DevEntryKind,
+}
+
+/// The launch-time /dev work for the two pattern modes: bwrap args binding the
+/// allowed devices into the private /dev (allowlist), or block mounts masking the
+/// rest of the live host /dev (live). Empty for the other modes.
+fn dev_launch_rules(
+    config: &RunnerConfig,
+) -> Result<(Vec<String>, Vec<MountRule>), RunnerError> {
+    let baseline: HashSet<&str> = config.fake_dev_entries.iter().map(String::as_str).collect();
+    match &config.dev {
+        DevConfig::Allowlist(patterns) => Ok((
+            dev_allowlist_bind_args(&compile_dev_patterns(patterns)?, &baseline, &read_dev_entries()?),
+            Vec::new(),
+        )),
+        DevConfig::Live(LiveDev { live }) => Ok((
+            Vec::new(),
+            dev_live_block_mounts(&compile_dev_patterns(live)?, &baseline, &read_dev_entries()?),
+        )),
+        DevConfig::Disabled | DevConfig::Enabled(_) => Ok((Vec::new(), Vec::new())),
+    }
+}
+
+fn compile_dev_patterns(patterns: &[String]) -> Result<Vec<Pattern>, RunnerError> {
+    patterns
         .iter()
         .map(|pattern| {
             Pattern::new(pattern).map_err(|err| {
@@ -398,59 +431,75 @@ fn dev_allowlist_block_mounts(config: &RunnerConfig) -> Result<Vec<MountRule>, R
                 ))
             })
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect()
+}
 
-    let fake_dev_entries: std::collections::HashSet<&str> =
-        config.fake_dev_entries.iter().map(String::as_str).collect();
-    let mut block_mounts = Vec::new();
-    let read_dir = fs::read_dir("/dev").map_err(|source| RunnerError::OpenFile {
+fn read_dev_entries() -> Result<Vec<DevEntry>, RunnerError> {
+    let open_err = |source| RunnerError::OpenFile {
         path: "/dev".into(),
         source,
-    })?;
+    };
+    fs::read_dir("/dev")
+        .map_err(open_err)?
+        .map(|entry| {
+            let entry = entry.map_err(open_err)?;
+            let file_type = entry.file_type().map_err(open_err)?;
+            let kind = if file_type.is_symlink() {
+                DevEntryKind::Symlink
+            } else if file_type.is_dir() {
+                DevEntryKind::Dir
+            } else {
+                DevEntryKind::Other
+            };
+            Ok(entry.file_name().to_str().map(|name| DevEntry {
+                name: name.to_string(),
+                kind,
+            }))
+        })
+        .filter_map(Result::transpose)
+        .collect()
+}
 
-    for entry in read_dir {
-        let entry = entry.map_err(|source| RunnerError::OpenFile {
-            path: "/dev".into(),
-            source,
-        })?;
-        let file_name = entry.file_name();
-        let Some(file_name) = file_name.to_str() else {
-            continue;
-        };
+/// Allowlist mode: `--dev-bind-try` for each matching entry, on top of bwrap's
+/// private `--dev /dev`. Baseline names are never bound, even if a pattern matches
+/// them: those come from bwrap, and binding the host's would re-import its
+/// terminals (pts, ptmx) or shared memory (shm).
+fn dev_allowlist_bind_args(
+    patterns: &[Pattern],
+    baseline: &HashSet<&str>,
+    entries: &[DevEntry],
+) -> Vec<String> {
+    entries
+        .iter()
+        .filter(|entry| !baseline.contains(entry.name.as_str()))
+        .map(|entry| format!("/dev/{}", entry.name))
+        .filter(|path| patterns.iter().any(|pattern| pattern.matches(path)))
+        .flat_map(|path| ["--dev-bind-try".to_string(), path.clone(), path])
+        .collect()
+}
 
-        if fake_dev_entries.contains(file_name) {
-            continue;
-        }
-
-        let path = format!("/dev/{file_name}");
-        if compiled_patterns
-            .iter()
-            .any(|pattern| pattern.matches(&path))
-        {
-            continue;
-        }
-
-        let file_type = entry.file_type().map_err(|source| RunnerError::OpenFile {
-            path: path.clone().into(),
-            source,
-        })?;
-
-        if file_type.is_symlink() {
-            continue;
-        }
-
-        let mount_type = if file_type.is_dir() { "dir" } else { "file" };
-
-        block_mounts.push(MountRule {
+/// Live mode: block mounts for each entry of the (whole, live) host /dev that is
+/// neither a baseline node nor a match. Symlinks are left alone: they only point
+/// at nodes, which are masked themselves.
+fn dev_live_block_mounts(
+    patterns: &[Pattern],
+    baseline: &HashSet<&str>,
+    entries: &[DevEntry],
+) -> Vec<MountRule> {
+    entries
+        .iter()
+        .filter(|entry| entry.kind != DevEntryKind::Symlink)
+        .filter(|entry| !baseline.contains(entry.name.as_str()))
+        .map(|entry| (format!("/dev/{}", entry.name), entry.kind))
+        .filter(|(path, _)| !patterns.iter().any(|pattern| pattern.matches(path)))
+        .map(|(path, kind)| MountRule {
             path,
             perm: "block".to_string(),
-            r#type: mount_type.to_string(),
+            r#type: if kind == DevEntryKind::Dir { "dir" } else { "file" }.to_string(),
             source: None,
             mkdir: false,
-        });
-    }
-
-    Ok(block_mounts)
+        })
+        .collect()
 }
 
 /// Creates a `MFD_CLOEXEC` anonymous in-memory file and hands back a `File`. The nix
@@ -1222,6 +1271,84 @@ mod tests {
     fn mount_with_undefined_required_var_errors() {
         let err = run_mounts(&[mount("$NOPE/x", "rw", "dir", None)]).unwrap_err();
         assert!(matches!(err, RunnerError::UndefinedVariable { name } if name == "NOPE"));
+    }
+
+    // --- /dev allowlist (private /dev + binds) and live (host /dev + masks) ---
+
+    fn dev_entry(name: &str, kind: DevEntryKind) -> DevEntry {
+        DevEntry {
+            name: name.to_string(),
+            kind,
+        }
+    }
+
+    fn dev_entries() -> Vec<DevEntry> {
+        vec![
+            dev_entry("null", DevEntryKind::Other),
+            dev_entry("pts", DevEntryKind::Dir),
+            dev_entry("ptmx", DevEntryKind::Other),
+            dev_entry("shm", DevEntryKind::Dir),
+            dev_entry("kvm", DevEntryKind::Other),
+            dev_entry("ttyUSB0", DevEntryKind::Other),
+            dev_entry("ttyS0", DevEntryKind::Other),
+            dev_entry("mem", DevEntryKind::Other),
+            dev_entry("input", DevEntryKind::Dir),
+            dev_entry("rtc", DevEntryKind::Symlink),
+        ]
+    }
+
+    fn baseline() -> HashSet<&'static str> {
+        HashSet::from(["null", "pts", "ptmx", "shm"])
+    }
+
+    fn patterns(globs: &[&str]) -> Vec<Pattern> {
+        compile_dev_patterns(&globs.iter().map(|g| g.to_string()).collect::<Vec<_>>()).unwrap()
+    }
+
+    #[test]
+    fn allowlist_binds_only_matching_entries() {
+        assert_eq!(
+            dev_allowlist_bind_args(&patterns(&["/dev/ttyUSB*", "/dev/kvm"]), &baseline(), &dev_entries()),
+            vec![
+                "--dev-bind-try", "/dev/kvm", "/dev/kvm",
+                "--dev-bind-try", "/dev/ttyUSB0", "/dev/ttyUSB0",
+            ]
+        );
+    }
+
+    #[test]
+    fn allowlist_never_binds_host_baseline_nodes() {
+        // "/dev/pt*" matches pts and ptmx, but those must stay bwrap's private ones.
+        assert!(
+            dev_allowlist_bind_args(&patterns(&["/dev/pt*", "/dev/sh*", "/dev/null"]), &baseline(), &dev_entries())
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn live_masks_everything_but_baseline_matches_and_symlinks() {
+        let masked: Vec<(String, String)> =
+            dev_live_block_mounts(&patterns(&["/dev/ttyUSB*", "/dev/kvm"]), &baseline(), &dev_entries())
+                .into_iter()
+                .inspect(|m| assert_eq!(m.perm, "block"))
+                .map(|m| (m.path, m.r#type))
+                .collect();
+        assert_eq!(
+            masked,
+            vec![
+                ("/dev/ttyS0".to_string(), "file".to_string()),
+                ("/dev/mem".to_string(), "file".to_string()),
+                ("/dev/input".to_string(), "dir".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn invalid_dev_pattern_is_rejected() {
+        assert!(matches!(
+            compile_dev_patterns(&["/dev/[".to_string()]),
+            Err(RunnerError::InvalidConfig(_))
+        ));
     }
 
     // --- pure helpers ---

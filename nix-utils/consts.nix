@@ -1,4 +1,13 @@
+let
+	nixDaemonSocketDir = "/nix/var/nix/daemon-socket";
+in
 {
+	# The nix daemon's socket dir. Blocked by default (protectedPaths); a tool opts
+	# back in with `fs."${nixDaemonSocketDir}" = { perm = "ro"; }` (connect() works
+	# through a read-only bind). Opting in requires network = true (_wrapper asserts
+	# it): the daemon builds fixed-output derivations WITH network access, so a
+	# sandbox that can reach it can fetch/exfiltrate even under --unshare-net.
+	inherit nixDaemonSocketDir;
 	SKIP_SANDBOX_ENV_VAR_NAME = "__NIX_UTILS_SKIP_SANDBOX";
 	RESTRICT_TO_ENV_VAR_NAME = "__NIX_UTILS_RESTRICT_TO";
 	# Env vars allowed to be unset: a mount path referencing one of these is
@@ -9,10 +18,12 @@
 	# to cover `${TMPDIR:-/tmp}` (the broker socket dir): when TMPDIR is unset the
 	# "$TMPDIR" mount is skipped and "/tmp" covers it; when set, "$TMPDIR" binds it.
 	optionalEnvVars = [ "WAYLAND_DISPLAY" "SSH_AUTH_SOCK" "TMPDIR" ];
-	# The /dev nodes `bwrap --dev /dev` creates (fixed per bubblewrap version). For
-	# dev-allowlist tools the runner keeps these (never block-mounts them) while
-	# blocking other real devices. Kept as a constant instead of probing bwrap on
-	# every launch; tests/cases/dev-baseline.nix guards it against bwrap drift.
+	# The /dev nodes `bwrap --dev /dev` creates (fixed per bubblewrap version). A
+	# `dev = [ patterns ]` tool never binds the host's version of these over bwrap's
+	# (pts/ptmx/shm would re-import the host's terminals and shared memory); a
+	# `dev = { live = ...; }` tool never masks them. Kept as a constant instead of
+	# probing bwrap on every launch; tests/cases/dev-baseline.nix guards it against
+	# bwrap drift.
 	fakeDevEntries = [
 		"core" "fd" "full" "null" "ptmx" "pts" "random" "shm"
 		"stderr" "stdin" "stdout" "tty" "urandom" "zero"
@@ -127,5 +138,10 @@
 		# action / write) to execute commands in zellij's (broad) sandbox. Block
 		# it by default; zellij opts back in via its own fs entry.
 		{ path = "$XDG_RUNTIME_DIR/zellij"; type = "dir"; }
+		# nix daemon (see nixDaemonSocketDir above): a network proxy (fixed-output
+		# builds fetch with network) and a root-owned attack surface. zsh, claude and
+		# opencode opt back in. Guarded by tests/cases/uds-connectable.nix and
+		# tests/cases/program-nix-daemon.nix.
+		{ path = nixDaemonSocketDir; type = "dir"; }
 	];
 }

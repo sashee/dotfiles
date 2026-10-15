@@ -60,6 +60,9 @@ keybinds {
 	};
 
 	merged_sandbox_restrictions = zsh.sandbox_restrictions // {
+		# Live host /dev so a device plugged in later reaches NEW panes: each pane's zsh
+		# reads this /dev at launch and binds the matches into its own private /dev.
+		dev = { live = zsh.sandbox_restrictions.dev; };
 		dont_die_with_parent = true;
 		share_pid = true;
 		fs = (zsh.sandbox_restrictions.fs or {}) // {

@@ -50,7 +50,11 @@ in
 	scripts = (import ../_wrapper/default.nix {
 		name = "tmux";
 		inherit pkgs bin;
-		sandbox_restrictions = zsh.sandbox_restrictions // { network = true; };
+		sandbox_restrictions = zsh.sandbox_restrictions // {
+			network = true;
+			# Live host /dev, like zellij: new windows' zsh picks up devices plugged in later.
+			dev = { live = zsh.sandbox_restrictions.dev; };
+		};
 	}).scripts;
 	inherit (zsh) sandbox_restrictions;
 }
