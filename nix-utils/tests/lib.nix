@@ -191,6 +191,7 @@ let
     program-opencode = import ./cases/program-opencode.nix { inherit pkgs; };
     program-claude = import ./cases/program-claude.nix { inherit pkgs; };
     program-nix-daemon = import ./cases/program-nix-daemon.nix { inherit pkgs; };
+    program-dev-modes = import ./cases/program-dev-modes.nix { inherit pkgs; };
   };
 
   isolated = lib.filterAttrs (_: c: c.isolate or false) cases;

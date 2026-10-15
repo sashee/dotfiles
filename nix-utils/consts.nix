@@ -18,10 +18,12 @@ in
 	# to cover `${TMPDIR:-/tmp}` (the broker socket dir): when TMPDIR is unset the
 	# "$TMPDIR" mount is skipped and "/tmp" covers it; when set, "$TMPDIR" binds it.
 	optionalEnvVars = [ "WAYLAND_DISPLAY" "SSH_AUTH_SOCK" "TMPDIR" ];
-	# The /dev nodes `bwrap --dev /dev` creates (fixed per bubblewrap version). For
-	# dev-allowlist tools the runner keeps these (never block-mounts them) while
-	# blocking other real devices. Kept as a constant instead of probing bwrap on
-	# every launch; tests/cases/dev-baseline.nix guards it against bwrap drift.
+	# The /dev nodes `bwrap --dev /dev` creates (fixed per bubblewrap version). A
+	# `dev = [ patterns ]` tool never binds the host's version of these over bwrap's
+	# (pts/ptmx/shm would re-import the host's terminals and shared memory); a
+	# `dev = { live = ...; }` tool never masks them. Kept as a constant instead of
+	# probing bwrap on every launch; tests/cases/dev-baseline.nix guards it against
+	# bwrap drift.
 	fakeDevEntries = [
 		"core" "fd" "full" "null" "ptmx" "pts" "random" "shm"
 		"stderr" "stdin" "stdout" "tty" "urandom" "zero"

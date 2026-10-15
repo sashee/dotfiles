@@ -112,8 +112,11 @@ let
   pathDepth = p: builtins.length (builtins.filter (x: x != "") (pkgs.lib.splitString "/" p));
   mountRules = builtins.sort (a: b: pathDepth a.path < pathDepth b.path) deduplicatedEntries;
 
+  # dev = false | true | [ patterns ] | { live = [ patterns ]; }. Only `true` and the
+  # live form bind the host's /dev; a pattern list gets bwrap's private --dev and the
+  # runner binds the matching devices in at launch.
   devConfig = sandbox_restrictions.dev or false;
-  useRealDev = devConfig != false;
+  useRealDev = devConfig == true || builtins.isAttrs devConfig;
 
   bwrapBaseArgs =
     (pkgs.lib.optionals (!((sandbox_restrictions.share_user or false))) [ "--unshare-user" "--uid" "__CURRENT_UID__" "--gid" "__CURRENT_GID__" ])

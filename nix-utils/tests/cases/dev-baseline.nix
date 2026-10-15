@@ -1,5 +1,6 @@
-# Case: the hardcoded consts.fakeDevEntries (the /dev nodes the runner keeps for
-# dev-allowlist tools, instead of probing bwrap on every launch) still matches what
+# Case: the hardcoded consts.fakeDevEntries (the /dev nodes the runner never takes from
+# the host in allowlist mode and never masks in live mode, instead of probing bwrap on
+# every launch) still matches what
 # `bwrap --dev /dev` actually creates for the pinned bubblewrap. Guards against a
 # future bubblewrap changing its --dev population.
 { pkgs }:

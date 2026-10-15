@@ -14,9 +14,9 @@ pub struct RunnerConfig {
     pub debug_bwrap: bool,
     #[serde(default)]
     pub dev: DevConfig,
-    /// The /dev nodes `bwrap --dev` creates, supplied from consts.nix. Used to
-    /// keep those nodes when block-mounting non-allowlisted real devices, instead
-    /// of probing bwrap on every launch.
+    /// The /dev nodes `bwrap --dev` creates, supplied from consts.nix, instead of
+    /// probing bwrap on every launch. Never taken from the host in allowlist mode,
+    /// never masked in live mode.
     #[serde(default)]
     pub fake_dev_entries: Vec<String>,
     #[serde(default)]
@@ -56,8 +56,24 @@ pub struct CommandConfig {
 pub enum DevConfig {
     #[default]
     Disabled,
-    Enabled(bool),
+    // `dev = true/false`: decided on the Nix side (`--dev-bind /dev` vs `--dev`), so
+    // the runner has nothing to do with the value.
+    Enabled(#[allow(dead_code)] bool),
+    /// bwrap's private `--dev /dev`, plus each host /dev entry matching a pattern at
+    /// launch bound in. Devices that appear later stay invisible (fail closed).
     Allowlist(Vec<String>),
+    /// The live host /dev, with every entry that is neither a baseline node nor a match
+    /// masked at launch. Devices that appear later are visible unmasked, and the host's
+    /// pts/shm are shared — only for the outermost layer (zellij/tmux), so newly
+    /// plugged devices reach the allowlist sandboxes started inside it.
+    Live(LiveDev),
+}
+
+/// `{ "live": [patterns] }`; see [`DevConfig::Live`].
+#[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct LiveDev {
+    pub live: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -146,26 +162,21 @@ impl RunnerConfig {
             ));
         }
 
-        match &self.dev {
-            DevConfig::Disabled => {}
-            DevConfig::Enabled(enabled) => {
-                let _ = *enabled;
+        if let DevConfig::Allowlist(patterns) | DevConfig::Live(LiveDev { live: patterns }) =
+            &self.dev
+        {
+            if let Some(pattern) = patterns.iter().find(|p| !p.starts_with("/dev/")) {
+                return Err(RunnerError::InvalidConfig(format!(
+                    "dev allowlist entries must start with /dev/, got {pattern}",
+                )));
             }
-            DevConfig::Allowlist(patterns) => {
-                for pattern in patterns {
-                    if !pattern.starts_with("/dev/") {
-                        return Err(RunnerError::InvalidConfig(format!(
-                            "dev allowlist entries must start with /dev/, got {pattern}",
-                        )));
-                    }
-                }
-                // Fail closed: without the bwrap-created baseline we'd block
-                // essential nodes (e.g. /dev/null) when applying the allowlist.
-                if self.fake_dev_entries.is_empty() {
-                    return Err(RunnerError::InvalidConfig(
-                        "fake_dev_entries must be non-empty when dev is an allowlist".to_string(),
-                    ));
-                }
+            // Fail closed: without the bwrap-created baseline, live mode would mask
+            // essential nodes (e.g. /dev/null) and allowlist mode could bind the
+            // host's pts/shm over bwrap's private ones.
+            if self.fake_dev_entries.is_empty() {
+                return Err(RunnerError::InvalidConfig(
+                    "fake_dev_entries must be non-empty when dev is an allowlist".to_string(),
+                ));
             }
         }
 
@@ -326,6 +337,42 @@ mod tests {
             r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
                "dev":["/dev/ttyUSB*"]}"#
         )));
+    }
+
+    #[test]
+    fn parses_live_dev_form() {
+        let c = parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "dev":{"live":["/dev/ttyUSB*"]},"fake_dev_entries":["null"]}"#,
+        );
+        assert!(matches!(&c.dev, DevConfig::Live(LiveDev { live }) if live == &["/dev/ttyUSB*"]));
+        assert!(c.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_live_pattern_without_dev_prefix() {
+        assert!(is_invalid(&parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "dev":{"live":["/foo"]},"fake_dev_entries":["null"]}"#
+        )));
+    }
+
+    #[test]
+    fn rejects_live_without_fake_dev_entries() {
+        assert!(is_invalid(&parse(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "dev":{"live":["/dev/kvm"]}}"#
+        )));
+    }
+
+    #[test]
+    fn rejects_unknown_dev_object() {
+        // A typo'd key must not silently fall back to some other mode.
+        assert!(serde_json::from_str::<RunnerConfig>(
+            r#"{"program_name":"t","bwrap":{"bin":"/b"},"command":{"bin":"/s"},
+               "dev":{"lvie":["/dev/kvm"]}}"#
+        )
+        .is_err());
     }
 
     #[test]
