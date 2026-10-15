@@ -24,6 +24,14 @@ let
   in if conflicts == [] then true
     else throw "Path(s) cannot be in both fs and dbus: ${builtins.concatStringsSep ", " conflicts}";
 
+  # The nix daemon fetches with network access, so opting into its socket would undo
+  # network = false (see consts.nixDaemonSocketDir).
+  validateNixDaemonNeedsNetwork =
+    if (sandbox_restrictions.network or false)
+      || !(builtins.hasAttr consts.nixDaemonSocketDir (sandbox_restrictions.fs or {}))
+    then true
+    else throw "${name}: fs.\"${consts.nixDaemonSocketDir}\" requires network = true (the nix daemon fetches with network access)";
+
   afMap = {
     AF_INET = 2;
     AF_INET6 = 10;
@@ -291,6 +299,7 @@ ${pkgs.jq}/bin/jq . ${sandboxRestrictionsFile} >&2
   );
 in
   assert validateNoConflicts;
+  assert validateNixDaemonNeedsNetwork;
   {
     inherit scripts;
   }

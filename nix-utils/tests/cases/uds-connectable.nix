@@ -15,8 +15,11 @@ in
 {
   testScript = ''
     allowed = set(${builtins.toJSON consts.allowedSockets})
+    # The nix daemon socket dir is scanned on its own (not all of /nix/var): a stale
+    # gc-socket left behind by a GC refuses connections, which the probe counts as
+    # reachable. `node` doesn't opt into the daemon, so its socket must not show up.
     actual = set(
-        run_user("node ${probes.auditConnectable} /run /tmp /dev/shm /var").split()
+        run_user("node ${probes.auditConnectable} /run /tmp /dev/shm /var ${consts.nixDaemonSocketDir}").split()
     )
     extra = sorted(actual - allowed)
     assert not extra, (

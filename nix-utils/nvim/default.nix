@@ -117,6 +117,9 @@ export default [
 			PATH = nvimPath;
 			SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
 			NVIM_RPLUGIN_MANIFEST = "${./rplugin.vim}";
+			# No nix daemon in nvim's sandbox (consts.nixDaemonSocketDir): give nixd's
+			# evaluator an in-memory store instead of letting it fail to open one.
+			NIX_REMOTE = "dummy://";
 		};
 		extraArgs = [
 			"-u"

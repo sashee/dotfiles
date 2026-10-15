@@ -17,6 +17,8 @@ let
 		"$HOME/.local/share/freeorion" = { perm = "rw"; };
 		"$HOME/.config/freeorion" = { perm = "rw"; };
 		"$HOME/.config/transmission" = { perm = "rw"; };
+		# nix-shell / nix-build from the shell. Stripped again for zsh-nonet below.
+		"${consts.nixDaemonSocketDir}" = { perm = "ro"; };
 	};
 
 
@@ -130,6 +132,8 @@ export PROMPT="$PROMPT_PREF$PROMPT"
 	  		name = "zsh-nonet";
 		  		inherit pkgs bin;
 		  		sandbox_restrictions = merged_restrictions // {
+			  			# No nix daemon without network (it fetches with network access).
+			  			fs = builtins.removeAttrs merged_restrictions.fs [ consts.nixDaemonSocketDir ];
 			  			dev = dev_allowlist;
 			  			share_pid = true;
 			  		};  # same fs/env as zsh, no network (no network key)

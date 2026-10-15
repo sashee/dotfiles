@@ -3,6 +3,7 @@
 	unstable,
 }:
 let
+	consts = import ../consts.nix;
 	launcher = import ../launcher.nix { inherit pkgs; };
 	hostTools = import ../host-tools-mcp/default.nix { inherit pkgs; };
 	inherit (hostTools) hostToolsMcp brokerEnsureCmd;
@@ -63,6 +64,7 @@ let
 			"/tmp/host-tools-mcp" = { perm = "rw"; mkdir = true; };
 			"$HOME/.config/claude" = { perm = "rw"; mkdir = true; };
 			"$HOME/.cache/claude" = { perm = "rw"; mkdir = true; };
+			"${consts.nixDaemonSocketDir}" = { perm = "ro"; };
 		};
 		network = true;
 		dev = ["/dev/kvm"];
