@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 use std::io::Read;
+use std::num::NonZeroU16;
 use std::os::unix::process::CommandExt;
 use std::os::unix::process::ExitStatusExt;
 use std::process::Command as StdCommand;
@@ -36,6 +37,9 @@ use crate::{
 /// child's exit; in the normal case EOF arrives immediately and the result
 /// returns right away.
 const EOF_FALLBACK: Duration = Duration::from_millis(2000);
+
+/// Rows and columns of the virtual screen PTY output is rendered on.
+const PTY_SCREEN_SIZE: NonZeroU16 = NonZeroU16::new(200).unwrap();
 
 pub async fn run_register(mode: RegisteredCommand) -> Result<()> {
     debug_log(format!(
@@ -883,7 +887,7 @@ struct PtyRenderer {
 impl PtyRenderer {
     fn new() -> Self {
         Self {
-            parser: vt100::Parser::new(200, 200, 5000),
+            parser: vt100::Parser::new(PTY_SCREEN_SIZE, PTY_SCREEN_SIZE, 5000),
             last_lines: Vec::new(),
         }
     }
@@ -909,8 +913,8 @@ impl PtyRenderer {
 fn rendered_screen_lines(screen: &vt100::Screen) -> Vec<String> {
     let (rows, cols) = screen.size();
     let mut lines = screen
-        .rows(0, cols)
-        .take(rows as usize)
+        .rows(0, cols.get())
+        .take(usize::from(rows.get()))
         .map(|line| line.trim_end().to_string())
         .collect::<Vec<_>>();
     while lines.last().is_some_and(|line| line.is_empty()) {
