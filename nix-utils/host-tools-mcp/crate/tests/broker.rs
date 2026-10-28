@@ -130,12 +130,26 @@ struct Upstream {
 
 impl Upstream {
     fn start(root: &Path, name: &str) -> Self {
+        Self::start_replying(root, name, ServerToProvider::Success { in_reply_to: 1 })
+    }
+
+    /// A registry that refuses every registration with `message`, as a real
+    /// one does when the tool name is already taken.
+    fn rejecting(root: &Path, name: &str, message: &str) -> Self {
+        Self::start_replying(
+            root,
+            name,
+            ServerToProvider::Error { in_reply_to: 1, message: message.to_string() },
+        )
+    }
+
+    fn start_replying(root: &Path, name: &str, register_reply: ServerToProvider) -> Self {
         let dir = root.join(name);
         std::fs::create_dir_all(&dir).unwrap();
         let listener = UnixListener::bind(dir.join("registry.sock")).unwrap();
         let (ev_tx, ev_rx) = mpsc::unbounded_channel();
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-        tokio::spawn(upstream_actor(listener, ev_tx, cmd_rx));
+        tokio::spawn(upstream_actor(listener, ev_tx, cmd_rx, register_reply));
         Self { events: ev_rx, cmds: cmd_tx }
     }
 
@@ -161,6 +175,7 @@ async fn upstream_actor(
     listener: UnixListener,
     events: mpsc::UnboundedSender<UpEvent>,
     mut cmds: mpsc::UnboundedReceiver<UpCmd>,
+    register_reply: ServerToProvider,
 ) {
     // Find the relay connection, skipping `discover_live_servers` liveness
     // probes (connect + immediate EOF) and honouring an early Shutdown.
@@ -180,7 +195,7 @@ async fn upstream_actor(
                 Ok(ProviderToServer::RegisterTools { tools, .. }) => {
                     let _ = events.send(UpEvent::Registered(tools.len()));
                     let mut writer = writer;
-                    send(&mut writer, &ServerToProvider::Success { in_reply_to: 1 }).await;
+                    send(&mut writer, &register_reply).await;
                     break (lines, writer);
                 }
                 _ => continue,
@@ -203,7 +218,7 @@ async fn upstream_actor(
                     }
                     Ok(ProviderToServer::RegisterTools { tools, .. }) => {
                         let _ = events.send(UpEvent::Registered(tools.len()));
-                        send(&mut writer, &ServerToProvider::Success { in_reply_to: 1 }).await;
+                        send(&mut writer, &register_reply).await;
                     }
                     Err(_) => {}
                 }
@@ -394,6 +409,40 @@ async fn deregister_propagates_to_registries() {
         other => panic!("expected Success for deregister, got {other:?}"),
     }
     assert_eq!(u0.next().await, UpEvent::Deregistered(vec![tool]));
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[tokio::test]
+async fn forwards_registry_rejection_to_downstream() {
+    let tmp = unique_tmpdir();
+    let root = tmp.join("host-tools-mcp");
+    let mut accepting = Upstream::start(&root, "u0");
+    let mut rejecting = Upstream::rejecting(&root, "u1", "tool sh_c already exists");
+    let _broker = spawn_broker(&tmp, &[]);
+    wait_for_socket(&broker_sock(&tmp)).await;
+
+    // An id distinct from the broker's own upstream ids, so the reply must be
+    // translated back rather than passed through.
+    let mut down = Downstream::connect(&broker_sock(&tmp)).await;
+    let cmd = RegisteredCommand::argv_prefix(vec!["sh".into(), "-c".into()]).unwrap();
+    down.send(&ProviderToServer::RegisterTools { id: 7, tools: vec![cmd.tool_definition()] })
+        .await;
+    assert_eq!(accepting.next().await, UpEvent::Registered(1));
+    assert_eq!(rejecting.next().await, UpEvent::Registered(1));
+
+    // The broker's own ack, then the rejection; the accepting registry's ack is
+    // not forwarded.
+    match down.recv().await {
+        ServerToProvider::Success { in_reply_to: 7 } => {}
+        other => panic!("expected the broker's Success, got {other:?}"),
+    }
+    match down.recv().await {
+        ServerToProvider::Error { in_reply_to: 7, message } => {
+            assert_eq!(message, "tool sh_c already exists");
+        }
+        other => panic!("expected the registry's rejection, got {other:?}"),
+    }
 
     let _ = std::fs::remove_dir_all(&tmp);
 }

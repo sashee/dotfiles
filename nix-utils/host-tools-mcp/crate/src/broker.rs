@@ -40,6 +40,10 @@ pub use crate::broker_socket_path;
 const DEFAULT_RECONCILE: Duration = Duration::from_secs(1);
 /// Exit after this long with zero live registries (= no clients running).
 const DEFAULT_IDLE_GRACE: Duration = Duration::from_secs(30);
+/// Request ids the broker uses toward registries, distinct so a registry's
+/// reply says which kind of request it answers.
+const UPSTREAM_REGISTER_ID: u64 = 1;
+const UPSTREAM_DEREGISTER_ID: u64 = 2;
 
 /// Read a millisecond duration from `var`, falling back to `default`. Lets tests
 /// shrink the reconcile/idle timings without waiting real seconds.
@@ -323,6 +327,10 @@ async fn handle_downstream(stream: UnixStream, reconcile_every: Duration) {
     tokio::spawn(downstream_reader(reader, down_tx));
 
     let mut tools: Vec<Tool> = Vec::new();
+    // The downstream's id for its latest registration: a registry's rejection
+    // (possibly much later, from a late-joining registry) is reported as the
+    // reply to it.
+    let mut register_id: u64 = 0;
     let mut relays: HashMap<u64, RelayHandle> = HashMap::new();
     let mut dirs: HashMap<PathBuf, u64> = HashMap::new();
     let mut router = CallRouter::new();
@@ -338,11 +346,12 @@ async fn handle_downstream(stream: UnixStream, reconcile_every: Duration) {
                     DownstreamMsg::Msg(message) => match message {
                         ProviderToServer::RegisterTools { id, tools: new_tools } => {
                             tools = new_tools;
+                            register_id = id;
                             if send_to_downstream(&mut writer, &ServerToProvider::Success { in_reply_to: id }).await.is_err() {
                                 break;
                             }
                             for relay in relays.values() {
-                                let _ = relay.to_upstream.send(ProviderToServer::RegisterTools { id: 1, tools: tools.clone() }).await;
+                                let _ = relay.to_upstream.send(ProviderToServer::RegisterTools { id: UPSTREAM_REGISTER_ID, tools: tools.clone() }).await;
                             }
                         }
                         ProviderToServer::DeregisterTools { id, tools: names } => {
@@ -351,7 +360,7 @@ async fn handle_downstream(stream: UnixStream, reconcile_every: Duration) {
                                 break;
                             }
                             for relay in relays.values() {
-                                let _ = relay.to_upstream.send(ProviderToServer::DeregisterTools { id: 1, tools: names.clone() }).await;
+                                let _ = relay.to_upstream.send(ProviderToServer::DeregisterTools { id: UPSTREAM_DEREGISTER_ID, tools: names.clone() }).await;
                             }
                         }
                         ProviderToServer::ToolCallResult { call_id, result } => {
@@ -386,7 +395,22 @@ async fn handle_downstream(stream: UnixStream, reconcile_every: Duration) {
                                 let _ = send_to_downstream(&mut writer, &ServerToProvider::CancelCall { call_id: cid_f, reason }).await;
                             }
                         }
-                        // Registration acks from upstreams are not forwarded.
+                        // A registry refused the tools (e.g. the name is already
+                        // taken there), so they are not callable from that
+                        // client: tell the downstream rather than leave it
+                        // believing the registration went through.
+                        ServerToProvider::Error { in_reply_to: UPSTREAM_REGISTER_ID, message } => {
+                            debug_log(format!(
+                                "broker: registry {} rejected registration: {message}",
+                                relays.get(&upstream_id).map(|relay| relay.dir.display().to_string()).unwrap_or_default()
+                            ));
+                            if send_to_downstream(&mut writer, &ServerToProvider::Error { in_reply_to: register_id, message }).await.is_err() {
+                                break;
+                            }
+                        }
+                        // Acks are not forwarded (the downstream got the broker's
+                        // own), nor are deregistration errors: nothing the
+                        // downstream relies on failed.
                         ServerToProvider::Success { .. } | ServerToProvider::Error { .. } => {}
                     },
                     RelayEvent::Closed { upstream_id } => {
@@ -438,7 +462,7 @@ async fn reconcile(
         ));
         if !tools.is_empty() {
             let _ = tx
-                .send(ProviderToServer::RegisterTools { id: 1, tools: tools.to_vec() })
+                .send(ProviderToServer::RegisterTools { id: UPSTREAM_REGISTER_ID, tools: tools.to_vec() })
                 .await;
         }
         dirs.insert(server.dir.clone(), upstream_id);

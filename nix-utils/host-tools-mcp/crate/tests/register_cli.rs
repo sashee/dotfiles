@@ -1583,6 +1583,39 @@ fn broker_bridges_register_cli_to_server() {
     assert!(text.contains("hello-broker"), "expected command output, got {text:?}");
 }
 
+#[test]
+fn duplicate_registration_through_broker_fails_the_second_cli() {
+    // Two mcp-register-prefix processes with the same prefix (differing only in
+    // environment, which is not part of the tool name) map to one tool name. The
+    // server rejects the second; the broker must surface that so the second CLI
+    // exits with the error instead of idling as a tool that never gets called.
+    let test_id = gen_test_id();
+    let _test_dir = test_dir(&test_id);
+    let mut server = ChildHarness::host_tools_mcp(&test_id);
+    wait_for_file(&server.socket_path());
+    initialize_client(&mut server);
+
+    let _broker = BrokerProc::spawn(&test_id);
+    wait_for_file(&test_log_root(&test_id).join("broker.sock"));
+
+    let prefix = ["sh".to_string(), "-c".to_string()];
+    let _first = RegisterCli::spawn(env!("CARGO_BIN_EXE_mcp-register-prefix"), &prefix, &test_id);
+    wait_for_tools(&mut server, &["sh_c"]);
+
+    let mut second =
+        RegisterCli::spawn(env!("CARGO_BIN_EXE_mcp-register-prefix"), &prefix, &test_id);
+    second.recv_stderr_matching(EXTENDED_TIMEOUT, |line| line.contains("tool sh_c already exists"));
+    assert!(!second.wait().success(), "the rejected CLI must exit non-zero");
+
+    // The first registration is unaffected.
+    call_tool(&mut server, 2, "sh_c", json!({ "args": ["echo still-first"] }));
+    let response = server.recv_matching(EXTENDED_TIMEOUT, |message| message["id"] == json!(2));
+    let text = response["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(text.contains("still-first"), "expected command output, got {text:?}");
+}
+
 fn initialize_client(server: &mut ChildHarness) {
     server.send_json_rpc(json!({
         "jsonrpc": "2.0",
