@@ -23,11 +23,16 @@ let
 		target = "${pkgs.git}/bin/git";
 		# GIT_SEQUENCE_EDITOR/GIT_EDITOR + LAZYGIT_DAEMON_* let lazygit's daemon-mode
 		# interactive rebase (drop/squash/reword) reach git; without them git falls
-		# back to `vi`, which is not on the sandboxed PATH. These come from the
+		# back to `vi`, which is not on the sandboxed PATH. The repository-location
+		# vars let callers aim git at a private repo/index (Claude Code's bash-edit-diff
+		# snapshots); dropped, git falls back to the cwd repo and their
+		# `update-index --add` stages into the user's real index. These come from the
 		# invoking user, not repo content, so keeping them doesn't widen the sandbox.
 		keepEnv = ["HOME" "PATH" "TMPDIR" "TERM" "LANG" "SSH_AUTH_SOCK"
 		           "GIT_SEQUENCE_EDITOR" "GIT_EDITOR"
-		           "LAZYGIT_DAEMON_KIND" "LAZYGIT_DAEMON_INSTRUCTION"];
+		           "LAZYGIT_DAEMON_KIND" "LAZYGIT_DAEMON_INSTRUCTION"
+		           "GIT_DIR" "GIT_WORK_TREE" "GIT_INDEX_FILE" "GIT_COMMON_DIR"
+		           "GIT_OBJECT_DIRECTORY" "GIT_ALTERNATE_OBJECT_DIRECTORIES"];
 		# Pin git's fixed-name command-exec keys at command-line precedence
 		# (beats repo-local .git/config). diff.external is pinned to difftastic
 		# rather than emptied: git treats an empty value as "exec a program named
