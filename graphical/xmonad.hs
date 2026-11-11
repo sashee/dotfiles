@@ -37,6 +37,7 @@ myConfig = def
     , ("M4-S-u", spawn "xscreensaver-command -lock")
     , ("M4-S-m", spawn "/home/sashee/dotfiles/functions/power-mode.sh cycle")
     , ("M4-S-,", spawn "/home/sashee/dotfiles/functions/manage-brightness.sh turn_nightlight")
+    , ("M4-S-.", spawn "/home/sashee/dotfiles/functions/bt-headset-mode.sh toggle")
   ]
 
 myTerminal = "alacritty"

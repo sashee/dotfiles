@@ -32,10 +32,11 @@ Config { overrideRedirect = False
 			, Run Com "/home/sashee/dotfiles/functions/manage-brightness.sh" [] "brightness" 2
 			, Run Com "cat" ["/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"] "governor" 2
 			, Run Com "/home/sashee/dotfiles/functions/power-mode.sh" [] "wifi" 2
+			, Run Com "/home/sashee/dotfiles/functions/bt-headset-mode.sh" [] "btmode" 10
 
                     , Run StdinReader
                     ]
        , sepChar  = "%"
        , alignSep = "}{"
-       , template = "%StdinReader% }{ Vol: %volume% | Bright: %brightness% | %battery% | %cpu% | %governor% | %wifi% | %memory% * %swap% | %date% "
+       , template = "%StdinReader% }{ Vol: %volume% | %btmode% | Bright: %brightness% | %battery% | %cpu% | %governor% | %wifi% | %memory% * %swap% | %date% "
        }
