@@ -11,7 +11,9 @@ let
 			"$HOME/.config/keepassxc" = { perm = "rw"; mkdir = true; };
 			"$HOME/laptop-backup" = { perm = "rw"; };
 			"$HOME/safe" = { perm = "rw"; };
-			"$HOME/.cache/keepassxc" = { perm = "rw"; mkdir = true; };
+			# 2.8+ keeps recent/last-opened DBs in $XDG_STATE_HOME/keepassxc/keepassxc_local.ini
+			# (was ~/.cache/keepassxc/keepassxc.ini); XDG_STATE_HOME isn't in keepEnv, so the default applies.
+			"$HOME/.local/state/keepassxc" = { perm = "rw"; mkdir = true; };
 			"$SSH_AUTH_SOCK" = { perm = "ro"; };
 			"$XDG_RUNTIME_DIR/bus" = { perm = "ro"; };
 			"/run/udev" = { perm = "ro"; };
