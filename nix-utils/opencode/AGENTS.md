@@ -39,6 +39,7 @@ A useful refinement is to define exceptions explicitly:
 ## Sandboxing
 
 - You are running in a sandbox so you won't have access to the full system.
+- The temp directory is only your own and will be wiped when the harness exits.
 
 ## Tooling
 
