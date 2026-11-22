@@ -161,7 +161,7 @@ struct ProviderHarness {
 
 impl ProviderHarness {
     fn connect(socket_path: &Path) -> Self {
-        let stream = UnixStream::connect(socket_path).expect("failed to connect provider socket");
+        let stream = connect_when_listening(socket_path);
         let reader = stream.try_clone().expect("failed to clone provider stream");
         let (tx, rx) = mpsc::channel();
         let reader_handle = thread::spawn(move || {
@@ -1173,6 +1173,26 @@ fn wait_for_file(path: &Path) {
         thread::sleep(Duration::from_millis(10));
     }
     panic!("timed out waiting for {}", path.display());
+}
+
+/// The socket file appears at `bind()`, but connects are refused until the
+/// server's separate `listen()` call, so `wait_for_file` alone races (CI flake
+/// under load). Retry instead of probing: a probe would itself be accepted as a
+/// provider and shift the provider ids the tests assert on.
+fn connect_when_listening(path: &Path) -> UnixStream {
+    let deadline = Instant::now() + FILE_TIMEOUT;
+    loop {
+        match UnixStream::connect(path) {
+            Ok(stream) => return stream,
+            Err(error)
+                if error.kind() == std::io::ErrorKind::ConnectionRefused
+                    && Instant::now() < deadline =>
+            {
+                thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) => panic!("failed to connect provider socket: {error:?}"),
+        }
+    }
 }
 
 fn read_json_lines(path: &Path) -> Vec<Value> {
