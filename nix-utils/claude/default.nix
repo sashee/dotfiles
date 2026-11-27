@@ -7,6 +7,7 @@ let
 	launcher = import ../launcher.nix { inherit pkgs; };
 	hostTools = import ../host-tools-mcp/default.nix { inherit pkgs; };
 	inherit (hostTools) hostToolsMcp brokerEnsureCmd;
+	agentSkills = import ../agent-skills/default.nix { inherit pkgs; };
 
 	claudemd = pkgs.writeTextFile {
 		name = "CLAUDE.md";
@@ -55,6 +56,7 @@ let
 			--settings ${settingsJson} \
 			--mcp-config ${mcpJson} \
 			--strict-mcp-config \
+			--plugin-dir ${agentSkills} \
 			--append-system-prompt "$(cat ${claudemd})" \
 			"$@"
 	'';

@@ -7,6 +7,7 @@ let
 	launcher = import ../launcher.nix { inherit pkgs; };
 	hostTools = import ../host-tools-mcp/default.nix { inherit pkgs; };
 	inherit (hostTools) hostToolsMcp brokerEnsureCmd;
+	agentSkills = import ../agent-skills/default.nix { inherit pkgs; };
 
 	agentsmd = pkgs.writeTextFile {
 		name = "AGENTS.md";
@@ -28,6 +29,7 @@ let
 		}
 	},
 	"instructions": ["${agentsmd}"],
+	"skills": ["${agentSkills}/skills"],
 	"permission": {
 		"external_directory": {
 			"*": "allow"

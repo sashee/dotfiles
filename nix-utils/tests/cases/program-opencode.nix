@@ -9,6 +9,8 @@
 #     (preLaunchHostCmd), so a client launch brings the broker up by itself.
 #   - The MCP server command in its injected config actually exists and is executable —
 #     the config is what the real agent follows to spawn the server.
+#   - The injected config's `skills` entry points at the shared agent-skills bundle,
+#     and its SKILL.md files are readable inside the sandbox.
 #   - Launching it really does bring the broker socket up, not just declare the intent.
 { pkgs }:
 {
@@ -29,7 +31,18 @@
         )
         run_user(f"test -x {server}")
 
-        # 3) Launching opencode actually starts the broker. A long idle grace keeps the
+        # 3) The injected config points at the agent-skills bundle, and its skills are
+        # readable from inside opencode's own sandbox.
+        skills_dir = run_user(
+            "opencode-shell -c '${pkgs.jq}/bin/jq -r \".skills[0]\" \"$OPENCODE_CONFIG\"'"
+        ).strip()
+        assert skills_dir.startswith("/nix/store/"), (
+            f"opencode's config must list the skills dir by store path; got {skills_dir!r}"
+        )
+        skills = run_user(f"opencode-shell -c 'ls {skills_dir}/*/SKILL.md'").split()
+        assert skills, f"opencode's skills dir must carry skills readable in its sandbox: {skills_dir}"
+
+        # 4) Launching opencode actually starts the broker. A long idle grace keeps the
         # broker (which sees no registries here) from idle-exiting before the check when
         # `opencode --version` is slow under aarch64 TCG.
         run_user("rm -f /tmp/host-tools-mcp/broker.sock; true")
