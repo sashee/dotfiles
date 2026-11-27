@@ -52,6 +52,9 @@ let
 	claudeEntry = pkgs.writeShellScriptBin "claude" ''
 		export CLAUDE_CONFIG_DIR="$HOME/.config/claude"
 		export DISABLE_AUTOUPDATER="1"
+		# bypassPermissions still prompts for rm/rmdir on "critical paths" and for
+		# commands it can't parse; this turns those prompts off too (sandboxed anyway).
+		export CLAUDE_CODE_EVEN_MORE_DANGEROUSLY_SKIP_PERMISSIONS="1"
 		exec ${unstable.claude-code}/bin/claude \
 			--settings ${settingsJson} \
 			--mcp-config ${mcpJson} \
